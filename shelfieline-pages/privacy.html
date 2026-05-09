@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shelfieline — プライバシーポリシー</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #0a0510;
+    color: #f0e8d8;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+    line-height: 1.8;
+  }
+  h1 { color: #f0e8d8; font-size: 28px; }
+  h2 { color: rgba(240,232,216,0.92); margin-top: 28px; font-size: 18px; }
+  p, li { color: rgba(240,232,216,0.78); }
+  a { color: #ff9e2e; }
+  .last { color: rgba(240,232,216,0.40); font-size: 12px; }
+  .nav { margin: 12px 0 28px; }
+  .nav a { color: #ff9e2e; margin-right: 14px; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="./">← Top</a>
+  <a href="./support.html">Support / FAQ</a>
+</div>
+
+<h1>Shelfieline — プライバシーポリシー</h1>
+<p class="last">最終更新: 2026-05-09 (v1.0)</p>
+
+<p>Shelfieline (以下「本アプリ」) は Taka Hamuro (以下「開発者」) が個人で開発・提供するアプリです。本ポリシーは、本アプリがユーザー情報をどのように扱うかを説明します。</p>
+
+<h2>1. データ収集</h2>
+<p>本アプリは、ユーザーの個人データを開発者のサーバーに送信・収集することはありません。蔵書情報・読書ステータス・読書日記・表紙画像など、すべてのデータは iOS 標準の SwiftData によって <strong>お使いの端末内にのみ</strong> 保存されます。</p>
+
+<h2>2. アカウント登録</h2>
+<p>本アプリはアカウント登録機能を持ちません。メールアドレス・電話番号・氏名などの登録は不要です。</p>
+
+<h2>3. ユーザートラッキング</h2>
+<p>本アプリは Google Analytics や Facebook SDK 等の第三者アナリティクス・トラッキング SDK を組み込んでいません。広告も表示しません。App Tracking Transparency (ATT) のリクエストも行いません。</p>
+
+<h2>4. 外部 API への通信</h2>
+<p>書誌情報 (タイトル・著者・出版社など) を取得するため、ユーザーがバーコードスキャン等で本を追加した際に、以下の公式 API へ ISBN を送信します:</p>
+<ul>
+  <li><strong>openBD</strong> (<a href="https://openbd.jp/">https://openbd.jp/</a>) — 書誌情報の自動取得</li>
+  <li><strong>国立国会図書館サーチ</strong> (<a href="https://ndlsearch.ndl.go.jp/">https://ndlsearch.ndl.go.jp/</a>) — 書誌情報の補完</li>
+</ul>
+<p>これらのリクエストには ISBN 番号のみが含まれ、ユーザー識別子・端末識別子などの個人情報は一切送信されません。</p>
+
+<h2>5. カメラ・写真ライブラリの使用</h2>
+<p>本アプリは以下の用途で iOS のカメラ・写真ライブラリへのアクセスを求めます:</p>
+<ul>
+  <li><strong>カメラ:</strong> 本のバーコード読み取り (Vision フレームワーク)、本の表紙をユーザー自身で撮影する用途</li>
+  <li><strong>写真ライブラリ:</strong> ユーザーが既に撮影/保存している表紙画像を本に紐付ける用途</li>
+</ul>
+<p>取得された画像はすべて端末内 (SwiftData の external storage) にのみ保存され、外部へ送信されることはありません。</p>
+
+<h2>6. Share Extension</h2>
+<p>本アプリには Share Extension (BookshelflineShare) が含まれます。Safari など他アプリから「画像」または「URL」を共有した際、共有データは App Group 経由でメインアプリの inbox に一時保存され、ユーザーが本に紐付けるまで保持されます。inbox の内容は端末内のみで、外部へ送信されません。</p>
+
+<h2>7. データの削除</h2>
+<p>本アプリで作成したすべてのデータは、本アプリを iPhone / iPad からアンインストールすることで完全に削除されます。開発者がデータを保持することはありません。</p>
+
+<h2>8. 子どもの利用</h2>
+<p>本アプリは全年齢 (4+) 対象です。13 歳未満の子どもからの個人データを意図的に収集することはありません。</p>
+
+<h2>9. ポリシーの変更</h2>
+<p>本ポリシーは予告なく改訂される場合があります。重要な変更がある場合は、本ページに改訂日を記載してお知らせします。</p>
+
+<h2>10. お問い合わせ</h2>
+<p>本ポリシーに関するご質問は <a href="mailto:trim.hoist.6b@icloud.com">trim.hoist.6b@icloud.com</a> までお寄せください。</p>
+
+</body>
+</html>
