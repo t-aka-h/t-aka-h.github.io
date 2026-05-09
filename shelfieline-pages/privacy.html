@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shelfieline — プライバシーポリシー</title>
+<title>Shelfieline — Privacy Policy / プライバシーポリシー</title>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
@@ -21,6 +21,9 @@
   .last { color: rgba(240,232,216,0.40); font-size: 12px; }
   .nav { margin: 12px 0 28px; }
   .nav a { color: #ff9e2e; margin-right: 14px; }
+  .lang-switch { margin: 8px 0 24px; padding: 10px 14px; background: rgba(255,158,46,0.08); border: 1px solid rgba(255,158,46,0.25); border-radius: 8px; }
+  .lang-switch a { display: inline-block; margin-right: 14px; }
+  hr.divider { border: 0; border-top: 1px solid rgba(255,158,46,0.3); margin: 60px 0 40px; }
 </style>
 </head>
 <body>
@@ -30,7 +33,14 @@
   <a href="./support.html">Support / FAQ</a>
 </div>
 
-<h1>Shelfieline — プライバシーポリシー</h1>
+<div class="lang-switch">
+  <strong>Language:</strong>
+  <a href="#ja">日本語</a>
+  <a href="#en">English</a>
+</div>
+
+<!-- ===================== Japanese ===================== -->
+<h1 id="ja">Shelfieline — プライバシーポリシー</h1>
 <p class="last">最終更新: 2026-05-09 (v1.0)</p>
 
 <p>Shelfieline (以下「本アプリ」) は Taka Hamuro (以下「開発者」) が個人で開発・提供するアプリです。本ポリシーは、本アプリがユーザー情報をどのように扱うかを説明します。</p>
@@ -74,6 +84,54 @@
 
 <h2>10. お問い合わせ</h2>
 <p>本ポリシーに関するご質問は <a href="mailto:trim.hoist.6b@icloud.com">trim.hoist.6b@icloud.com</a> までお寄せください。</p>
+
+<hr class="divider">
+
+<!-- ===================== English ===================== -->
+<h1 id="en">Shelfieline — Privacy Policy</h1>
+<p class="last">Last updated: 2026-05-09 (v1.0)</p>
+
+<p>Shelfieline ("the App") is an iOS / iPadOS application developed and operated by Taka Hamuro ("the Developer"). This Privacy Policy explains how the App handles user information.</p>
+
+<h2>1. Data Collection</h2>
+<p>The App does not transmit or collect any personal data to the Developer's servers. All data including library entries, reading status, reading notes, and cover images is stored <strong>solely on your device</strong> using Apple's SwiftData framework.</p>
+
+<h2>2. Account Registration</h2>
+<p>The App has no account registration feature. No email address, phone number, or personal identifiers are required.</p>
+
+<h2>3. User Tracking</h2>
+<p>The App contains no third-party analytics or tracking SDKs (no Google Analytics, no Facebook SDK, etc.). No advertisements are shown. The App does not present an App Tracking Transparency (ATT) prompt.</p>
+
+<h2>4. External API Communication</h2>
+<p>When you add a book via barcode scan or ISBN entry, the App queries the following official APIs by sending only the ISBN number:</p>
+<ul>
+  <li><strong>openBD</strong> (<a href="https://openbd.jp/">https://openbd.jp/</a>) — bibliographic information lookup</li>
+  <li><strong>National Diet Library Search</strong> (<a href="https://ndlsearch.ndl.go.jp/">https://ndlsearch.ndl.go.jp/</a>) — bibliographic supplementation</li>
+</ul>
+<p>These requests contain only the ISBN. No user identifiers, device identifiers, or any other personal information are sent.</p>
+
+<h2>5. Camera and Photo Library Use</h2>
+<p>The App requests access to the iOS camera and photo library for the following purposes:</p>
+<ul>
+  <li><strong>Camera:</strong> reading book barcodes (via the Vision framework), and letting the user capture a book cover photo themselves.</li>
+  <li><strong>Photo Library:</strong> letting the user attach an existing photo from their library to a book as a cover image.</li>
+</ul>
+<p>All captured images are stored only on your device (in SwiftData's external storage) and are never transmitted externally.</p>
+
+<h2>6. Share Extension</h2>
+<p>The App includes a Share Extension (BookshelflineShare). When you share an image or URL from another app such as Safari, the shared data is temporarily stored in the main app's inbox via App Group and held until you assign it to a book. The inbox content stays on the device and is not transmitted externally.</p>
+
+<h2>7. Data Deletion</h2>
+<p>All data created by the App is completely removed when you uninstall the App from your iPhone or iPad. The Developer retains no data.</p>
+
+<h2>8. Children's Use</h2>
+<p>The App is rated for all ages (4+). It does not knowingly collect personal data from children under 13.</p>
+
+<h2>9. Changes to This Policy</h2>
+<p>This Policy may be updated without prior notice. Material changes will be indicated by updating the date at the top of this page.</p>
+
+<h2>10. Contact</h2>
+<p>If you have any questions about this Privacy Policy, please contact us at <a href="mailto:trim.hoist.6b@icloud.com">trim.hoist.6b@icloud.com</a>.</p>
 
 </body>
 </html>

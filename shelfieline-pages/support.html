@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shelfieline — サポート / FAQ</title>
+<title>Shelfieline — Support / FAQ / サポート</title>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
@@ -23,6 +23,9 @@
   .nav { margin: 12px 0 28px; }
   .nav a { color: #ff9e2e; margin-right: 14px; }
   .answer { padding-left: 14px; border-left: 2px solid rgba(255,158,46,0.4); margin: 8px 0 18px; }
+  .lang-switch { margin: 8px 0 24px; padding: 10px 14px; background: rgba(255,158,46,0.08); border: 1px solid rgba(255,158,46,0.25); border-radius: 8px; }
+  .lang-switch a { display: inline-block; margin-right: 14px; }
+  hr.divider { border: 0; border-top: 1px solid rgba(255,158,46,0.3); margin: 60px 0 40px; }
 </style>
 </head>
 <body>
@@ -32,7 +35,14 @@
   <a href="./privacy.html">Privacy Policy</a>
 </div>
 
-<h1>Shelfieline — サポート / FAQ</h1>
+<div class="lang-switch">
+  <strong>Language:</strong>
+  <a href="#ja">日本語</a>
+  <a href="#en">English</a>
+</div>
+
+<!-- ===================== Japanese ===================== -->
+<h1 id="ja">Shelfieline — サポート / FAQ</h1>
 <p class="last">最終更新: 2026-05-09 (v1.0)</p>
 
 <h2>使い方</h2>
@@ -105,6 +115,83 @@ v1.0 ではゴミ箱機能は未実装です。本詳細シートの「本棚か
 <h2>App 開発者</h2>
 <p>Taka Hamuro — iOS / watchOS app developer</p>
 <p>その他のアプリは <a href="https://t-aka-h.github.io/">こちら</a></p>
+
+<hr class="divider">
+
+<!-- ===================== English ===================== -->
+<h1 id="en">Shelfieline — Support / FAQ</h1>
+<p class="last">Last updated: 2026-05-09 (v1.0)</p>
+
+<h2>How to Use</h2>
+
+<h3>Adding a Book</h3>
+<div class="answer">
+Tap the "+" button at the top right of the bookshelf detail page. There are three ways to add a book:
+<ul>
+  <li><strong>Barcode:</strong> Scan the ISBN barcode on the back cover. The book's bibliographic info is auto-filled.</li>
+  <li><strong>Manual entry:</strong> Type in title, author, and page count directly.</li>
+  <li><strong>Safari Share:</strong> Share a cover image from a web page via Safari's share menu to Shelfieline. The app will let you assign it to a book on next launch.</li>
+</ul>
+</div>
+
+<h3>Setting a Cover Image</h3>
+<div class="answer">
+On the book detail sheet, tap "Capture / Choose Cover" to take a new photo with the camera or pick one from your photo library. The "Search the Web for an Image" button simply opens Safari with a Google Image search query — it does not auto-fetch results. You save the image yourself and import it back.
+</div>
+
+<h3>Switching Bookshelves</h3>
+<div class="answer">
+On the study (carousel) page, tap a shelf to open its detail page. At the bottom, swipe horizontally on the shelf-name strip to switch to an adjacent shelf. The top-left "back to study" button returns you to the carousel.
+</div>
+
+<h3>Pinch Zoom and Drag Reorder</h3>
+<div class="answer">
+On the bookshelf detail page, two-finger pinch to zoom — the number of rows recalculates automatically based on the zoom level. Long-press a book to lift it, then drop it at the desired position to reorder. A floating cover preview appears while dragging.
+</div>
+
+<h2>Frequently Asked Questions</h2>
+
+<h3>Q. Are there any paid plans?</h3>
+<div class="answer">
+Version 1.0 is a fully free app. The free tier supports up to 3 bookshelves and 30 books. A Pro plan that unlocks these limits will be offered as an In-App Purchase in a future update (v1.1 or later).
+</div>
+
+<h3>Q. Does it sync across multiple devices via iCloud?</h3>
+<div class="answer">
+Not in v1.0. Data is stored only on each device. iCloud sync (CloudKit) is being considered for a future update.
+</div>
+
+<h3>Q. How do I back up my data?</h3>
+<div class="answer">
+The App's data is included in iOS's standard backups (iCloud Backup / iTunes Backup). When you change devices, restoring from iCloud on the new device will also restore the App's data automatically.
+</div>
+
+<h3>Q. When I try to create a 4th bookshelf, it says "Coming soon."</h3>
+<div class="answer">
+Adding shelves or books beyond the v1.0 free tier (3 shelves / 30 books) will be unlocked via the Pro plan (v1.1 or later). For now, just tap "OK" to dismiss.
+</div>
+
+<h3>Q. The launch splash screen feels long.</h3>
+<div class="answer">
+The neon-sign ignition sequence runs for about 6 seconds. Since this only plays on app launch, it shouldn't be too intrusive in everyday use. Shortening it is being considered for a future update.
+</div>
+
+<h3>Q. The barcode scanner doesn't read my book.</h3>
+<div class="answer">
+Use the App in a well-lit area and position the ISBN barcode in the center of the frame. For older books or hard-to-read barcodes, please use the "manual entry" option. iPhone XS or newer is recommended for barcode scanning.
+</div>
+
+<h3>Q. Can I restore a deleted book?</h3>
+<div class="answer">
+A Trash feature is not yet implemented in v1.0. The book detail sheet shows a confirmation dialog before deletion, but the deletion is permanent. Please delete with care.
+</div>
+
+<h2>Contact</h2>
+<p>For questions not answered in the FAQ, bug reports, or feature requests, please email us at <a href="mailto:trim.hoist.6b@icloud.com">trim.hoist.6b@icloud.com</a>. We do our best to reply promptly.</p>
+
+<h2>About the Developer</h2>
+<p>Taka Hamuro — iOS / watchOS app developer</p>
+<p>See other apps at <a href="https://t-aka-h.github.io/">t-aka-h.github.io</a>.</p>
 
 </body>
 </html>
