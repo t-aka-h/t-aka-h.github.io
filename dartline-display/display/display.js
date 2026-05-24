@@ -28,6 +28,18 @@
     : null;
   if (board) board.draw();
 
+  // Web Audio synth — needs a user gesture to unlock on Safari. We attach a
+  // one-shot listener that primes the AudioContext the first time anyone
+  // interacts with the page (tap, click, key).
+  const sound = window.DartlineSound
+    ? new window.DartlineSound.SoundSynth()
+    : null;
+  if (sound) {
+    const unlock = () => sound.ensureContext();
+    ["pointerdown", "touchstart", "keydown"].forEach((ev) =>
+      document.addEventListener(ev, unlock, { once: true, passive: true }));
+  }
+
   els.session.textContent = sessionId;
 
   function setStatus(text, cls) {
@@ -180,6 +192,7 @@
     const score = window.DartlineDartboard.scoreAt(x, y);
     board.addHit(x, y, score);
     showScoreToast(score);
+    if (sound) sound.playForScore(score);
   }
 
   function showScoreToast(score) {

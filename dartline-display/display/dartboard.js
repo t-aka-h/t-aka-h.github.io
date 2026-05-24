@@ -64,15 +64,28 @@
       this._animPending = false;
       this._honeycombCache = null;
       this._lastSide = 0;
+      // Eased aim — chases the target each frame so on-screen motion stays
+      // 60 fps smooth even when WebSocket updates land at ~30 Hz with jitter.
+      this._easedAim = { x: 0, y: 0 };
+      this._easedAimRate = 0.28;  // larger = snappier, smaller = floatier
       this._resize();
       window.addEventListener("resize", () => {
         this._resize();
         this._honeycombCache = null;
         this.requestDraw();
       });
-      // Continuous animation loop for the pulsing markers on recent hits.
+      // Continuous animation loop — eases the crosshair and redraws when
+      // either the cursor is in motion or there are pulsing hits.
       const tick = () => {
-        if (this.hits.length > 0) this.draw();
+        const target = this.locked && this.lockedAim ? this.lockedAim : this.aim;
+        const dx = target.x - this._easedAim.x;
+        const dy = target.y - this._easedAim.y;
+        const moving = Math.abs(dx) > 0.0008 || Math.abs(dy) > 0.0008;
+        if (moving) {
+          this._easedAim.x += dx * this._easedAimRate;
+          this._easedAim.y += dy * this._easedAimRate;
+        }
+        if (moving || this.hits.length > 0) this.draw();
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -412,7 +425,8 @@
     }
 
     _drawCrosshair(ctx, R) {
-      const aim = this.locked && this.lockedAim ? this.lockedAim : this.aim;
+      // Use the eased position so the crosshair glides between samples.
+      const aim = this._easedAim;
       const color = this.locked ? COLOR.crosshairLocked : COLOR.crosshair;
       const [ax, ay] = this._world(aim.x, aim.y);
       const arm = R * 0.085;

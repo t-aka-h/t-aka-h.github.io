@@ -207,9 +207,20 @@
   let aimTracker = null;
   let lastAimSent = { x: 0, y: 0 };
   let lastAimSentAt = 0;
-  const AIM_SEND_INTERVAL_MS = 50; // 20 Hz aim updates over the wire.
+  const AIM_SEND_INTERVAL_MS = 33; // 30 Hz aim updates over the wire.
   let locked = false;
   let lockedAim = { x: 0, y: 0 };
+
+  // Web Audio synth — same as on the display side. Played from the iPhone
+  // speaker so the user gets local audio feedback in their hand.
+  const sound = window.DartlineSound
+    ? new window.DartlineSound.SoundSynth()
+    : null;
+  if (sound) {
+    const unlock = () => sound.ensureContext();
+    ["pointerdown", "touchstart", "keydown"].forEach((ev) =>
+      document.addEventListener(ev, unlock, { once: true, passive: true }));
+  }
 
   function initThrowDetector() {
     if (!window.DartlineMotion) return;
@@ -244,6 +255,7 @@
         y: lockedAim.y,
         ts: Date.now(),
       });
+      if (sound) sound.playAimLock();
     }
     updateLockButton();
   }
@@ -264,6 +276,8 @@
     els.aimState.className = "value " + (state === "aiming" ? "connected" : "waiting");
     // Send a state update so the display can show "calibrating" vs "aiming".
     sendMaybe({ type: "aim_state", state, ts: Date.now() });
+    // Audible cue when calibration completes.
+    if (state === "aiming" && sound) sound.playAimEnter();
   }
 
   function onAim(aim) {
@@ -280,6 +294,7 @@
     els.throwCount.textContent = String(throwCount);
     els.lastForce.textContent = event.force.toFixed(2) + "  (peak " + event.peak.toFixed(1) + ")";
     flashThrow(event.force);
+    if (sound) sound.playThrowSnap();
     // Use the locked aim if available, otherwise fall back to the live aim.
     const aim = locked ? lockedAim : lastAimSent;
     sendMaybe({

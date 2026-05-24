@@ -164,12 +164,17 @@
 
   const AIM_DEFAULTS = {
     // Tilt angle that maps to the edge of the display (after smoothing).
-    // 25° means a comfortable wrist movement reaches the corners.
-    sensitivityDeg: 25,
+    // 22° lets a comfortable wrist movement reach the corners; iOS Dartline
+    // settled around 18° but we run slightly less sensitive to compensate
+    // for the heavier smoothing below.
+    sensitivityDeg: 22,
 
     // Low-pass coefficient (0..1). Higher = snappier, lower = smoother.
-    // 0.40 gives a noticeable but pleasant lag.
-    smoothing: 0.40,
+    // 0.22 = heavy smoothing — matches iOS Dartline Day 1.10 where the team
+    // pushed the value down hard to kill cross-axis bleed when the user
+    // tries to move only in one direction. The display side adds further
+    // 60 Hz interpolation on top so the on-screen motion stays buttery.
+    smoothing: 0.22,
 
     // Clamp output to slightly past the edges so the cursor visibly leaves
     // the visible play area at extreme tilts.
