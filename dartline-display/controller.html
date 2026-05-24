@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06030D">
+  <title>Dartline Display — Controller</title>
+  <link rel="stylesheet" href="controller/controller.css">
+</head>
+<body>
+  <main id="app">
+    <header class="brand">
+      <h1>Dartline Display</h1>
+      <p class="subtitle">Controller</p>
+    </header>
+
+    <section id="connection" class="card">
+      <div class="row">
+        <span class="label">Session</span>
+        <span id="sessionId" class="value">—</span>
+      </div>
+      <div class="row">
+        <span class="label">Status</span>
+        <span id="status" class="value">init</span>
+      </div>
+    </section>
+
+    <section id="permissionCard" class="card hidden">
+      <p>センサーを使うには許可が必要です。</p>
+      <button id="permissionButton" class="primary">センサーを有効化</button>
+    </section>
+
+    <section id="motionCard" class="card">
+      <h2>Motion</h2>
+      <div class="grid">
+        <div><span class="label">ax</span><span id="ax" class="value">0.00</span></div>
+        <div><span class="label">ay</span><span id="ay" class="value">0.00</span></div>
+        <div><span class="label">az</span><span id="az" class="value">0.00</span></div>
+        <div><span class="label">α</span><span id="alpha" class="value">0.0</span></div>
+        <div><span class="label">β</span><span id="beta" class="value">0.0</span></div>
+        <div><span class="label">γ</span><span id="gamma" class="value">0.0</span></div>
+      </div>
+      <p class="hint">iPhone を振るとグラス側に値が届きます。</p>
+    </section>
+  </main>
+
+  <script src="shared/protocol.js"></script>
+  <script src="controller/controller.js"></script>
+</body>
+</html>

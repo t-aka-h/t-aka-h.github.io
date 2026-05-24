@@ -1,0 +1,104 @@
+/*
+ * Meta Ray-Ban Display rules:
+ *  - Background must be true black (#000) — additive display treats it as transparent.
+ *  - High-contrast bright text only.
+ *  - Body text >= 16px, primary >= 20-24px.
+ *  - No scrolling; entire UI fits within 600x600.
+ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 600px;
+  height: 600px;
+  overflow: hidden;
+  background: #000;
+  color: #FFFFFF;
+  font-family: "Helvetica Neue", -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  width: 600px;
+  height: 600px;
+  display: grid;
+  grid-template-rows: 56px 1fr 56px;
+  padding: 16px 24px;
+}
+
+.hud-top, .hud-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.hud-top .title {
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #00E5FF;
+}
+
+.hud-top .session {
+  font-family: "Menlo", monospace;
+  color: #FFB547;
+}
+
+.big {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: center;
+  padding: 20px 8px;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.line .k {
+  font-size: 22px;
+  color: #9BD8FF;
+  letter-spacing: 1px;
+}
+
+.line .v {
+  font-family: "Menlo", monospace;
+  font-size: 36px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.hud-bottom .status {
+  color: #FFB547;
+}
+
+.hud-bottom .status.connected { color: #00E5FF; }
+.hud-bottom .status.error { color: #FF2D87; }
+
+.hud-bottom .rate {
+  font-family: "Menlo", monospace;
+  color: #FFFFFF;
+}
+
+/* Optional flash when a motion frame lands — visual "we're alive" cue. */
+.pulse {
+  animation: pulse 120ms ease-out;
+}
+
+@keyframes pulse {
+  0%   { color: #00E5FF; }
+  100% { color: #FFFFFF; }
+}
