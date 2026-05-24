@@ -20,6 +20,9 @@
     alpha: document.getElementById("alpha"),
     beta: document.getElementById("beta"),
     gamma: document.getElementById("gamma"),
+    throwOverlay: document.getElementById("throwOverlay"),
+    throwForce: document.getElementById("throwForce"),
+    throwFill: document.getElementById("throwFill"),
   };
 
   els.session.textContent = sessionId;
@@ -94,10 +97,27 @@
       case "motion":
         renderMotion(msg);
         break;
+      case "throw":
+        showThrow(msg);
+        break;
       default:
         // ignore unknown types for now
         break;
     }
+  }
+
+  function showThrow(msg) {
+    const force = typeof msg.force === "number" ? msg.force : 0;
+    const peak = typeof msg.peak === "number" ? msg.peak : 0;
+    const el = els.throwOverlay;
+    if (!el) return;
+    els.throwForce.textContent =
+      "force " + force.toFixed(2) +
+      "  ·  peak " + peak.toFixed(1) + " m/s²";
+    els.throwFill.style.transform = "scaleX(" + Math.max(0.02, Math.min(1, force)) + ")";
+    el.classList.remove("active");
+    void el.offsetWidth;
+    el.classList.add("active");
   }
 
   function renderMotion(msg) {

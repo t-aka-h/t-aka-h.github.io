@@ -138,3 +138,50 @@ html, body {
 #status.connected { color: var(--accent-cyan); }
 #status.error { color: var(--accent-pink); }
 #status.waiting { color: var(--accent-amber); }
+
+/* Full-screen flash overlay shown momentarily when a throw is detected.
+   Kicked off by adding the `.active` class — the animation fades it out. */
+.throw-flash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center,
+              rgba(255, 45, 135, 0.35) 0%,
+              rgba(6, 3, 13, 0.85) 65%,
+              rgba(6, 3, 13, 0.95) 100%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 999;
+}
+
+.throw-flash__title {
+  font-size: 88px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: var(--accent-cyan);
+  text-shadow: 0 0 24px rgba(0, 229, 255, 0.6),
+               0 0 48px rgba(255, 45, 135, 0.4);
+}
+
+.throw-flash__force {
+  margin-top: 12px;
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 18px;
+  color: var(--accent-amber);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.throw-flash.active {
+  animation: throwFlash 700ms ease-out forwards;
+}
+
+@keyframes throwFlash {
+  0%   { opacity: 0;   transform: scale(0.94); }
+  10%  { opacity: 1;   transform: scale(1.02); }
+  30%  { opacity: 1;   transform: scale(1.00); }
+  100% { opacity: 0;   transform: scale(1.06); }
+}

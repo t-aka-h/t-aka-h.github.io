@@ -23,6 +23,10 @@
     alpha: document.getElementById("alpha"),
     beta: document.getElementById("beta"),
     gamma: document.getElementById("gamma"),
+    peakMag: document.getElementById("peakMag"),
+    lastForce: document.getElementById("lastForce"),
+    throwCount: document.getElementById("throwCount"),
+    throwFlash: document.getElementById("throwFlash"),
   };
 
   els.session.textContent = sessionId;
@@ -140,6 +144,11 @@
     latest.az = acc.z ?? 0;
     render();
     flush();
+    if (throwDetector) {
+      throwDetector.feed(latest.ax, latest.ay, latest.az);
+      const peak = throwDetector.peakMagnitude || 0;
+      if (peak > 0) els.peakMag.textContent = peak.toFixed(2);
+    }
   }
 
   function onOrientation(event) {
@@ -171,8 +180,45 @@
     window.addEventListener("deviceorientation", onOrientation);
   }
 
+  // ---- Throw detection -----------------------------------------------------
+
+  let throwDetector = null;
+  let throwCount = 0;
+
+  function initThrowDetector() {
+    if (!window.DartlineMotion) return;
+    throwDetector = new window.DartlineMotion.ThrowDetector();
+    throwDetector.on(onThrow);
+  }
+
+  function onThrow(event) {
+    throwCount += 1;
+    els.throwCount.textContent = String(throwCount);
+    els.lastForce.textContent = event.force.toFixed(2) + "  (peak " + event.peak.toFixed(1) + ")";
+    flashThrow(event.force);
+    sendMaybe({
+      type: "throw",
+      // Phase 1: aim is not implemented yet — send the center until Phase 2.
+      x: 0,
+      y: 0,
+      force: event.force,
+      peak: event.peak,
+      ts: event.ts,
+    });
+  }
+
+  function flashThrow(force) {
+    const el = els.throwFlash;
+    if (!el) return;
+    el.querySelector(".throw-flash__force").textContent = "force " + force.toFixed(2);
+    el.classList.remove("active");
+    void el.offsetWidth;
+    el.classList.add("active");
+  }
+
   // ---- Boot ----------------------------------------------------------------
 
+  initThrowDetector();
   connect();
   if (needsPermission()) {
     els.permissionCard.classList.remove("hidden");
