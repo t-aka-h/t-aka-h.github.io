@@ -17,12 +17,6 @@
     status: document.getElementById("status"),
     permissionCard: document.getElementById("permissionCard"),
     permissionButton: document.getElementById("permissionButton"),
-    ax: document.getElementById("ax"),
-    ay: document.getElementById("ay"),
-    az: document.getElementById("az"),
-    alpha: document.getElementById("alpha"),
-    beta: document.getElementById("beta"),
-    gamma: document.getElementById("gamma"),
     peakMag: document.getElementById("peakMag"),
     lastForce: document.getElementById("lastForce"),
     throwCount: document.getElementById("throwCount"),
@@ -154,12 +148,11 @@
         gamma: event.rotationRate.gamma ?? 0,
       };
     }
-    render();
     flush();
     if (throwDetector) {
       throwDetector.feed(latest.ax, latest.ay, latest.az);
       const peak = throwDetector.peakMagnitude || 0;
-      if (peak > 0) els.peakMag.textContent = peak.toFixed(2);
+      if (peak > 0 && els.peakMag) els.peakMag.textContent = peak.toFixed(2);
     }
   }
 
@@ -167,7 +160,6 @@
     latest.alpha = event.alpha ?? 0;
     latest.beta = event.beta ?? 0;
     latest.gamma = event.gamma ?? 0;
-    render();
     flush();
     if (aimTracker) {
       aimTracker.feed({
@@ -176,15 +168,6 @@
         rotationRate: latestRotationRate,
       });
     }
-  }
-
-  function render() {
-    els.ax.textContent = latest.ax.toFixed(2);
-    els.ay.textContent = latest.ay.toFixed(2);
-    els.az.textContent = latest.az.toFixed(2);
-    els.alpha.textContent = latest.alpha.toFixed(1);
-    els.beta.textContent = latest.beta.toFixed(1);
-    els.gamma.textContent = latest.gamma.toFixed(1);
   }
 
   function flush() {
