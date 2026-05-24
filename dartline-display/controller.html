@@ -5,71 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#06030D">
   <title>Dartline Display — Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="controller/controller.css">
 </head>
 <body>
   <main id="app">
     <header class="brand">
-      <h1>Dartline Display</h1>
-      <p class="subtitle">Controller</p>
+      <h1 class="brand__title">Dartline Display</h1>
+      <p class="brand__subtitle">CONTROLLER</p>
+      <div class="brand__accent"></div>
     </header>
-
-    <section id="connection" class="card">
-      <div class="row">
-        <span class="label">Session</span>
-        <span id="sessionId" class="value">—</span>
-      </div>
-      <div class="row">
-        <span class="label">Status</span>
-        <span id="status" class="value">init</span>
-      </div>
-    </section>
 
     <section id="permissionCard" class="card hidden">
       <p>センサーを使うには許可が必要です。</p>
       <button id="permissionButton" class="primary">センサーを有効化</button>
     </section>
 
-    <section id="throwCard" class="card">
-      <h2>Throw Detector</h2>
-      <div class="row">
-        <span class="label">Peak (m/s²)</span>
-        <span id="peakMag" class="value">0.00</span>
+    <section id="scoreboard" class="scoreboard">
+      <div class="scoreboard__row">
+        <div class="scoreboard__chip" id="roundChip">ROUND — / 8</div>
+        <div class="scoreboard__dots" id="throwDots">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
       </div>
-      <div class="row">
-        <span class="label">Last force</span>
-        <span id="lastForce" class="value">—</span>
+      <div class="scoreboard__total">
+        <div class="scoreboard__totalLabel">TOTAL</div>
+        <div class="scoreboard__totalValue" id="totalValue">0</div>
       </div>
-      <div class="row">
-        <span class="label">Throws</span>
-        <span id="throwCount" class="value">0</span>
+      <div class="scoreboard__row scoreboard__row--meta">
+        <div class="scoreboard__best" id="bestChip">BEST 0</div>
+        <div class="scoreboard__lastHit" id="lastHitChip"></div>
       </div>
     </section>
 
-    <section id="aimCard" class="card">
-      <h2>Aim</h2>
-      <div class="row">
-        <span class="label">State</span>
-        <span id="aimState" class="value">init</span>
-      </div>
-      <div class="row">
-        <span class="label">x · y</span>
-        <span id="aimXY" class="value">0.00  ·  0.00</span>
-      </div>
-      <button id="lockButton" class="primary primary--lock">LOCK</button>
-      <button id="recalibrateButton" class="secondary">Re-center</button>
-      <p class="hint">LOCK で照準を固定 → 振って投擲 → 着弾が表示されます。もう一度 LOCK で解除。</p>
+    <section id="actionPanel" class="action-panel">
+      <button id="mainButton" class="big-button" data-mode="start">
+        <span class="big-button__label" id="mainButtonLabel">START</span>
+        <span class="big-button__sub" id="mainButtonSub">8 ラウンド × 3 投</span>
+      </button>
     </section>
+
+    <footer class="footer">
+      <div class="footer__row">
+        <div class="footer__chip" id="aimStateChip" data-state="init">AIMING</div>
+        <button id="recalibrateButton" class="footer__action">⊙ Re-center</button>
+      </div>
+      <div class="footer__row footer__row--meta">
+        <span class="footer__meta">Session <span id="sessionId">—</span></span>
+        <span class="footer__meta footer__meta--status" id="status">init</span>
+      </div>
+    </footer>
   </main>
-
-  <div id="throwFlash" class="throw-flash" aria-hidden="true">
-    <div class="throw-flash__title">THROWN</div>
-    <div class="throw-flash__force"></div>
-  </div>
 
   <script src="shared/protocol.js"></script>
   <script src="shared/motion.js"></script>
   <script src="shared/sound.js"></script>
+  <script src="shared/dartboard.js"></script>
+  <script src="shared/game.js"></script>
   <script src="controller/controller.js"></script>
 </body>
 </html>

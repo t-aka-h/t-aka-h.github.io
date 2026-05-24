@@ -5,13 +5,27 @@
   <!-- Meta Ray-Ban Display: 600x600 fixed viewport, no scroll -->
   <meta name="viewport" content="width=600, height=600, initial-scale=1, user-scalable=no">
   <title>Dartline Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="display/display.css">
 </head>
 <body>
   <main id="stage">
     <header class="hud-top">
-      <span class="title">DARTLINE</span>
-      <span class="session" id="session">—</span>
+      <div class="hud-top__brand">
+        <span class="hud-top__brandName">Dartline</span>
+      </div>
+      <div class="hud-top__center">
+        <div class="hud-top__roundLabel" id="hudRoundLabel">READY</div>
+        <div class="hud-top__dots" id="hudDots">
+          <span class="hudDot"></span><span class="hudDot"></span><span class="hudDot"></span>
+        </div>
+      </div>
+      <div class="hud-top__right">
+        <div class="hud-top__totalLabel">TOTAL</div>
+        <div class="hud-top__totalValue" id="hudTotal">0</div>
+      </div>
     </header>
 
     <section class="big">
@@ -26,20 +40,23 @@
     </section>
 
     <footer class="hud-bottom">
-      <span class="status" id="status">connecting</span>
-      <span class="rate" id="rate">0 Hz</span>
+      <span class="hud-bottom__best" id="hudBest">BEST —</span>
+      <span class="hud-bottom__session">Dartline Display · <span id="session">—</span></span>
+      <span class="hud-bottom__status" id="status">connecting</span>
     </footer>
-  </main>
 
-  <div id="throwOverlay" class="throw-overlay" aria-hidden="true">
-    <div class="throw-overlay__title">THROWN</div>
-    <div class="throw-overlay__force" id="throwForce">force 0.00</div>
-    <div class="throw-overlay__bar"><div class="throw-overlay__fill" id="throwFill"></div></div>
-  </div>
+    <div id="gameOverModal" class="game-over hidden" aria-hidden="true">
+      <div class="game-over__title">GAME OVER</div>
+      <div class="game-over__score" id="gameOverScore">0</div>
+      <div class="game-over__badge hidden" id="gameOverBadge">NEW BEST!</div>
+      <div class="game-over__hint">iPhone で PLAY AGAIN をタップ</div>
+    </div>
+  </main>
 
   <script src="shared/protocol.js"></script>
   <script src="shared/dartboard.js"></script>
   <script src="shared/sound.js"></script>
+  <script src="shared/game.js"></script>
   <script src="display/dartboard.js"></script>
   <script src="display/display.js"></script>
 </body>

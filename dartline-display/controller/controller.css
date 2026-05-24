@@ -1,14 +1,15 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #06030D;
-  --panel: #110A22;
+  --bg:           #06030D;
+  --panel:        #110A22;
   --panel-border: #281A48;
-  --text: #F2EEFF;
-  --text-dim: #9B92C0;
-  --accent-cyan: #00E5FF;
-  --accent-pink: #FF2D87;
+  --text:         #F2EEFF;
+  --text-dim:     #9B92C0;
+  --accent-cyan:  #00E5FF;
+  --accent-pink:  #FF2D87;
   --accent-amber: #FFB547;
+  --led-rim:      #46E3FF;
 }
 
 html, body {
@@ -23,99 +24,307 @@ html, body {
 }
 
 #app {
-  padding: 20px 18px 40px;
+  min-height: 100vh;
+  padding: 24px 22px 28px;
   max-width: 540px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 
-.brand h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+/* ───── brand ───── */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.brand__title {
+  font-family: "Pacifico", "Snell Roundhand", cursive;
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: 0;
   background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  line-height: 1.0;
 }
 
-.brand .subtitle {
-  font-size: 13px;
+.brand__subtitle {
+  font-size: 11px;
+  letter-spacing: 4px;
   color: var(--text-dim);
-  letter-spacing: 2px;
-  text-transform: uppercase;
   margin-top: 2px;
 }
+
+.brand__accent {
+  width: 64%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-pink), transparent);
+  margin-top: 10px;
+  opacity: 0.7;
+}
+
+/* ───── card (used for permission prompt only) ───── */
 
 .card {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 14px;
-  padding: 14px 16px;
+  padding: 16px 18px;
 }
 
-.card h2 {
-  font-size: 13px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 10px;
+.hidden { display: none !important; }
+
+/* ───── scoreboard ───── */
+
+.scoreboard {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 18px 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.row {
+.scoreboard__row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-}
-
-.row + .row {
-  border-top: 1px solid rgba(255,255,255,0.04);
-}
-
-.label {
-  font-size: 12px;
-  color: var(--text-dim);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.value {
-  font-family: "SF Mono", "Menlo", monospace;
-  font-size: 15px;
-  color: var(--text);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
-.grid > div {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 10px;
-  padding: 10px 8px;
+.scoreboard__row--meta {
+  margin-top: -4px;
+}
+
+.scoreboard__chip {
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scoreboard__dots {
+  display: flex;
+  gap: 8px;
+}
+
+.scoreboard__dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-cyan);
+  background: transparent;
+  transition: background 200ms ease-out, transform 100ms ease-out;
+}
+
+.scoreboard__dots .dot.filled {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.7);
+}
+
+.scoreboard__total {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.grid .value {
-  font-size: 18px;
-  font-weight: 600;
+.scoreboard__totalLabel {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--text-dim);
 }
 
-.hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text-dim);
-  text-align: center;
+.scoreboard__totalValue {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 72px;
+  line-height: 1.0;
+  letter-spacing: -1px;
+  color: var(--text);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
 }
+
+.scoreboard__total.new-best .scoreboard__totalValue {
+  color: var(--accent-amber);
+  text-shadow: 0 0 26px rgba(255, 181, 71, 0.5);
+}
+
+.scoreboard__best {
+  font-family: "Menlo", monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--accent-amber);
+  font-weight: 700;
+}
+
+.scoreboard__lastHit {
+  font-family: "Menlo", monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--accent-pink);
+  font-weight: 700;
+  min-height: 16px;
+}
+
+/* ───── big action button ───── */
+
+.action-panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 0 4px;
+}
+
+.big-button {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  background: radial-gradient(circle at 30% 30%, #FF6FA9 0%, var(--accent-pink) 55%, #B5176C 100%);
+  color: #FFFFFF;
+  box-shadow:
+    0 0 32px rgba(255, 45, 135, 0.45),
+    0 0 64px rgba(255, 45, 135, 0.25),
+    inset 0 -10px 24px rgba(0, 0, 0, 0.25),
+    inset 0 8px 16px rgba(255, 255, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 80ms ease-out, box-shadow 200ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.big-button:active {
+  transform: scale(0.97);
+  box-shadow:
+    0 0 18px rgba(255, 45, 135, 0.6),
+    inset 0 -6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.big-button__label {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.big-button__sub {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+}
+
+/* Lock-on (UNLOCK) state — cyan instead of pink to flag the change. */
+.big-button[data-mode="unlock"] {
+  background: radial-gradient(circle at 30% 30%, #6EE7FA 0%, var(--accent-cyan) 55%, #007D99 100%);
+  box-shadow:
+    0 0 32px rgba(0, 229, 255, 0.45),
+    0 0 64px rgba(0, 229, 255, 0.25),
+    inset 0 -10px 24px rgba(0, 0, 0, 0.25),
+    inset 0 8px 16px rgba(255, 255, 255, 0.18);
+}
+
+/* Disabled (waiting for calibration / between rounds) */
+.big-button[data-mode="disabled"] {
+  background: radial-gradient(circle at 30% 30%, #4A3F66 0%, #2C2440 60%, #1A1428 100%);
+  box-shadow: inset 0 -6px 14px rgba(0, 0, 0, 0.35);
+  color: var(--text-dim);
+  border-color: var(--panel-border);
+}
+
+/* ───── footer ───── */
+
+.footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.footer__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer__chip {
+  font-size: 11px;
+  letter-spacing: 3px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.footer__chip[data-state="aiming"] {
+  color: var(--accent-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.08);
+}
+
+.footer__chip[data-state="calibrating"] {
+  color: var(--accent-amber);
+  border-color: rgba(255, 181, 71, 0.35);
+  background: rgba(255, 181, 71, 0.08);
+}
+
+.footer__chip[data-state="locked"] {
+  color: var(--accent-pink);
+  border-color: rgba(255, 45, 135, 0.35);
+  background: rgba(255, 45, 135, 0.10);
+}
+
+.footer__action {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.footer__action:active { transform: scale(0.96); }
+
+.footer__row--meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.footer__meta {
+  font-family: "Menlo", monospace;
+}
+
+.footer__meta--status.connected { color: var(--accent-cyan); }
+.footer__meta--status.error { color: var(--accent-pink); }
+.footer__meta--status.waiting { color: var(--accent-amber); }
+
+/* Permission prompt button stays here for the boot screen. */
 
 .primary {
   width: 100%;
@@ -130,88 +339,4 @@ html, body {
   cursor: pointer;
   margin-top: 10px;
 }
-
 .primary:active { transform: scale(0.98); }
-
-.primary--lock {
-  margin-top: 14px;
-  font-size: 22px;
-  letter-spacing: 4px;
-  padding: 20px;
-}
-
-.primary--lock-on {
-  background: linear-gradient(90deg, var(--accent-pink), var(--accent-amber));
-  color: #0f0413;
-  box-shadow: 0 0 24px rgba(255, 45, 135, 0.45);
-}
-
-.secondary {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--accent-cyan);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  cursor: pointer;
-  margin-top: 12px;
-  text-transform: uppercase;
-}
-
-.secondary:active { transform: scale(0.98); }
-
-.hidden { display: none !important; }
-
-#status.connected { color: var(--accent-cyan); }
-#status.error { color: var(--accent-pink); }
-#status.waiting { color: var(--accent-amber); }
-
-/* Full-screen flash overlay shown momentarily when a throw is detected.
-   Kicked off by adding the `.active` class — the animation fades it out. */
-.throw-flash {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at center,
-              rgba(255, 45, 135, 0.35) 0%,
-              rgba(6, 3, 13, 0.85) 65%,
-              rgba(6, 3, 13, 0.95) 100%);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 999;
-}
-
-.throw-flash__title {
-  font-size: 88px;
-  font-weight: 900;
-  letter-spacing: 8px;
-  color: var(--accent-cyan);
-  text-shadow: 0 0 24px rgba(0, 229, 255, 0.6),
-               0 0 48px rgba(255, 45, 135, 0.4);
-}
-
-.throw-flash__force {
-  margin-top: 12px;
-  font-family: "SF Mono", "Menlo", monospace;
-  font-size: 18px;
-  color: var(--accent-amber);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-.throw-flash.active {
-  animation: throwFlash 700ms ease-out forwards;
-}
-
-@keyframes throwFlash {
-  0%   { opacity: 0;   transform: scale(0.94); }
-  10%  { opacity: 1;   transform: scale(1.02); }
-  30%  { opacity: 1;   transform: scale(1.00); }
-  100% { opacity: 0;   transform: scale(1.06); }
-}

@@ -21,7 +21,9 @@
       this._ctx = null;
       this._master = null;
       this.muted = false;
-      this.masterGain = 0.85;
+      // Bumped from 0.85 → 1.10. iPhone speakers + Web Audio default gain
+      // through the system mixer have been quiet in practice.
+      this.masterGain = 1.10;
     }
 
     // Lazily create the context. MUST be called from a user gesture for the
@@ -40,6 +42,17 @@
       master.gain.value = this.masterGain;
       master.connect(this._ctx.destination);
       this._master = master;
+      // iOS Safari quirk: even with resume(), the audio output stream stays
+      // dormant until something plays. Kick it off with an inaudible buffer
+      // so the first real SE doesn't get clipped.
+      try {
+        const sr = this._ctx.sampleRate;
+        const buf = this._ctx.createBuffer(1, 1, sr);
+        const src = this._ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(this._ctx.destination);
+        src.start(0);
+      } catch (_) {}
       if (this._ctx.state === "suspended") {
         this._ctx.resume().catch(() => {});
       }

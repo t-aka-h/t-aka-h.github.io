@@ -1,9 +1,9 @@
 /*
  * Meta Ray-Ban Display rules:
- *  - Background must be true black (#000) — additive display treats it as transparent.
- *  - High-contrast bright text only.
- *  - Body text >= 16px, primary >= 20-24px.
- *  - No scrolling; entire UI fits within 600x600.
+ *   - Background must be pure #000 — additive display reads it as transparent.
+ *   - High-contrast bright text only.
+ *   - Body >= 16 px, primary >= 20-24 px.
+ *   - No scrolling — fits within 600 x 600.
  */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,29 +22,91 @@ html, body {
   width: 600px;
   height: 600px;
   display: grid;
-  grid-template-rows: 56px 1fr 56px;
-  padding: 16px 24px;
+  grid-template-rows: 70px 1fr 44px;
+  padding: 10px 16px;
 }
 
-.hud-top, .hud-bottom {
-  display: flex;
-  justify-content: space-between;
+/* ───── HUD top — brand · round/dots · total ───── */
+
+.hud-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  font-size: 16px;
-  letter-spacing: 2px;
+  gap: 16px;
+}
+
+.hud-top__brand {
+  justify-self: start;
+}
+
+.hud-top__brandName {
+  font-family: "Pacifico", "Snell Roundhand", cursive;
+  font-size: 30px;
+  background: linear-gradient(90deg, #00E5FF, #FF2D87);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.0;
+}
+
+.hud-top__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-top__roundLabel {
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: #00E5FF;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
-.hud-top .title {
-  font-weight: 800;
-  letter-spacing: 4px;
-  color: #00E5FF;
+.hud-top__dots {
+  display: flex;
+  gap: 8px;
 }
 
-.hud-top .session {
-  font-family: "Menlo", monospace;
-  color: #FFB547;
+.hud-top__dots .hudDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #00E5FF;
+  background: transparent;
 }
+
+.hud-top__dots .hudDot.filled {
+  background: #00E5FF;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+}
+
+.hud-top__right {
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-top__totalLabel {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #9BD8FF;
+}
+
+.hud-top__totalValue {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.0;
+  letter-spacing: -1px;
+}
+
+.hud-top__totalValue.new-best { color: #FFB547; }
+
+/* ───── board stage ───── */
 
 .big {
   display: flex;
@@ -53,11 +115,10 @@ html, body {
   padding: 0;
 }
 
-/* Dartboard stage. The Canvas2D inside owns the actual rendering. */
 .board-stage {
   position: relative;
-  width: 480px;
-  height: 480px;
+  width: 500px;
+  height: 500px;
   margin: 0 auto;
 }
 
@@ -67,11 +128,10 @@ html, body {
   height: 100%;
 }
 
-/* Toast in the upper-right corner showing the most recent hit's label/points. */
 .score-toast {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
+  right: 4px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -80,22 +140,16 @@ html, body {
   pointer-events: none;
   transition: opacity 200ms ease-out;
 }
-
-.score-toast.active {
-  opacity: 1;
-}
-
+.score-toast.active { opacity: 1; }
 .score-toast__label {
-  font-family: "Helvetica Neue", system-ui, sans-serif;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 2px;
   color: #FFB547;
 }
-
 .score-toast__pts {
   font-family: "Menlo", monospace;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   color: #FFFFFF;
 }
@@ -109,16 +163,16 @@ html, body {
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
   color: #FFB547;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: 4px;
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.3;
   transition: opacity 200ms ease-out;
 }
 
 .aim-overlay__sub {
-  font-size: 16px;
+  font-size: 13px;
   color: #FFFFFF;
   letter-spacing: 2px;
   font-weight: 400;
@@ -126,89 +180,89 @@ html, body {
   display: inline-block;
 }
 
-.aim-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
+.aim-overlay.hidden { opacity: 0; pointer-events: none; }
+
+/* ───── HUD bottom — best · session · status ───── */
+
+.hud-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
-.hud-bottom .status {
+.hud-bottom__best {
   color: #FFB547;
-}
-
-.hud-bottom .status.connected { color: #00E5FF; }
-.hud-bottom .status.error { color: #FF2D87; }
-
-.hud-bottom .rate {
   font-family: "Menlo", monospace;
-  color: #FFFFFF;
+  font-weight: 700;
+  justify-self: start;
 }
 
-/* Optional flash when a motion frame lands — visual "we're alive" cue. */
-.pulse {
-  animation: pulse 120ms ease-out;
+.hud-bottom__session {
+  color: #9BD8FF;
+  justify-self: center;
+  letter-spacing: 1px;
 }
 
-@keyframes pulse {
-  0%   { color: #00E5FF; }
-  100% { color: #FFFFFF; }
+.hud-bottom__status {
+  color: #FFB547;
+  justify-self: end;
 }
 
-/* THROWN overlay — full-viewport bright text on additive display.
-   Background stays #000 (= transparent on Meta Ray-Ban Display) so only the
-   bright pixels are perceived as floating in space. */
-.throw-overlay {
+.hud-bottom__status.connected { color: #00E5FF; }
+.hud-bottom__status.error     { color: #FF2D87; }
+
+/* ───── Game-over modal ───── */
+
+.game-over {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  background: #000;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 999;
+  gap: 14px;
+  background: rgba(6, 3, 13, 0.92);
+  opacity: 1;
+  transition: opacity 250ms ease-out;
+  z-index: 80;
+  text-align: center;
 }
 
-.throw-overlay__title {
-  font-size: 110px;
+.game-over.hidden { opacity: 0; pointer-events: none; }
+
+.game-over__title {
+  font-size: 32px;
   font-weight: 900;
-  letter-spacing: 14px;
+  letter-spacing: 10px;
   color: #00E5FF;
-  /* No drop shadows — additive displays don't render dim halos well. */
 }
 
-.throw-overlay__force {
-  font-family: "Menlo", monospace;
-  font-size: 26px;
-  color: #FFB547;
+.game-over__score {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  font-size: 132px;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.0;
+  letter-spacing: -2px;
+}
+
+.game-over__badge {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FFB547, #FF2D87);
+  color: #06030D;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 4px;
+}
+.game-over__badge.hidden { display: none; }
+
+.game-over__hint {
+  margin-top: 6px;
+  color: #9BD8FF;
+  font-size: 14px;
   letter-spacing: 3px;
-  text-transform: uppercase;
-}
-
-.throw-overlay__bar {
-  width: 360px;
-  height: 14px;
-  border: 2px solid #FFFFFF;
-  background: transparent;
-  overflow: hidden;
-}
-
-.throw-overlay__fill {
-  width: 100%;
-  height: 100%;
-  background: #FF2D87;
-  transform-origin: left center;
-  transform: scaleX(0);
-}
-
-.throw-overlay.active {
-  animation: throwIn 900ms ease-out forwards;
-}
-
-@keyframes throwIn {
-  0%   { opacity: 0;   transform: scale(0.85); }
-  15%  { opacity: 1;   transform: scale(1.06); }
-  35%  { opacity: 1;   transform: scale(1.00); }
-  100% { opacity: 0;   transform: scale(1.08); }
 }

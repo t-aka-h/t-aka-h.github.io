@@ -1,10 +1,9 @@
 // Dartline Display — Controller (iPhone Safari)
-// Phase 0: stream raw DeviceMotion / DeviceOrientation to the display.
+// Tilt to aim, tap LOCK to freeze, swing to throw. Count Up runs as the
+// default game mode: 8 rounds × 3 throws = 24 darts, sum of all hit points.
 
 (() => {
   const DEFAULT_SESSION = "DEMO01";
-  // Override at runtime by serving with ?s=ABC123. For local dev without a
-  // worker deployed yet, set RELAY_URL to e.g. ws://192.168.1.x:8787 .
   const RELAY_URL =
     new URLSearchParams(location.search).get("relay") ||
     "wss://dartline-display-relay.darts-relay.workers.dev";
@@ -13,29 +12,47 @@
   const sessionId = (params.get("s") || DEFAULT_SESSION).toUpperCase();
 
   const els = {
-    session: document.getElementById("sessionId"),
-    status: document.getElementById("status"),
-    permissionCard: document.getElementById("permissionCard"),
+    sessionId: document.getElementById("sessionId"),
+    status:    document.getElementById("status"),
+    permissionCard:   document.getElementById("permissionCard"),
     permissionButton: document.getElementById("permissionButton"),
-    peakMag: document.getElementById("peakMag"),
-    lastForce: document.getElementById("lastForce"),
-    throwCount: document.getElementById("throwCount"),
-    throwFlash: document.getElementById("throwFlash"),
-    aimState: document.getElementById("aimState"),
-    aimXY: document.getElementById("aimXY"),
+    roundChip:   document.getElementById("roundChip"),
+    throwDots:   document.getElementById("throwDots"),
+    totalValue:  document.getElementById("totalValue"),
+    bestChip:    document.getElementById("bestChip"),
+    lastHitChip: document.getElementById("lastHitChip"),
+    mainButton:      document.getElementById("mainButton"),
+    mainButtonLabel: document.getElementById("mainButtonLabel"),
+    mainButtonSub:   document.getElementById("mainButtonSub"),
+    aimStateChip:    document.getElementById("aimStateChip"),
     recalibrateButton: document.getElementById("recalibrateButton"),
-    lockButton: document.getElementById("lockButton"),
   };
 
-  els.session.textContent = sessionId;
+  els.sessionId.textContent = sessionId;
 
   function setStatus(text, cls) {
     els.status.textContent = text;
-    els.status.className = "value" + (cls ? " " + cls : "");
+    els.status.className = "footer__meta footer__meta--status" + (cls ? " " + cls : "");
   }
 
-  // ---- WebSocket -----------------------------------------------------------
+  // ── Web Audio ───────────────────────────────────────────────────────────
+  const sound = window.DartlineSound
+    ? new window.DartlineSound.SoundSynth()
+    : null;
+  let audioReady = false;
+  if (sound) {
+    const unlock = () => {
+      sound.ensureContext();
+      if (!audioReady) {
+        audioReady = true;
+        sound.playAimEnter();   // brief audible confirmation
+      }
+    };
+    ["pointerdown", "touchstart", "keydown"].forEach((ev) =>
+      document.addEventListener(ev, unlock, { once: true, passive: true }));
+  }
 
+  // ── WebSocket ───────────────────────────────────────────────────────────
   let ws = null;
   let reconnectAttempts = 0;
   const MAX_BACKOFF_MS = 5000;
@@ -45,102 +62,100 @@
     setStatus("connecting", "waiting");
     try {
       ws = new WebSocket(url);
-    } catch (e) {
-      setStatus("error", "error");
+    } catch (_) {
       scheduleReconnect();
       return;
     }
-
     ws.addEventListener("open", () => {
       reconnectAttempts = 0;
       setStatus("connected", "connected");
+      // Re-broadcast game state so a freshly opened display catches up.
+      if (game) {
+        sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
+      }
     });
-
     ws.addEventListener("message", (event) => {
-      // Phase 0: log only; controller doesn't act on display messages yet.
-      // (Future: handle menu selections from the glasses.)
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === "hello" || msg.type === "peer_joined" || msg.type === "peer_left") {
-          // Keep status fresh based on whether a display is present.
-          if (msg.type === "hello") {
-            const hasDisplay = (msg.peers || []).includes("display");
-            setStatus(hasDisplay ? "linked" : "waiting for display", hasDisplay ? "connected" : "waiting");
-          } else if (msg.type === "peer_joined" && msg.role === "display") {
-            setStatus("linked", "connected");
-          } else if (msg.type === "peer_left" && msg.role === "display") {
-            setStatus("waiting for display", "waiting");
-          }
+        if (msg.type === "hello") {
+          const hasDisplay = (msg.peers || []).includes("display");
+          setStatus(hasDisplay ? "linked" : "waiting display", hasDisplay ? "connected" : "waiting");
+        } else if (msg.type === "peer_joined" && msg.role === "display") {
+          setStatus("linked", "connected");
+          // Push state to the newly-arrived display.
+          if (game) sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
+        } else if (msg.type === "peer_left" && msg.role === "display") {
+          setStatus("waiting display", "waiting");
         }
       } catch (_) {}
     });
-
-    ws.addEventListener("close", () => {
-      setStatus("disconnected", "error");
-      scheduleReconnect();
-    });
-
-    ws.addEventListener("error", () => {
-      setStatus("error", "error");
-    });
+    ws.addEventListener("close", () => { setStatus("disconnected", "error"); scheduleReconnect(); });
+    ws.addEventListener("error", () => { setStatus("error", "error"); });
   }
-
   function scheduleReconnect() {
     reconnectAttempts += 1;
     const delay = Math.min(500 * Math.pow(2, reconnectAttempts), MAX_BACKOFF_MS);
     setTimeout(connect, delay);
   }
-
   function sendMaybe(msg) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    try {
-      ws.send(JSON.stringify(msg));
-    } catch (_) {}
+    try { ws.send(JSON.stringify(msg)); } catch (_) {}
   }
 
-  // ---- Sensors -------------------------------------------------------------
-
-  // iOS 13+ requires an explicit permission request triggered by a user gesture.
+  // ── Sensor permissions ──────────────────────────────────────────────────
   function needsPermission() {
-    return (
-      typeof DeviceMotionEvent !== "undefined" &&
-      typeof DeviceMotionEvent.requestPermission === "function"
-    );
+    return typeof DeviceMotionEvent !== "undefined" &&
+           typeof DeviceMotionEvent.requestPermission === "function";
   }
-
   async function requestPermissions() {
     try {
-      const motionPerm = await DeviceMotionEvent.requestPermission();
-      let orientPerm = "granted";
-      if (
-        typeof DeviceOrientationEvent !== "undefined" &&
-        typeof DeviceOrientationEvent.requestPermission === "function"
-      ) {
-        orientPerm = await DeviceOrientationEvent.requestPermission();
+      const m = await DeviceMotionEvent.requestPermission();
+      let o = "granted";
+      if (typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function") {
+        o = await DeviceOrientationEvent.requestPermission();
       }
-      if (motionPerm === "granted" && orientPerm === "granted") {
+      if (m === "granted" && o === "granted") {
         els.permissionCard.classList.add("hidden");
         startSensors();
       } else {
         setStatus("permission denied", "error");
       }
-    } catch (e) {
+    } catch (_) {
       setStatus("permission error", "error");
     }
   }
 
-  // Throttle outbound motion frames so we don't flood the relay.
-  // 50 Hz feels plenty for Phase 0.
-  const SEND_INTERVAL_MS = 20;
+  // ── Sensor + tracker plumbing ───────────────────────────────────────────
+  const SEND_INTERVAL_MS = 20;       // raw motion → relay
+  const AIM_SEND_INTERVAL_MS = 33;   // 30 Hz aim updates
   let lastSentAt = 0;
-  let latest = { ax: 0, ay: 0, az: 0, alpha: 0, beta: 0, gamma: 0 };
+  let lastAimSentAt = 0;
+  let lastAimSent = { x: 0, y: 0 };
+  let latestRotationRate = null;
+  const latest = { ax: 0, ay: 0, az: 0, alpha: 0, beta: 0, gamma: 0 };
+
+  let throwDetector = null;
+  let aimTracker = null;
+  let aimStateNow = "calibrating";
+  let locked = false;
+  let lockedAim = { x: 0, y: 0 };
+
+  function initTrackers() {
+    if (!window.DartlineMotion) return;
+    throwDetector = new window.DartlineMotion.ThrowDetector();
+    throwDetector.on(onThrow);
+    aimTracker = new window.DartlineMotion.AimTracker();
+    aimTracker.onStateChange(onAimState);
+    aimTracker.onAim(onAim);
+    onAimState(aimTracker.state);
+  }
 
   function onMotion(event) {
     const acc = event.accelerationIncludingGravity || event.acceleration || {};
     latest.ax = acc.x ?? 0;
     latest.ay = acc.y ?? 0;
     latest.az = acc.z ?? 0;
-    // Capture rotationRate for the aim tracker's calibration check.
     if (event.rotationRate) {
       latestRotationRate = {
         alpha: event.rotationRate.alpha ?? 0,
@@ -148,19 +163,14 @@
         gamma: event.rotationRate.gamma ?? 0,
       };
     }
-    flush();
-    if (throwDetector) {
-      throwDetector.feed(latest.ax, latest.ay, latest.az);
-      const peak = throwDetector.peakMagnitude || 0;
-      if (peak > 0 && els.peakMag) els.peakMag.textContent = peak.toFixed(2);
-    }
+    flushMotion();
+    if (throwDetector) throwDetector.feed(latest.ax, latest.ay, latest.az);
   }
-
   function onOrientation(event) {
     latest.alpha = event.alpha ?? 0;
-    latest.beta = event.beta ?? 0;
+    latest.beta  = event.beta  ?? 0;
     latest.gamma = event.gamma ?? 0;
-    flush();
+    flushMotion();
     if (aimTracker) {
       aimTracker.feed({
         beta: latest.beta,
@@ -169,12 +179,29 @@
       });
     }
   }
-
-  function flush() {
+  function flushMotion() {
     const now = Date.now();
     if (now - lastSentAt < SEND_INTERVAL_MS) return;
     lastSentAt = now;
     sendMaybe(window.DartlineProtocol.motion({ ...latest, ts: now }));
+  }
+
+  function onAimState(state) {
+    aimStateNow = state;
+    els.aimStateChip.textContent = state.toUpperCase();
+    // Locked state takes precedence visually.
+    els.aimStateChip.dataset.state = locked ? "locked" : state;
+    sendMaybe({ type: "aim_state", state, ts: Date.now() });
+    if (state === "aiming" && sound) sound.playAimEnter();
+    refreshMainButton();
+  }
+
+  function onAim(aim) {
+    lastAimSent = aim;
+    const now = Date.now();
+    if (now - lastAimSentAt < AIM_SEND_INTERVAL_MS) return;
+    lastAimSentAt = now;
+    sendMaybe({ type: "aim", x: aim.x, y: aim.y, ts: now });
   }
 
   function startSensors() {
@@ -182,47 +209,98 @@
     window.addEventListener("deviceorientation", onOrientation);
   }
 
-  // ---- Throw detection -----------------------------------------------------
+  // ── Game ────────────────────────────────────────────────────────────────
+  const game = window.DartlineGame ? new window.DartlineGame.CountUpGame() : null;
 
-  let throwDetector = null;
-  let throwCount = 0;
-  let latestRotationRate = null;
-  let aimTracker = null;
-  let lastAimSent = { x: 0, y: 0 };
-  let lastAimSentAt = 0;
-  const AIM_SEND_INTERVAL_MS = 33; // 30 Hz aim updates over the wire.
-  let locked = false;
-  let lockedAim = { x: 0, y: 0 };
-
-  // Web Audio synth — same as on the display side. Played from the iPhone
-  // speaker so the user gets local audio feedback in their hand.
-  const sound = window.DartlineSound
-    ? new window.DartlineSound.SoundSynth()
-    : null;
-  if (sound) {
-    const unlock = () => sound.ensureContext();
-    ["pointerdown", "touchstart", "keydown"].forEach((ev) =>
-      document.addEventListener(ev, unlock, { once: true, passive: true }));
+  function startNewGame() {
+    if (!game) return;
+    game.start();
+    sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "start", ts: Date.now() });
+    renderGame();
+    refreshMainButton();
   }
 
-  function initThrowDetector() {
-    if (!window.DartlineMotion) return;
-    throwDetector = new window.DartlineMotion.ThrowDetector();
-    throwDetector.on(onThrow);
-    aimTracker = new window.DartlineMotion.AimTracker();
-    aimTracker.onStateChange(onAimState);
-    aimTracker.onAim(onAim);
-    onAimState(aimTracker.state);
-    if (els.recalibrateButton) {
-      els.recalibrateButton.addEventListener("click", () => {
-        if (locked) toggleLock();   // implicitly release lock on re-center
-        aimTracker.recalibrate();
-      });
+  function renderGame() {
+    if (!game) return;
+    const snap = game.snapshot();
+    // Round chip
+    if (snap.status === "idle") {
+      els.roundChip.textContent = `ROUND — / ${snap.totalRounds}`;
+    } else if (snap.status === "finished") {
+      els.roundChip.textContent = `FINAL`;
+    } else {
+      els.roundChip.textContent = `ROUND ${snap.round + 1} / ${snap.totalRounds}`;
     }
-    if (els.lockButton) {
-      els.lockButton.addEventListener("click", toggleLock);
-      updateLockButton();
+    // 3-dot throw indicator
+    const dots = els.throwDots.querySelectorAll(".dot");
+    dots.forEach((dot, idx) => {
+      dot.classList.toggle("filled", idx < snap.throwInRound && snap.status === "playing");
+    });
+    if (snap.status === "finished") {
+      // After finish: light all 3 dots amber.
+      dots.forEach((dot) => dot.classList.add("filled"));
     }
+    // Total
+    els.totalValue.textContent = String(snap.totalScore);
+    const totalEl = els.totalValue.parentElement;
+    const isNewBest = snap.status === "finished" && snap.totalScore > 0 && snap.totalScore >= snap.best;
+    totalEl.classList.toggle("new-best", isNewBest);
+    // Best
+    els.bestChip.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
+    // Last hit
+    if (snap.lastHit) {
+      els.lastHitChip.textContent =
+        `${snap.lastHit.label}  ${snap.lastHit.points > 0 ? "+" : ""}${snap.lastHit.points}`;
+    } else {
+      els.lastHitChip.textContent = "";
+    }
+  }
+
+  // ── Main button (state-aware) ───────────────────────────────────────────
+  function refreshMainButton() {
+    if (!game) return;
+    const snap = game.snapshot();
+    const calibrating = aimStateNow !== "aiming";
+    if (snap.status === "idle") {
+      els.mainButton.dataset.mode = "start";
+      els.mainButtonLabel.textContent = "START";
+      els.mainButtonSub.textContent = "8 ラウンド × 3 投";
+      return;
+    }
+    if (snap.status === "finished") {
+      els.mainButton.dataset.mode = "start";
+      els.mainButtonLabel.textContent = "PLAY AGAIN";
+      els.mainButtonSub.textContent = `FINAL ${snap.totalScore}`;
+      return;
+    }
+    // playing
+    if (calibrating) {
+      els.mainButton.dataset.mode = "disabled";
+      els.mainButtonLabel.textContent = "...";
+      els.mainButtonSub.textContent = "CALIBRATING";
+      return;
+    }
+    if (locked) {
+      els.mainButton.dataset.mode = "unlock";
+      els.mainButtonLabel.textContent = "UNLOCK";
+      els.mainButtonSub.textContent = "AIMING FROZEN";
+    } else {
+      els.mainButton.dataset.mode = "lock";
+      els.mainButtonLabel.textContent = "LOCK";
+      els.mainButtonSub.textContent = `THROW ${snap.throwInRound + 1} OF ${snap.throwsPerRound}`;
+    }
+  }
+
+  function onMainButtonClick() {
+    if (!game) return;
+    const snap = game.snapshot();
+    if (snap.status === "idle" || snap.status === "finished") {
+      startNewGame();
+      return;
+    }
+    // playing
+    if (aimStateNow !== "aiming") return;   // disabled
+    toggleLock();
   }
 
   function toggleLock() {
@@ -232,77 +310,53 @@
     } else {
       lockedAim = { x: lastAimSent.x, y: lastAimSent.y };
       locked = true;
-      sendMaybe({
-        type: "lock",
-        x: lockedAim.x,
-        y: lockedAim.y,
-        ts: Date.now(),
-      });
+      sendMaybe({ type: "lock", x: lockedAim.x, y: lockedAim.y, ts: Date.now() });
       if (sound) sound.playAimLock();
     }
-    updateLockButton();
+    els.aimStateChip.dataset.state = locked ? "locked" : aimStateNow;
+    els.aimStateChip.textContent = locked ? "LOCKED" : aimStateNow.toUpperCase();
+    refreshMainButton();
   }
 
-  function updateLockButton() {
-    if (!els.lockButton) return;
-    if (locked) {
-      els.lockButton.textContent = "UNLOCK";
-      els.lockButton.classList.add("primary--lock-on");
-    } else {
-      els.lockButton.textContent = "LOCK";
-      els.lockButton.classList.remove("primary--lock-on");
-    }
-  }
-
-  function onAimState(state) {
-    els.aimState.textContent = state;
-    els.aimState.className = "value " + (state === "aiming" ? "connected" : "waiting");
-    // Send a state update so the display can show "calibrating" vs "aiming".
-    sendMaybe({ type: "aim_state", state, ts: Date.now() });
-    // Audible cue when calibration completes.
-    if (state === "aiming" && sound) sound.playAimEnter();
-  }
-
-  function onAim(aim) {
-    lastAimSent = aim;
-    els.aimXY.textContent = aim.x.toFixed(2) + "  ·  " + aim.y.toFixed(2);
-    const now = Date.now();
-    if (now - lastAimSentAt < AIM_SEND_INTERVAL_MS) return;
-    lastAimSentAt = now;
-    sendMaybe({ type: "aim", x: aim.x, y: aim.y, ts: now });
-  }
-
+  // ── Throw handler ───────────────────────────────────────────────────────
   function onThrow(event) {
-    throwCount += 1;
-    els.throwCount.textContent = String(throwCount);
-    els.lastForce.textContent = event.force.toFixed(2) + "  (peak " + event.peak.toFixed(1) + ")";
-    flashThrow(event.force);
     if (sound) sound.playThrowSnap();
-    // Use the locked aim if available, otherwise fall back to the live aim.
     const aim = locked ? lockedAim : lastAimSent;
     sendMaybe({
       type: "throw",
-      x: aim.x,
-      y: aim.y,
-      force: event.force,
-      peak: event.peak,
-      ts: event.ts,
-      locked,
+      x: aim.x, y: aim.y,
+      force: event.force, peak: event.peak,
+      ts: event.ts, locked,
     });
+    // Score it and advance the game.
+    if (game && window.DartlineDartboard && game.snapshot().status === "playing") {
+      const score = window.DartlineDartboard.scoreAt(aim.x, aim.y);
+      const result = game.recordHit(score);
+      renderGame();
+      sendMaybe({
+        type: "game_state",
+        snapshot: game.snapshot(),
+        result,
+        ts: Date.now(),
+      });
+      // Auto-release lock between rounds and at game end so we don't carry
+      // a stale aim across rounds.
+      if ((result === "round_end" || result === "game_end") && locked) {
+        toggleLock();
+      }
+      refreshMainButton();
+    }
   }
 
-  function flashThrow(force) {
-    const el = els.throwFlash;
-    if (!el) return;
-    el.querySelector(".throw-flash__force").textContent = "force " + force.toFixed(2);
-    el.classList.remove("active");
-    void el.offsetWidth;
-    el.classList.add("active");
-  }
-
-  // ---- Boot ----------------------------------------------------------------
-
-  initThrowDetector();
+  // ── Boot ────────────────────────────────────────────────────────────────
+  initTrackers();
+  renderGame();
+  refreshMainButton();
+  els.mainButton.addEventListener("click", onMainButtonClick);
+  els.recalibrateButton.addEventListener("click", () => {
+    if (locked) toggleLock();
+    if (aimTracker) aimTracker.recalibrate();
+  });
   connect();
   if (needsPermission()) {
     els.permissionCard.classList.remove("hidden");
