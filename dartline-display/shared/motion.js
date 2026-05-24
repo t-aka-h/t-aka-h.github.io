@@ -264,12 +264,16 @@
       // aiming
       const dBeta  = beta  - this.refBeta;
       const dGamma = gamma - this.refGamma;
-      // Match iOS Dartline:
-      //   gamma → x  (right tilt = +x = cursor right)
-      //   beta  → y  (tilting top edge up = +beta = +y = cursor up)
-      // The display flips Y once more so this lands on screen the natural way.
-      const rawX = dGamma / this.opts.sensitivityDeg;
-      const rawY = dBeta  / this.opts.sensitivityDeg;
+      // Match iOS Dartline's laser-pointer feel:
+      //   tilt right (top edge to user's right)  →  cursor right
+      //   tilt left                              →  cursor left
+      //   tilt up    (top edge toward user)      →  cursor up
+      //   tilt down                              →  cursor down
+      // iOS DeviceOrientation: "tilt right" from the user's POV produces
+      // NEGATIVE gamma (the right SIDE of the phone tilts down, not up), so
+      // we invert gamma to match natural intent. Beta is already aligned.
+      const rawX = -dGamma / this.opts.sensitivityDeg;
+      const rawY =  dBeta  / this.opts.sensitivityDeg;
       const s = this.opts.smoothing;
       this.smoothedX = this.smoothedX * (1 - s) + rawX * s;
       this.smoothedY = this.smoothedY * (1 - s) + rawY * s;
