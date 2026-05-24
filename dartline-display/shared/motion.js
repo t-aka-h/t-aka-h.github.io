@@ -20,9 +20,18 @@
     // After the spike, keep tracking peak magnitude for this long.
     peakWindowMs: 220,
 
-    // After emitting a throw, ignore further motion for this long. Prevents
-    // the deceleration-and-rebound from registering as a second throw.
-    cooldownMs: 800,
+    // ── settle-based gating ──────────────────────────────────────────────
+    // After emitting a throw, we wait for the phone to stop moving before
+    // accepting another throw. The phone is "settled" once magnitude stays
+    // under `settleThreshold` for `settleFramesRequired` consecutive frames.
+    // This lets the user fire rapid throws as soon as the arm rests, while
+    // still absorbing the post-release rebound spike.
+    settleThreshold: 12,
+    settleFramesRequired: 4,
+
+    // Safety net — if we never settle (constant shaking), force-release the
+    // gate after this long so the detector doesn't get stuck.
+    maxSettleMs: 800,
 
     // Map peak magnitude → normalized force in [0, 1].
     //   forceFloor = peak that yields force 0
@@ -48,7 +57,8 @@
       this.state = "idle";
       this.peakMagnitude = 0;
       this.armedAt = 0;
-      this.cooldownUntil = 0;
+      this.settleEnteredAt = 0;
+      this.settleFrames = 0;
     }
 
     on(fn) {
@@ -68,7 +78,6 @@
 
       switch (this.state) {
         case "idle":
-          if (now < this.cooldownUntil) return null;
           if (mag >= this.opts.spikeThreshold) {
             this.state = "armed";
             this.peakMagnitude = mag;
@@ -84,8 +93,9 @@
           const overshoot = this.peakMagnitude - this.opts.spikeThreshold;
           if (overshoot < this.opts.minOvershoot) {
             // Looked like a spike but never built up — abort silently.
-            this.cooldownUntil = now + this.opts.cooldownMs / 2;
-            this.state = "idle";
+            this.state = "settling";
+            this.settleEnteredAt = now;
+            this.settleFrames = 0;
             this.peakMagnitude = 0;
             this.armedAt = 0;
             return null;
@@ -96,14 +106,33 @@
             peak: this.peakMagnitude,
             ts: now,
           };
-          this.cooldownUntil = now + this.opts.cooldownMs;
-          this.state = "idle";
+          this.state = "settling";
+          this.settleEnteredAt = now;
+          this.settleFrames = 0;
           this.peakMagnitude = 0;
           this.armedAt = 0;
           for (const fn of this._listeners) {
             try { fn(event); } catch (_) {}
           }
           return event;
+        }
+
+        case "settling": {
+          // Wait for the phone to come to rest before accepting the next
+          // throw. Any sample at or above settleThreshold resets the count,
+          // so the rebound spike from the previous throw won't slip past.
+          if (mag < this.opts.settleThreshold) {
+            this.settleFrames += 1;
+          } else {
+            this.settleFrames = 0;
+          }
+          const stuck = (now - this.settleEnteredAt) >= this.opts.maxSettleMs;
+          if (this.settleFrames >= this.opts.settleFramesRequired || stuck) {
+            this.state = "idle";
+            this.settleFrames = 0;
+            this.settleEnteredAt = 0;
+          }
+          return null;
         }
 
         default:
