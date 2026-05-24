@@ -148,5 +148,153 @@
     }
   }
 
-  window.DartlineMotion = { ThrowDetector, DEFAULTS };
+  // ──────────────────────────────────────────────────────────────────────────
+  // AimTracker — turns DeviceOrientation deltas into a normalized aim point
+  // in the range [-1, +1] on each axis (0 = pointing at the reference / center).
+  //
+  // Two states:
+  //   "calibrating" — wait for the phone to hold still, then capture the
+  //                   resting beta/gamma as the reference orientation.
+  //   "aiming"      — emit a smoothed aim from beta/gamma deltas.
+  //
+  // The caller feeds each deviceorientation event; the tracker decides when
+  // to fire onAimChange callbacks. Recalibration is a single method call —
+  // useful for a "re-center" button in the UI.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const AIM_DEFAULTS = {
+    // Tilt angle that maps to the edge of the display (after smoothing).
+    // 25° means a comfortable wrist movement reaches the corners.
+    sensitivityDeg: 25,
+
+    // Low-pass coefficient (0..1). Higher = snappier, lower = smoother.
+    // 0.40 gives a noticeable but pleasant lag.
+    smoothing: 0.40,
+
+    // Clamp output to slightly past the edges so the cursor visibly leaves
+    // the visible play area at extreme tilts.
+    maxRadius: 1.05,
+
+    // Calibration requires N consecutive frames with all rotationRate
+    // components below this threshold (degrees per second). Once met,
+    // we capture the current beta/gamma as the reference.
+    calibStillRateDps: 20,
+    calibFramesRequired: 14,
+
+    // Hard timeout — even with some wobble, calibration completes after
+    // this many ms so the user is never stuck on "Hold still".
+    calibTimeoutMs: 2200,
+
+    // Optional emit throttle (ms). 0 = emit on every input frame.
+    emitMinIntervalMs: 0,
+  };
+
+  class AimTracker {
+    constructor(options = {}) {
+      this.opts = { ...AIM_DEFAULTS, ...options };
+      this._aimListeners = [];
+      this._stateListeners = [];
+      this.reset();
+    }
+
+    reset() {
+      this.state = "calibrating";
+      this.refBeta = null;
+      this.refGamma = null;
+      this.smoothedX = 0;
+      this.smoothedY = 0;
+      this.calibFrames = 0;
+      this.calibStartAt = 0;
+      this.lastEmitAt = 0;
+    }
+
+    recalibrate() {
+      this.reset();
+      this._notifyState();
+    }
+
+    onAim(fn) {
+      this._aimListeners.push(fn);
+      return () => {
+        const i = this._aimListeners.indexOf(fn);
+        if (i >= 0) this._aimListeners.splice(i, 1);
+      };
+    }
+
+    onStateChange(fn) {
+      this._stateListeners.push(fn);
+      return () => {
+        const i = this._stateListeners.indexOf(fn);
+        if (i >= 0) this._stateListeners.splice(i, 1);
+      };
+    }
+
+    // Caller passes the latest deviceorientation values.
+    // rotationRate is optional but lets us calibrate faster — pass null if
+    // unavailable and we'll fall back to the timeout.
+    feed({ beta, gamma, rotationRate, now }) {
+      if (beta == null || gamma == null) return null;
+      now = now ?? Date.now();
+
+      if (this.state === "calibrating") {
+        if (!this.calibStartAt) this.calibStartAt = now;
+        const stillByRate =
+          !rotationRate ||
+          (Math.abs(rotationRate.alpha ?? 0) < this.opts.calibStillRateDps &&
+           Math.abs(rotationRate.beta  ?? 0) < this.opts.calibStillRateDps &&
+           Math.abs(rotationRate.gamma ?? 0) < this.opts.calibStillRateDps);
+        if (stillByRate) {
+          this.calibFrames += 1;
+        } else {
+          this.calibFrames = 0;
+        }
+        const enoughFrames = this.calibFrames >= this.opts.calibFramesRequired;
+        const timedOut = (now - this.calibStartAt) >= this.opts.calibTimeoutMs;
+        if (enoughFrames || timedOut) {
+          this.refBeta = beta;
+          this.refGamma = gamma;
+          this.smoothedX = 0;
+          this.smoothedY = 0;
+          this.state = "aiming";
+          this._notifyState();
+        }
+        return null;
+      }
+
+      // aiming
+      const dBeta  = beta  - this.refBeta;
+      const dGamma = gamma - this.refGamma;
+      // gamma → x (right tilt = +x).
+      // beta  → y. Tipping forward (beta decreasing) raises the aim, so we
+      // invert: y = -dBeta / sensitivity.
+      const rawX =  dGamma / this.opts.sensitivityDeg;
+      const rawY = -dBeta  / this.opts.sensitivityDeg;
+      const s = this.opts.smoothing;
+      this.smoothedX = this.smoothedX * (1 - s) + rawX * s;
+      this.smoothedY = this.smoothedY * (1 - s) + rawY * s;
+
+      const r = this.opts.maxRadius;
+      const x = Math.max(-r, Math.min(r, this.smoothedX));
+      const y = Math.max(-r, Math.min(r, this.smoothedY));
+
+      if (this.opts.emitMinIntervalMs > 0 &&
+          (now - this.lastEmitAt) < this.opts.emitMinIntervalMs) {
+        return { x, y, ts: now, throttled: true };
+      }
+      this.lastEmitAt = now;
+      const aim = { x, y, ts: now };
+      for (const fn of this._aimListeners) {
+        try { fn(aim); } catch (_) {}
+      }
+      return aim;
+    }
+
+    _notifyState() {
+      for (const fn of this._stateListeners) {
+        try { fn(this.state); } catch (_) {}
+      }
+    }
+  }
+
+  window.DartlineMotion = { ThrowDetector, AimTracker, DEFAULTS, AIM_DEFAULTS };
 })();

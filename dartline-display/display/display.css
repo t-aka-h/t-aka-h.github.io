@@ -47,38 +47,120 @@ html, body {
 }
 
 .big {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  display: flex;
   align-items: center;
-  padding: 20px 8px;
+  justify-content: center;
+  padding: 0;
 }
 
-.readout {
+/* Square aim stage. Crosshair coordinates are scaled to this box's size in JS. */
+.aim-stage {
+  position: relative;
+  width: 480px;
+  height: 480px;
+  margin: 0 auto;
+}
+
+/* Faint grid lines so the user has a sense of where center is.
+   On the additive display these read as subtle bright reticles in space. */
+.aim-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right,  rgba(255, 255, 255, 0.10) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+  background-size: 60px 60px;
+  /* Center the grid so a line falls on (0,0). */
+  background-position: center center;
+}
+
+/* Bright center fix dot (where the aim should land when tilted to reference). */
+.aim-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #FFB547;
+  box-shadow: 0 0 12px rgba(255, 181, 71, 0.7);
+}
+
+/* Moving aim cursor — its transform is updated by JS each aim message. */
+.aim-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: transform 60ms linear;
+}
+
+.aim-crosshair::before,
+.aim-crosshair::after {
+  content: "";
+  position: absolute;
+  background: #00E5FF;
+}
+.aim-crosshair::before {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  transform: translateY(-50%);
+}
+.aim-crosshair::after {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.aim-crosshair__dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #00E5FF;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.9);
+}
+
+.aim-overlay {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.line {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  padding-bottom: 6px;
-}
-
-.line .k {
-  font-size: 22px;
-  color: #9BD8FF;
-  letter-spacing: 1px;
-}
-
-.line .v {
-  font-family: "Menlo", monospace;
-  font-size: 36px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: #FFB547;
+  font-size: 28px;
   font-weight: 700;
+  letter-spacing: 4px;
+  text-align: center;
+  line-height: 1.4;
+  transition: opacity 200ms ease-out;
+}
+
+.aim-overlay__sub {
+  font-size: 16px;
   color: #FFFFFF;
+  letter-spacing: 2px;
+  font-weight: 400;
+  margin-top: 6px;
+  display: inline-block;
+}
+
+.aim-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hud-bottom .status {

@@ -27,6 +27,9 @@
     lastForce: document.getElementById("lastForce"),
     throwCount: document.getElementById("throwCount"),
     throwFlash: document.getElementById("throwFlash"),
+    aimState: document.getElementById("aimState"),
+    aimXY: document.getElementById("aimXY"),
+    recalibrateButton: document.getElementById("recalibrateButton"),
   };
 
   els.session.textContent = sessionId;
@@ -142,6 +145,14 @@
     latest.ax = acc.x ?? 0;
     latest.ay = acc.y ?? 0;
     latest.az = acc.z ?? 0;
+    // Capture rotationRate for the aim tracker's calibration check.
+    if (event.rotationRate) {
+      latestRotationRate = {
+        alpha: event.rotationRate.alpha ?? 0,
+        beta:  event.rotationRate.beta  ?? 0,
+        gamma: event.rotationRate.gamma ?? 0,
+      };
+    }
     render();
     flush();
     if (throwDetector) {
@@ -157,6 +168,13 @@
     latest.gamma = event.gamma ?? 0;
     render();
     flush();
+    if (aimTracker) {
+      aimTracker.feed({
+        beta: latest.beta,
+        gamma: latest.gamma,
+        rotationRate: latestRotationRate,
+      });
+    }
   }
 
   function render() {
@@ -184,11 +202,41 @@
 
   let throwDetector = null;
   let throwCount = 0;
+  let latestRotationRate = null;
+  let aimTracker = null;
+  let lastAimSent = { x: 0, y: 0 };
+  let lastAimSentAt = 0;
+  const AIM_SEND_INTERVAL_MS = 50; // 20 Hz aim updates over the wire.
 
   function initThrowDetector() {
     if (!window.DartlineMotion) return;
     throwDetector = new window.DartlineMotion.ThrowDetector();
     throwDetector.on(onThrow);
+    aimTracker = new window.DartlineMotion.AimTracker();
+    aimTracker.onStateChange(onAimState);
+    aimTracker.onAim(onAim);
+    onAimState(aimTracker.state);
+    if (els.recalibrateButton) {
+      els.recalibrateButton.addEventListener("click", () => {
+        aimTracker.recalibrate();
+      });
+    }
+  }
+
+  function onAimState(state) {
+    els.aimState.textContent = state;
+    els.aimState.className = "value " + (state === "aiming" ? "connected" : "waiting");
+    // Send a state update so the display can show "calibrating" vs "aiming".
+    sendMaybe({ type: "aim_state", state, ts: Date.now() });
+  }
+
+  function onAim(aim) {
+    lastAimSent = aim;
+    els.aimXY.textContent = aim.x.toFixed(2) + "  ·  " + aim.y.toFixed(2);
+    const now = Date.now();
+    if (now - lastAimSentAt < AIM_SEND_INTERVAL_MS) return;
+    lastAimSentAt = now;
+    sendMaybe({ type: "aim", x: aim.x, y: aim.y, ts: now });
   }
 
   function onThrow(event) {
@@ -198,9 +246,8 @@
     flashThrow(event.force);
     sendMaybe({
       type: "throw",
-      // Phase 1: aim is not implemented yet — send the center until Phase 2.
-      x: 0,
-      y: 0,
+      x: lastAimSent.x,
+      y: lastAimSent.y,
       force: event.force,
       peak: event.peak,
       ts: event.ts,

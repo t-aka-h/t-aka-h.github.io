@@ -15,15 +15,13 @@
     </header>
 
     <section class="big">
-      <div class="readout">
-        <div class="line"><span class="k">ax</span><span class="v" id="ax">0.00</span></div>
-        <div class="line"><span class="k">ay</span><span class="v" id="ay">0.00</span></div>
-        <div class="line"><span class="k">az</span><span class="v" id="az">0.00</span></div>
-      </div>
-      <div class="readout">
-        <div class="line"><span class="k">α</span><span class="v" id="alpha">0.0</span></div>
-        <div class="line"><span class="k">β</span><span class="v" id="beta">0.0</span></div>
-        <div class="line"><span class="k">γ</span><span class="v" id="gamma">0.0</span></div>
+      <div id="aimStage" class="aim-stage">
+        <div class="aim-grid"></div>
+        <div class="aim-center"></div>
+        <div id="aimCrosshair" class="aim-crosshair">
+          <div class="aim-crosshair__dot"></div>
+        </div>
+        <div id="aimOverlay" class="aim-overlay">CALIBRATING…<br><span class="aim-overlay__sub">iPhone を構える姿勢で静止</span></div>
       </div>
     </section>
 

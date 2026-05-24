@@ -14,12 +14,9 @@
     session: document.getElementById("session"),
     status: document.getElementById("status"),
     rate: document.getElementById("rate"),
-    ax: document.getElementById("ax"),
-    ay: document.getElementById("ay"),
-    az: document.getElementById("az"),
-    alpha: document.getElementById("alpha"),
-    beta: document.getElementById("beta"),
-    gamma: document.getElementById("gamma"),
+    aimStage: document.getElementById("aimStage"),
+    aimCrosshair: document.getElementById("aimCrosshair"),
+    aimOverlay: document.getElementById("aimOverlay"),
     throwOverlay: document.getElementById("throwOverlay"),
     throwForce: document.getElementById("throwForce"),
     throwFill: document.getElementById("throwFill"),
@@ -95,7 +92,16 @@
         if (msg.role === "controller") setStatus("waiting for controller");
         break;
       case "motion":
-        renderMotion(msg);
+        // We no longer render raw motion on the display starting at Phase 2.0,
+        // but the message still updates the frame-rate counter so we can see
+        // the controller link is alive.
+        bumpFrameRate();
+        break;
+      case "aim":
+        renderAim(msg);
+        break;
+      case "aim_state":
+        renderAimState(msg.state);
         break;
       case "throw":
         showThrow(msg);
@@ -120,14 +126,7 @@
     el.classList.add("active");
   }
 
-  function renderMotion(msg) {
-    setValue(els.ax, msg.ax, 2);
-    setValue(els.ay, msg.ay, 2);
-    setValue(els.az, msg.az, 2);
-    setValue(els.alpha, msg.alpha, 1);
-    setValue(els.beta,  msg.beta,  1);
-    setValue(els.gamma, msg.gamma, 1);
-
+  function bumpFrameRate() {
     frameCount += 1;
     const now = Date.now();
     if (now - lastRateUpdate >= 1000) {
@@ -138,14 +137,30 @@
     }
   }
 
-  function setValue(el, n, digits) {
-    if (typeof n !== "number" || !isFinite(n)) return;
-    el.textContent = n.toFixed(digits);
-    // Brief flash so a glance at the glasses confirms data is flowing.
-    el.classList.remove("pulse");
-    // Force reflow so re-adding the class restarts the animation.
-    void el.offsetWidth;
-    el.classList.add("pulse");
+  // Map normalized aim ([-1.05, +1.05] on each axis) into pixel offsets within
+  // the aim stage. The stage is square; we use its current size at each event.
+  function renderAim(msg) {
+    if (!els.aimCrosshair || !els.aimStage) return;
+    const x = typeof msg.x === "number" ? msg.x : 0;
+    const y = typeof msg.y === "number" ? msg.y : 0;
+    const rect = els.aimStage.getBoundingClientRect();
+    const halfW = rect.width / 2;
+    const halfH = rect.height / 2;
+    // y is positive = aiming up. CSS y axis is positive = downward, so flip.
+    const px = x * halfW;
+    const py = -y * halfH;
+    els.aimCrosshair.style.transform =
+      `translate(calc(-50% + ${px.toFixed(1)}px), calc(-50% + ${py.toFixed(1)}px))`;
+    bumpFrameRate();
+  }
+
+  function renderAimState(state) {
+    if (!els.aimOverlay) return;
+    if (state === "aiming") {
+      els.aimOverlay.classList.add("hidden");
+    } else {
+      els.aimOverlay.classList.remove("hidden");
+    }
   }
 
   connect();
