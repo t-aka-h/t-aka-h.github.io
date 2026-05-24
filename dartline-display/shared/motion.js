@@ -264,11 +264,12 @@
       // aiming
       const dBeta  = beta  - this.refBeta;
       const dGamma = gamma - this.refGamma;
-      // gamma → x (right tilt = +x).
-      // beta  → y. Tipping forward (beta decreasing) raises the aim, so we
-      // invert: y = -dBeta / sensitivity.
-      const rawX =  dGamma / this.opts.sensitivityDeg;
-      const rawY = -dBeta  / this.opts.sensitivityDeg;
+      // Match iOS Dartline:
+      //   gamma → x  (right tilt = +x = cursor right)
+      //   beta  → y  (tilting top edge up = +beta = +y = cursor up)
+      // The display flips Y once more so this lands on screen the natural way.
+      const rawX = dGamma / this.opts.sensitivityDeg;
+      const rawY = dBeta  / this.opts.sensitivityDeg;
       const s = this.opts.smoothing;
       this.smoothedX = this.smoothedX * (1 - s) + rawX * s;
       this.smoothedY = this.smoothedY * (1 - s) + rawY * s;
