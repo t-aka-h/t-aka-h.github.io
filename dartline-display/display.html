@@ -15,13 +15,13 @@
     </header>
 
     <section class="big">
-      <div id="aimStage" class="aim-stage">
-        <div class="aim-grid"></div>
-        <div class="aim-center"></div>
-        <div id="aimCrosshair" class="aim-crosshair">
-          <div class="aim-crosshair__dot"></div>
-        </div>
+      <div id="boardStage" class="board-stage">
+        <canvas id="dartboardCanvas" class="dartboard-canvas"></canvas>
         <div id="aimOverlay" class="aim-overlay">CALIBRATING…<br><span class="aim-overlay__sub">iPhone を構える姿勢で静止</span></div>
+        <div id="scoreToast" class="score-toast" aria-hidden="true">
+          <div class="score-toast__label">—</div>
+          <div class="score-toast__pts">0</div>
+        </div>
       </div>
     </section>
 
@@ -38,6 +38,8 @@
   </div>
 
   <script src="shared/protocol.js"></script>
+  <script src="shared/dartboard.js"></script>
+  <script src="display/dartboard.js"></script>
   <script src="display/display.js"></script>
 </body>
 </html>

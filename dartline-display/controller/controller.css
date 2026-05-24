@@ -133,6 +133,19 @@ html, body {
 
 .primary:active { transform: scale(0.98); }
 
+.primary--lock {
+  margin-top: 14px;
+  font-size: 22px;
+  letter-spacing: 4px;
+  padding: 20px;
+}
+
+.primary--lock-on {
+  background: linear-gradient(90deg, var(--accent-pink), var(--accent-amber));
+  color: #0f0413;
+  box-shadow: 0 0 24px rgba(255, 45, 135, 0.45);
+}
+
 .secondary {
   width: 100%;
   background: rgba(255, 255, 255, 0.06);

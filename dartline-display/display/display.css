@@ -53,83 +53,51 @@ html, body {
   padding: 0;
 }
 
-/* Square aim stage. Crosshair coordinates are scaled to this box's size in JS. */
-.aim-stage {
+/* Dartboard stage. The Canvas2D inside owns the actual rendering. */
+.board-stage {
   position: relative;
   width: 480px;
   height: 480px;
   margin: 0 auto;
 }
 
-/* Faint grid lines so the user has a sense of where center is.
-   On the additive display these read as subtle bright reticles in space. */
-.aim-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right,  rgba(255, 255, 255, 0.10) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.10) 1px, transparent 1px);
-  background-size: 60px 60px;
-  /* Center the grid so a line falls on (0,0). */
-  background-position: center center;
+.dartboard-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-/* Bright center fix dot (where the aim should land when tilted to reference). */
-.aim-center {
+/* Toast in the upper-right corner showing the most recent hit's label/points. */
+.score-toast {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  margin: -6px 0 0 -6px;
-  border-radius: 50%;
-  background: #FFB547;
-  box-shadow: 0 0 12px rgba(255, 181, 71, 0.7);
-}
-
-/* Moving aim cursor — its transform is updated by JS each aim message. */
-.aim-crosshair {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 48px;
-  height: 48px;
-  transform: translate(-50%, -50%);
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  opacity: 0;
   pointer-events: none;
-  transition: transform 60ms linear;
+  transition: opacity 200ms ease-out;
 }
 
-.aim-crosshair::before,
-.aim-crosshair::after {
-  content: "";
-  position: absolute;
-  background: #00E5FF;
-}
-.aim-crosshair::before {
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 2px;
-  transform: translateY(-50%);
-}
-.aim-crosshair::after {
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  transform: translateX(-50%);
+.score-toast.active {
+  opacity: 1;
 }
 
-.aim-crosshair__dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
-  border-radius: 50%;
-  background: #00E5FF;
-  box-shadow: 0 0 18px rgba(0, 229, 255, 0.9);
+.score-toast__label {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #FFB547;
+}
+
+.score-toast__pts {
+  font-family: "Menlo", monospace;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
 }
 
 .aim-overlay {

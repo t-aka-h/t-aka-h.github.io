@@ -30,6 +30,7 @@
     aimState: document.getElementById("aimState"),
     aimXY: document.getElementById("aimXY"),
     recalibrateButton: document.getElementById("recalibrateButton"),
+    lockButton: document.getElementById("lockButton"),
   };
 
   els.session.textContent = sessionId;
@@ -207,6 +208,8 @@
   let lastAimSent = { x: 0, y: 0 };
   let lastAimSentAt = 0;
   const AIM_SEND_INTERVAL_MS = 50; // 20 Hz aim updates over the wire.
+  let locked = false;
+  let lockedAim = { x: 0, y: 0 };
 
   function initThrowDetector() {
     if (!window.DartlineMotion) return;
@@ -218,8 +221,41 @@
     onAimState(aimTracker.state);
     if (els.recalibrateButton) {
       els.recalibrateButton.addEventListener("click", () => {
+        if (locked) toggleLock();   // implicitly release lock on re-center
         aimTracker.recalibrate();
       });
+    }
+    if (els.lockButton) {
+      els.lockButton.addEventListener("click", toggleLock);
+      updateLockButton();
+    }
+  }
+
+  function toggleLock() {
+    if (locked) {
+      locked = false;
+      sendMaybe({ type: "unlock", ts: Date.now() });
+    } else {
+      lockedAim = { x: lastAimSent.x, y: lastAimSent.y };
+      locked = true;
+      sendMaybe({
+        type: "lock",
+        x: lockedAim.x,
+        y: lockedAim.y,
+        ts: Date.now(),
+      });
+    }
+    updateLockButton();
+  }
+
+  function updateLockButton() {
+    if (!els.lockButton) return;
+    if (locked) {
+      els.lockButton.textContent = "UNLOCK";
+      els.lockButton.classList.add("primary--lock-on");
+    } else {
+      els.lockButton.textContent = "LOCK";
+      els.lockButton.classList.remove("primary--lock-on");
     }
   }
 
@@ -244,13 +280,16 @@
     els.throwCount.textContent = String(throwCount);
     els.lastForce.textContent = event.force.toFixed(2) + "  (peak " + event.peak.toFixed(1) + ")";
     flashThrow(event.force);
+    // Use the locked aim if available, otherwise fall back to the live aim.
+    const aim = locked ? lockedAim : lastAimSent;
     sendMaybe({
       type: "throw",
-      x: lastAimSent.x,
-      y: lastAimSent.y,
+      x: aim.x,
+      y: aim.y,
       force: event.force,
       peak: event.peak,
       ts: event.ts,
+      locked,
     });
   }
 

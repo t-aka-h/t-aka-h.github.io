@@ -14,13 +14,19 @@
     session: document.getElementById("session"),
     status: document.getElementById("status"),
     rate: document.getElementById("rate"),
-    aimStage: document.getElementById("aimStage"),
-    aimCrosshair: document.getElementById("aimCrosshair"),
+    boardStage: document.getElementById("boardStage"),
+    dartboardCanvas: document.getElementById("dartboardCanvas"),
     aimOverlay: document.getElementById("aimOverlay"),
     throwOverlay: document.getElementById("throwOverlay"),
     throwForce: document.getElementById("throwForce"),
     throwFill: document.getElementById("throwFill"),
+    scoreToast: document.getElementById("scoreToast"),
   };
+
+  const board = els.dartboardCanvas
+    ? new window.DartlineDartboardCanvas(els.dartboardCanvas)
+    : null;
+  if (board) board.draw();
 
   els.session.textContent = sessionId;
 
@@ -103,8 +109,15 @@
       case "aim_state":
         renderAimState(msg.state);
         break;
+      case "lock":
+        renderLock(true, { x: msg.x ?? 0, y: msg.y ?? 0 });
+        break;
+      case "unlock":
+        renderLock(false, null);
+        break;
       case "throw":
         showThrow(msg);
+        handleThrowOnBoard(msg);
         break;
       default:
         // ignore unknown types for now
@@ -137,20 +150,12 @@
     }
   }
 
-  // Map normalized aim ([-1.05, +1.05] on each axis) into pixel offsets within
-  // the aim stage. The stage is square; we use its current size at each event.
+  // Aim coordinates arrive at ~20 Hz. Pass them to the dartboard renderer.
   function renderAim(msg) {
-    if (!els.aimCrosshair || !els.aimStage) return;
+    if (!board) return;
     const x = typeof msg.x === "number" ? msg.x : 0;
     const y = typeof msg.y === "number" ? msg.y : 0;
-    const rect = els.aimStage.getBoundingClientRect();
-    const halfW = rect.width / 2;
-    const halfH = rect.height / 2;
-    // y is positive = aiming up. CSS y axis is positive = downward, so flip.
-    const px = x * halfW;
-    const py = -y * halfH;
-    els.aimCrosshair.style.transform =
-      `translate(calc(-50% + ${px.toFixed(1)}px), calc(-50% + ${py.toFixed(1)}px))`;
+    board.setAim({ x, y });
     bumpFrameRate();
   }
 
@@ -161,6 +166,35 @@
     } else {
       els.aimOverlay.classList.remove("hidden");
     }
+  }
+
+  function renderLock(locked, lockedAim) {
+    if (!board) return;
+    board.setLock(locked, lockedAim);
+  }
+
+  function handleThrowOnBoard(msg) {
+    if (!board || !window.DartlineDartboard) return;
+    const x = typeof msg.x === "number" ? msg.x : 0;
+    const y = typeof msg.y === "number" ? msg.y : 0;
+    const score = window.DartlineDartboard.scoreAt(x, y);
+    board.addHit(x, y, score);
+    showScoreToast(score);
+  }
+
+  function showScoreToast(score) {
+    if (!els.scoreToast) return;
+    const label = els.scoreToast.querySelector(".score-toast__label");
+    const pts = els.scoreToast.querySelector(".score-toast__pts");
+    if (label) label.textContent = score.label;
+    if (pts) pts.textContent = String(score.points);
+    els.scoreToast.classList.remove("active");
+    void els.scoreToast.offsetWidth;
+    els.scoreToast.classList.add("active");
+    clearTimeout(showScoreToast._t);
+    showScoreToast._t = setTimeout(() => {
+      els.scoreToast.classList.remove("active");
+    }, 1800);
   }
 
   connect();
