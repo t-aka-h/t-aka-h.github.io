@@ -25,12 +25,12 @@ html, body {
 
 #app {
   min-height: 100vh;
-  padding: 18px 20px 24px;
+  padding: 12px 16px 18px;
   max-width: 540px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 /* ───── brand ───── */
@@ -39,13 +39,13 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding-top: 4px;
+  gap: 2px;
+  padding-top: 0;
 }
 
 .brand__title {
   font-family: "Pacifico", "Snell Roundhand", cursive;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 400;
   letter-spacing: 0;
   background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
@@ -56,18 +56,18 @@ html, body {
 }
 
 .brand__subtitle {
-  font-size: 11px;
-  letter-spacing: 4px;
+  font-size: 9px;
+  letter-spacing: 3px;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .brand__accent {
-  width: 64%;
+  width: 60%;
   height: 1.5px;
   background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-pink), transparent);
-  margin-top: 8px;
-  opacity: 0.7;
+  margin-top: 4px;
+  opacity: 0.6;
 }
 
 /* ───── mini dartboard mirror — secondary to the glass view ───── */
@@ -75,7 +75,7 @@ html, body {
 .mini-board {
   position: relative;
   width: 100%;
-  max-width: 300px;
+  max-width: 220px;
   aspect-ratio: 1 / 1;
   margin: 0 auto;
 }
@@ -130,11 +130,11 @@ html, body {
 .scoreboard {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 18px;
-  padding: 18px 20px 22px;
+  border-radius: 16px;
+  padding: 12px 16px 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .scoreboard__row {
@@ -191,7 +191,7 @@ html, body {
 .scoreboard__totalValue {
   font-family: "Helvetica Neue", system-ui, sans-serif;
   font-weight: 900;
-  font-size: 56px;
+  font-size: 42px;
   line-height: 1.0;
   letter-spacing: -1px;
   color: var(--text);
@@ -226,12 +226,12 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px 0 4px;
+  padding: 2px 0;
 }
 
 .big-button {
-  width: 170px;
-  height: 170px;
+  width: 130px;
+  height: 130px;
   border-radius: 50%;
   border: 2px solid #FFFFFF;
   background: radial-gradient(circle at 30% 30%, #FF6FA9 0%, var(--accent-pink) 55%, #B5176C 100%);
@@ -260,14 +260,14 @@ html, body {
 
 .big-button__label {
   font-family: "Helvetica Neue", system-ui, sans-serif;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 900;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .big-button__sub {
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 2px;
   color: rgba(255, 255, 255, 0.85);
   text-transform: uppercase;
