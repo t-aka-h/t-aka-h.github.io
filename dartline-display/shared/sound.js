@@ -20,10 +20,19 @@
     constructor() {
       this._ctx = null;
       this._master = null;
+      this._unlocked = false;
+      this._silentAudio = null;
       this.muted = false;
-      // Bumped from 0.85 → 1.10. iPhone speakers + Web Audio default gain
-      // through the system mixer have been quiet in practice.
-      this.masterGain = 1.10;
+      // Bumped to 1.5 — Web Audio output on iPhone speakers has been very
+      // quiet at lower values, the master gain compensates.
+      this.masterGain = 1.50;
+    }
+
+    isRunning() {
+      return !!(this._ctx && this._ctx.state === "running");
+    }
+    contextState() {
+      return this._ctx ? this._ctx.state : "none";
     }
 
     // Lazily create the context. MUST be called from a user gesture for the
@@ -57,6 +66,48 @@
         this._ctx.resume().catch(() => {});
       }
       return this._ctx;
+    }
+
+    // Full unlock — needs to be called from a user gesture. Combines:
+    //   1. An <audio> element with a tiny silent data URL, played
+    //      synchronously. This wakes the iOS audio pipeline even if the
+    //      ringer is on but the device hasn't routed audio output yet.
+    //   2. ensureContext() — creates the WebAudio context and plays a
+    //      one-sample silent buffer.
+    //   3. Awaits ctx.resume() if it returned a promise. Returns true on
+    //      "running", false otherwise.
+    async unlock() {
+      // 1. <audio> element bridge.
+      if (!this._silentAudio) {
+        try {
+          const a = document.createElement("audio");
+          // 0.05s of silence as base64 mp3 (works on iOS Safari 14+).
+          a.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//FJAhCQEQAGsgIcEbcyCEgaRR8sl0EBFNw3RxQuvHc2bj5Vja3JM45VvNqxhSIyo4z4iEm+JfTW80wIxBLY3yT/M2QmwOmEhO6Cqe///VkIQRYJgYZsHi5MgL61SJBQUFGZ3iX4Ah0vxK6dDuTjVl1NgRSv4ZJ7CIRyfWFNgxlEY/V8M6/9p7Tq//9z7DyQF/ATEAlUYAW/A5GUgZkVOH8FjQNB1XRgT6sb6Z/91pBA5KMz+nADzS6q1hjlS6gj+nLBuY83KZTI7CPS6Wj1Ck6OVlEW/HZuoO1iZQ8DkU0sLB6Z+kY/AGsOyOzMVL+oNbpwk4tKMmIyNzkMjuhCMmCgN2pSZsLBwYRy04EnHsBgrnHIN7ttUVf4WLnW6QzNFFvHhz/4u4tJZ1B7Pr/4nXjzodGzqFqMnLWxnDIcPbeJyKlmwTKAxIzZ3wA/wjjEpA1jLFK1zEMyVc7H80AAQAAFTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+          a.loop = false;
+          a.preload = "auto";
+          a.volume = 0.01;
+          a.setAttribute("playsinline", "");
+          this._silentAudio = a;
+          // Try to play; failure is non-fatal.
+          const p = a.play();
+          if (p && typeof p.catch === "function") p.catch(() => {});
+        } catch (_) {}
+      }
+
+      // 2. AudioContext.
+      const ctx = this.ensureContext();
+      if (!ctx) return false;
+
+      // 3. Await resume.
+      if (ctx.state === "suspended") {
+        try { await ctx.resume(); } catch (_) {}
+      }
+      this._unlocked = ctx.state === "running";
+      return this._unlocked;
+    }
+
+    isUnlocked() {
+      return this._unlocked && this.isRunning();
     }
 
     setMuted(m) { this.muted = !!m; }

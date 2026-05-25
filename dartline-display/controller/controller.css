@@ -294,6 +294,11 @@ html, body {
   background: rgba(255, 45, 135, 0.10);
 }
 
+.footer__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .footer__action {
   background: transparent;
   border: 1px solid var(--panel-border);
@@ -308,6 +313,16 @@ html, body {
 }
 
 .footer__action:active { transform: scale(0.96); }
+
+.footer__action--audio[data-state="off"] {
+  color: var(--accent-amber);
+  border-color: rgba(255, 181, 71, 0.35);
+}
+.footer__action--audio[data-state="on"] {
+  color: var(--accent-cyan);
+  border-color: rgba(0, 229, 255, 0.45);
+  background: rgba(0, 229, 255, 0.08);
+}
 
 .footer__row--meta {
   font-size: 10px;

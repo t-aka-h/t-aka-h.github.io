@@ -330,24 +330,24 @@
     idealForce: 0.55,
 
     // Vertical offset per unit of (force − idealForce). Real-darts wrist
-    // mechanics: a HARD throw over-rotates and pushes the dart DOWN; a
-    // soft throw under-rotates and the dart lobs UP. So strong = −y,
-    // weak = +y. With verticalWeight = 0.42, force=1.0 → −0.19, force=0
-    // → +0.23.
-    verticalWeight: -0.42,
+    // mechanics: HARD throw over-rotates → DOWN; soft throw under-rotates
+    // → lobs UP. With −0.60: force=1.0 → −0.27, force=0 → +0.33.
+    verticalWeight: -0.60,
 
-    // Base scatter applied even on a "perfect" throw — small but visible.
-    // Keeps T20 from being trivially repeatable.
-    baseSpread: 0.05,
+    // Base scatter applied even on a "perfect" throw. Bumped from 0.05
+    // to 0.18 — without it, the limited human-control bandwidth of a
+    // phone-as-dart means every throw clusters in the same spot.
+    baseSpread: 0.18,
 
-    // Additional scatter per unit of force error. With error 0.25 (e.g.
-    // force=0.8 or 0.3), this adds 0.125 to the horizontal spread.
-    errorSpread: 0.50,
+    // Additional scatter per unit of force error. With 1.40 and error
+    // 0.30 (e.g. force=0.85 or 0.25), this adds 0.42 to the spread —
+    // a sloppy throw can drift halfway across the board.
+    errorSpread: 1.40,
 
     // Clamp the resolved landing inside [-maxRadius, +maxRadius] on each
     // axis. Just past the double ring so misses can still land in the
     // outer dead zone of the canvas.
-    maxRadius: 1.15,
+    maxRadius: 1.20,
   };
 
   class ThrowResolver {

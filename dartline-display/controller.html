@@ -50,7 +50,10 @@
     <footer class="footer">
       <div class="footer__row">
         <div class="footer__chip" id="aimStateChip" data-state="init">AIMING</div>
-        <button id="recalibrateButton" class="footer__action">⊙ Re-center</button>
+        <div class="footer__actions">
+          <button id="audioTestButton" class="footer__action footer__action--audio" data-state="off">♪ TEST</button>
+          <button id="recalibrateButton" class="footer__action">⊙ Re-center</button>
+        </div>
       </div>
       <div class="footer__row footer__row--meta">
         <span class="footer__meta">Session <span id="sessionId">—</span></span>

@@ -26,6 +26,7 @@
     mainButtonSub:   document.getElementById("mainButtonSub"),
     aimStateChip:    document.getElementById("aimStateChip"),
     recalibrateButton: document.getElementById("recalibrateButton"),
+    audioTestButton:   document.getElementById("audioTestButton"),
   };
 
   els.sessionId.textContent = sessionId;
@@ -40,16 +41,31 @@
     ? new window.DartlineSound.SoundSynth()
     : null;
   let audioReady = false;
+  function refreshAudioChip() {
+    if (!els.audioTestButton || !sound) return;
+    const state = sound.contextState();
+    els.audioTestButton.dataset.state = sound.isRunning() ? "on" : "off";
+    els.audioTestButton.textContent = sound.isRunning() ? "♪ TEST" : `♪ TEST (${state})`;
+  }
+  async function unlockAudio({ playConfirm }) {
+    if (!sound) return;
+    const ok = await sound.unlock();
+    refreshAudioChip();
+    if (ok && playConfirm && !audioReady) {
+      audioReady = true;
+      sound.playAimEnter();
+    } else if (ok && playConfirm) {
+      // Subsequent presses of TEST always play a tone so the user can
+      // verify audio at any time.
+      sound.playAimEnter();
+    }
+  }
   if (sound) {
-    const unlock = () => {
-      sound.ensureContext();
-      if (!audioReady) {
-        audioReady = true;
-        sound.playAimEnter();   // brief audible confirmation
-      }
-    };
+    // First user-gesture anywhere → unlock + play confirmation tone so
+    // the user gets immediate audible feedback that audio is alive.
+    const firstTouch = () => unlockAudio({ playConfirm: true });
     ["pointerdown", "touchstart", "keydown"].forEach((ev) =>
-      document.addEventListener(ev, unlock, { once: true, passive: true }));
+      document.addEventListener(ev, firstTouch, { once: true, passive: true }));
   }
 
   // ── WebSocket ───────────────────────────────────────────────────────────
@@ -363,6 +379,12 @@
     if (locked) toggleLock();
     if (aimTracker) aimTracker.recalibrate();
   });
+  if (els.audioTestButton) {
+    els.audioTestButton.addEventListener("click", () => {
+      unlockAudio({ playConfirm: true });
+    });
+  }
+  refreshAudioChip();
   connect();
   if (needsPermission()) {
     els.permissionCard.classList.remove("hidden");
