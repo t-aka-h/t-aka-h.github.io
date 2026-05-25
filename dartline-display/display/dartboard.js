@@ -53,6 +53,16 @@
   const PULSE_CYCLE_MS = 900;
   const HIT_FADE_MS = 1800;
 
+  // Segment-flash + landing-zoom — port of iOS Dartline Day 1.11 / 1.12.
+  const FLASH_DUR_MS       = 800;
+  const ZOOM_PEAK_FACTOR   = 1.85;
+  const ZOOM_PEAK_MS       = 220;       // time to ramp up to peak
+  const ZOOM_HOLD_END_MS   = 2000;      // hold zoom until here
+  const ZOOM_RELEASE_END_MS = 2400;     // back to 1.0x by here
+
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeIn(t)  { return t * t * t; }
+
   class DartboardCanvas {
     constructor(canvas) {
       this.canvas = canvas;
@@ -68,6 +78,11 @@
       // 60 fps smooth even when WebSocket updates land at ~30 Hz with jitter.
       this._easedAim = { x: 0, y: 0 };
       this._easedAimRate = 0.28;  // larger = snappier, smaller = floatier
+      // Hit-flash + landing-zoom state (Day 1.11 / 1.12 port).
+      this._flashStart = 0;
+      this._flashScore = null;
+      this._zoomStart = 0;
+      this._zoomHit = { x: 0, y: 0 };
       this._resize();
       window.addEventListener("resize", () => {
         this._resize();
@@ -122,6 +137,11 @@
     addHit(x, y, score) {
       this.hits.push({ x, y, score, ts: Date.now() });
       if (this.hits.length > MAX_HITS) this.hits.shift();
+      // Trigger the segment flash + landing-zoom cinematic.
+      this._flashStart = Date.now();
+      this._flashScore = score;
+      this._zoomStart = Date.now();
+      this._zoomHit = { x, y };
       this.requestDraw();
     }
 
@@ -148,10 +168,53 @@
       const { cx, cy, R, side } = this;
       const RINGS = window.DartlineDartboard.RINGS;
       const NUMS  = window.DartlineDartboard.SEGMENT_NUMBERS;
+      const now = Date.now();
 
-      // ── Cabinet background ─────────────────────────────────────────────
+      // Compute current zoom factor + flash alpha from the time elapsed
+      // since the last hit was registered.
+      let zoom = 1.0;
+      let zoomHcx = cx, zoomHcy = cy;
+      if (this._zoomStart) {
+        const dt = now - this._zoomStart;
+        if (dt < ZOOM_PEAK_MS) {
+          zoom = 1.0 + (ZOOM_PEAK_FACTOR - 1.0) * easeOut(dt / ZOOM_PEAK_MS);
+        } else if (dt < ZOOM_HOLD_END_MS) {
+          zoom = ZOOM_PEAK_FACTOR;
+        } else if (dt < ZOOM_RELEASE_END_MS) {
+          const p = (dt - ZOOM_HOLD_END_MS) / (ZOOM_RELEASE_END_MS - ZOOM_HOLD_END_MS);
+          zoom = ZOOM_PEAK_FACTOR - (ZOOM_PEAK_FACTOR - 1.0) * easeIn(p);
+        } else {
+          zoom = 1.0;
+          this._zoomStart = 0;
+        }
+        const [hcx, hcy] = this._world(this._zoomHit.x, this._zoomHit.y);
+        zoomHcx = hcx; zoomHcy = hcy;
+      }
+
+      // Flash window for the hit segment (or bull).
+      const flashAge = this._flashStart ? now - this._flashStart : Infinity;
+      const flashing = flashAge < FLASH_DUR_MS;
+      const flashAlpha = flashing ? (1 - flashAge / FLASH_DUR_MS) : 0;
+      if (!flashing && this._flashStart) {
+        this._flashStart = 0;
+        this._flashScore = null;
+      }
+      const flashSegmentIdx = (flashing && this._flashScore &&
+                               this._flashScore.segmentIndex >= 0)
+                              ? this._flashScore.segmentIndex : -1;
+
+      // ── Cabinet background (drawn before the zoom transform so the
+      //    edges of the canvas stay opaque even when zooming) ────────────
       ctx.fillStyle = COLOR.cabinet;
       ctx.fillRect(0, 0, side, side);
+
+      // Apply zoom transform — everything below it scales around the hit.
+      ctx.save();
+      if (zoom > 1.0) {
+        ctx.translate(cx, cy);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-zoomHcx, -zoomHcy);
+      }
 
       // ── Cabinet chamfer (purple ring around the LED rim) ──────────────
       ctx.strokeStyle = COLOR.cabinetEdge;
@@ -330,11 +393,64 @@
       ctx.fill();
       ctx.shadowBlur = 0;
 
+      // ── Hit-segment flash overlay ──────────────────────────────────────
+      // Drawn after the bull so it can light up either a segment wedge or
+      // the bullseye, depending on where the dart landed.
+      if (flashing && this._flashScore) {
+        this._drawFlash(ctx, R, flashAlpha, this._flashScore, flashSegmentIdx);
+      }
+
       // ── Hit markers ────────────────────────────────────────────────────
       this._drawHits(ctx, R);
 
       // ── Crosshair ──────────────────────────────────────────────────────
       this._drawCrosshair(ctx, R);
+
+      // Close the zoom transform scope opened just after the cabinet fill.
+      ctx.restore();
+    }
+
+    _drawFlash(ctx, R, alpha, score, segIdx) {
+      const RINGS = window.DartlineDartboard.RINGS;
+      const cx = this.cx, cy = this.cy;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      // Segment flash — full wedge from center to outer.
+      if (segIdx >= 0) {
+        const a0 = (segIdx * 18 - 9 - 90) * Math.PI / 180;
+        const a1 = (segIdx * 18 + 9 - 90) * Math.PI / 180;
+        // Pick a flash color that contrasts with the segment's base.
+        const cyanSeg  = (segIdx % 2) === 0;
+        const baseFlash = cyanSeg ? "rgba(0, 229, 255, " : "rgba(255, 45, 135, ";
+        ctx.fillStyle = baseFlash + (0.55 * alpha) + ")";
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a0, a1);
+        ctx.closePath();
+        ctx.fill();
+        // Bright white core that fades faster than the colored wash.
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.30 * alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a0, a1);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Bull flash — fired when the hit was on bull or outer bull.
+      if (score.ring === "double-bull" || score.ring === "outer-bull") {
+        const flashR = R * (score.ring === "double-bull"
+                              ? RINGS.outerBull * 1.05
+                              : RINGS.innerSingle * 0.7);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * alpha})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, flashR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 181, 71, ${0.4 * alpha})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, flashR * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     _drawHoneycomb(ctx, R) {
