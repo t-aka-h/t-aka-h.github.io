@@ -243,9 +243,11 @@
     // Locked state takes precedence visually.
     els.aimStateChip.dataset.state = locked ? "locked" : state;
     sendMaybe({ type: "aim_state", state, ts: Date.now() });
-    if (state === "aiming" && sound) sound.playAimEnter();
+    if (state === "aiming") {
+      if (sound) sound.playAimEnter();
+      if (window.DartlineHaptics) window.DartlineHaptics.tick();
+    }
     refreshMainButton();
-    // Mirror calibration overlay on the iPhone canvas too.
     if (els.miniAimOverlay) {
       els.miniAimOverlay.classList.toggle("hidden", state === "aiming");
     }
@@ -371,6 +373,7 @@
       sendMaybe({ type: "lock", x: lockedAim.x, y: lockedAim.y, ts: Date.now() });
       if (sound) sound.playAimLock();
     }
+    if (window.DartlineHaptics) window.DartlineHaptics.click();
     els.aimStateChip.dataset.state = locked ? "locked" : aimStateNow;
     els.aimStateChip.textContent = locked ? "LOCKED" : aimStateNow.toUpperCase();
     if (miniBoard) miniBoard.setLock(locked, locked ? lockedAim : null);
@@ -380,6 +383,7 @@
   // ── Throw handler ───────────────────────────────────────────────────────
   function onThrow(event) {
     if (sound) sound.playThrowSnap();
+    if (window.DartlineHaptics) window.DartlineHaptics.throw_();
     const baseAim = locked ? lockedAim : lastAimSent;
     // Apply ThrowResolver: turn (aim, force) into the actual landing point.
     // This gives the game challenge — perfect intent isn't perfect outcome.
@@ -409,6 +413,18 @@
       // Brief local impact tap on the iPhone speaker so the user feels the
       // hit in their throwing hand. The Glass plays the full score chime.
       if (sound) sound._impact(sound._now(), 0.6);
+      // Haptic burst on landing — scales by what got hit. On Android this
+      // is a real vibration; on iOS Safari it's a no-op (Apple hasn't
+      // shipped Web Vibration).
+      if (window.DartlineHaptics) {
+        if (result === "game_end") window.DartlineHaptics.gameOver();
+        else if (score.ring === "double-bull" ||
+                (score.multiplier === 3 && score.points >= 51)) {
+          window.DartlineHaptics.perfect();
+        } else {
+          window.DartlineHaptics.hit(score.ring);
+        }
+      }
       if ((result === "round_end" || result === "game_end") && locked) {
         toggleLock();
       }
