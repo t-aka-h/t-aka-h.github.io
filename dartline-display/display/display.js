@@ -128,8 +128,15 @@
   }
   function renderAimState(state) {
     if (!els.aimOverlay) return;
-    if (state === "aiming") els.aimOverlay.classList.add("hidden");
-    else els.aimOverlay.classList.remove("hidden");
+    if (state === "aiming") {
+      els.aimOverlay.classList.add("hidden");
+      // Belt-and-suspenders — if the CSS didn't load (cached HTML against
+      // missing stylesheet), the inline style still hides the overlay.
+      els.aimOverlay.style.display = "none";
+    } else {
+      els.aimOverlay.classList.remove("hidden");
+      els.aimOverlay.style.display = "";
+    }
   }
   function renderLock(locked, lockedAim) {
     if (!board) return;

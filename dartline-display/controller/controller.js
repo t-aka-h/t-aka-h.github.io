@@ -132,6 +132,15 @@
       sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
     }
   }
+
+  // Heartbeat — broadcast the current aim_state every 1500 ms so a display
+  // that joined late (or any cached display that missed earlier state
+  // updates) catches up within ~2 seconds. Cheap insurance against the
+  // Worker-as-pure-relay design having no history.
+  setInterval(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    sendMaybe({ type: "aim_state", state: aimStateNow, ts: Date.now() });
+  }, 1500);
   function scheduleReconnect() {
     reconnectAttempts += 1;
     const delay = Math.min(500 * Math.pow(2, reconnectAttempts), MAX_BACKOFF_MS);
