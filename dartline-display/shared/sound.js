@@ -23,9 +23,9 @@
       this._unlocked = false;
       this._silentAudio = null;
       this.muted = false;
-      // Bumped to 1.5 — Web Audio output on iPhone speakers has been very
-      // quiet at lower values, the master gain compensates.
-      this.masterGain = 1.50;
+      // Bumped to 1.85 — small phone / glass speakers, plus the
+      // missing-fundamental bass tricks below, want extra headroom.
+      this.masterGain = 1.85;
     }
 
     isRunning() {
@@ -49,7 +49,23 @@
       this._ctx = new AC({ latencyHint: "interactive" });
       const master = this._ctx.createGain();
       master.gain.value = this.masterGain;
-      master.connect(this._ctx.destination);
+      // Low-shelf bass boost: +7 dB below 260 Hz. On small phone / glass
+      // speakers the high-mids dominate naturally, so a shelf compensates
+      // and lets the missing-fundamental tricks read as actual bass.
+      const lowShelf = this._ctx.createBiquadFilter();
+      lowShelf.type = "lowshelf";
+      lowShelf.frequency.value = 260;
+      lowShelf.gain.value = 7;
+      // Dynamics compressor — tames peaks and raises the average loudness
+      // so the bass sits inside a denser mix instead of clipping.
+      const comp = this._ctx.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.knee.value = 22;
+      comp.ratio.value = 6;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.22;
+      // Chain: master gain → low-shelf → compressor → destination
+      master.connect(lowShelf).connect(comp).connect(this._ctx.destination);
       this._master = master;
       // iOS Safari quirk: even with resume(), the audio output stream stays
       // dormant until something plays. Kick it off with an inaudible buffer
@@ -168,28 +184,42 @@
     }
 
     _missingFundamental(startSec, duration, baseHz, baseGain) {
-      // Add harmonics 2F..5F at small amplitudes to suggest F via the
-      // auditory system's harmonic-template matching.
-      for (let h = 2; h <= 5; h++) {
-        this._tone(startSec, duration, baseHz * h, baseGain * 0.85 / h, "sine");
+      // Add harmonics 2F..7F at substantial amplitudes to suggest F via the
+      // auditory system's harmonic-template matching. Lower harmonics
+      // (which the speaker CAN reproduce) get more weight than the 1/h
+      // default — that makes the perceived bass much heavier on tiny
+      // speakers that can't render the actual fundamental at all.
+      const weights = { 2: 1.00, 3: 0.85, 4: 0.55, 5: 0.40, 6: 0.28, 7: 0.20 };
+      for (let h = 2; h <= 7; h++) {
+        this._tone(startSec, duration, baseHz * h, baseGain * weights[h], "sine");
       }
     }
 
-    // Dart-hitting-board impact. Two layers:
+    // Dart-hitting-board impact. Four layers, all triggered simultaneously
+    // to read as a single THUNK:
     //   1. High-mid noise crack — the "TICK" of the steel tip piercing the
     //      sisal/cork. Sharp attack, brief tail.
-    //   2. Low-frequency thump sweep — the "THUD" of the board absorbing
-    //      the dart's momentum.
-    // `intensity` 0..1 scales loudness, brightness, and duration so a bull
-    // hit hits harder than a single hit which hits harder than a miss.
+    //   2. Body sweep — a 280→55 Hz drop, the "thump" of the board.
+    //   3. Missing-fundamental sub-bass (≈45 Hz F0) — uses harmonics
+    //      2F..7F so the brain reconstructs a real subwoofer-style boom
+    //      from a phone speaker that can't physically reproduce 45 Hz.
+    //   4. Low-mid square-wave tone (~140 Hz) for the gut-punch body that
+    //      bridges the perceptible range and the missing fundamental.
     _impact(startSec, intensity = 1.0) {
       const i = Math.max(0.4, Math.min(1.2, intensity));
+      // 1. Noise crack
       const noiseDur  = 0.040 + 0.045 * i;
-      const noiseGain = 0.45 * i;
+      const noiseGain = 0.50 * i;
       const noiseLpf  = 3500 + 4000 * i;
       this._noise(startSec, noiseDur, noiseGain, noiseLpf);
-      // Low thump — short sweep from ~250 Hz down into sub-bass.
-      this._sweep(startSec, 0.060 + 0.030 * i, 260, 75, 0.30 * i);
+      // 2. Body sweep — much louder and reaches lower than before.
+      this._sweep(startSec, 0.110 + 0.040 * i, 280, 55, 0.65 * i);
+      // 3. Missing-fundamental sub-bass
+      this._missingFundamental(startSec, 0.220 + 0.080 * i, 45, 0.32 * i);
+      // 4. Body tone — square wave for richer harmonics in the perceptible
+      //    bass range.
+      this._tone(startSec, 0.180 + 0.040 * i, 140, 0.28 * i, "square");
+      this._tone(startSec, 0.180 + 0.040 * i,  90, 0.22 * i, "triangle");
     }
 
     // ── sound effects ─────────────────────────────────────────────────────
