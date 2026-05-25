@@ -386,11 +386,14 @@
     // and "START" after a mode change cleanly.
     game = window.DartlineGame.makeGame(currentModeId, practiceConfig);
     game.start();
+    comTurnPending = false;
     sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "start", ts: Date.now() });
     refreshGameSection();
     refreshPracticeConfigUI();
     renderGame();
     refreshMainButton();
+    // If P1 itself is COM (rare — would need bot-vs-bot setup), trigger now.
+    maybeScheduleCOMTurn("start");
   }
 
   function refreshGameSection() {
@@ -638,7 +641,78 @@
         toggleLock();
       }
       refreshMainButton();
+      // If the next turn is a COM player, schedule their 3 throws now.
+      maybeScheduleCOMTurn(result);
     }
+  }
+
+  // ── COM turn automation ────────────────────────────────────────────────
+  // For modes where players[i].type === "com" (currently only Cut Throat),
+  // after the human's round ends we queue 3 simulated throws from the
+  // configured AI difficulty. Each throw is fed through the SAME path a
+  // human throw uses, so scoring + audio + dartboard updates all work.
+  let comTurnPending = false;
+
+  function maybeScheduleCOMTurn(lastResult) {
+    if (!game || !window.DartlineAI) return;
+    const snap = game.snapshot();
+    if (snap.status !== "playing") return;
+    if (snap.gameType !== "cricket_cut_throat") return;
+    if (lastResult !== "player_change" && lastResult !== "start") return;
+    const cur = snap.players[snap.currentPlayer];
+    if (!cur || cur.type !== "com") return;
+    if (comTurnPending) return;
+    comTurnPending = true;
+
+    const ai = new window.DartlineAI.COMAI(cur.difficulty || "normal");
+    let throwIdx = 0;
+
+    function comThrow() {
+      if (!game || game.snapshot().status !== "playing") {
+        comTurnPending = false;
+        return;
+      }
+      const liveSnap = game.snapshot();
+      const liveCur = liveSnap.players[liveSnap.currentPlayer];
+      if (!liveCur || liveCur.type !== "com") {
+        comTurnPending = false;
+        return;
+      }
+      const plan = ai.plan(liveSnap);
+      // Send a throw message so the display draws the hit normally.
+      sendMaybe({
+        type: "throw",
+        x: plan.x, y: plan.y,
+        force: plan.force, peak: plan.peak,
+        ts: Date.now(), locked: true, isCOM: true,
+      });
+      if (sound) sound.playThrowSnap();
+      const score = window.DartlineDartboard.scoreAt(plan.x, plan.y);
+      const result = game.recordHit(score);
+      if (miniBoard) miniBoard.addHit(plan.x, plan.y, score);
+      renderGame();
+      sendMaybe({
+        type: "game_state",
+        snapshot: game.snapshot(),
+        result,
+        ts: Date.now(),
+      });
+      throwIdx += 1;
+      // If the COM's round just ended, stop scheduling — control returns
+      // to the human via player_change (or to ourselves if both are COM,
+      // which is supported by recursing back into maybeScheduleCOMTurn).
+      if (result === "player_change" || result === "game_end") {
+        comTurnPending = false;
+        refreshMainButton();
+        maybeScheduleCOMTurn(result);
+        return;
+      }
+      // Otherwise queue the next COM throw with a dramatic delay.
+      setTimeout(comThrow, 1500);
+    }
+
+    // Initial delay so the announcement overlay has time to play.
+    setTimeout(comThrow, 2200);
   }
 
   // ── Boot ────────────────────────────────────────────────────────────────

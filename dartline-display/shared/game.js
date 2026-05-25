@@ -378,14 +378,17 @@
   // once all of one player's targets are closed.
 
   class CricketCutThroatGame extends BaseGame {
-    constructor() {
+    constructor({ comDifficulty = null } = {}) {
       super();
       this.gameType = "cricket_cut_throat";
       this.throwsPerRound = 3;
       this.targets = CRICKET_TARGETS.slice();
       this.players = [
-        { name: "P1", marks: {}, points: 0 },
-        { name: "P2", marks: {}, points: 0 },
+        { name: "P1", marks: {}, points: 0, type: "human" },
+        { name: comDifficulty ? `COM ${comDifficulty[0].toUpperCase()}` : "P2",
+          marks: {}, points: 0,
+          type: comDifficulty ? "com" : "human",
+          difficulty: comDifficulty || null },
       ];
       this.currentPlayer = 0;
       this.best = loadBest(STORAGE.cricket_cut_throat);  // best = lowest losing-player points
@@ -581,7 +584,14 @@
       case "x01_501_do":         return new X01Game({ startingScore: 501, doubleOut: true });
       case "cricket_count_up":   return new CricketCountUpGame();
       case "cricket_standard":   return new CricketStandardGame();
-      case "cricket_cut_throat": return new CricketCutThroatGame();
+      case "cricket_cut_throat":
+        return new CricketCutThroatGame(options || {});
+      case "cricket_cut_throat_com_easy":
+        return new CricketCutThroatGame({ comDifficulty: "easy" });
+      case "cricket_cut_throat_com_normal":
+        return new CricketCutThroatGame({ comDifficulty: "normal" });
+      case "cricket_cut_throat_com_hard":
+        return new CricketCutThroatGame({ comDifficulty: "hard" });
       case "practice":           return new PracticeGame(options || {});
       case "count_up":
       default:                   return new CountUpGame();
@@ -595,7 +605,10 @@
     { id: "x01_501",             name: "501",              hint: "Reach 0 from 501" },
     { id: "cricket_count_up",    name: "Cricket Count Up", hint: "20→19→…→Bull→ALL" },
     { id: "cricket_standard",    name: "Cricket Standard", hint: "Close 15-20 + Bull, score on closed" },
-    { id: "cricket_cut_throat",  name: "Cut Throat",       hint: "2-player, low score wins" },
+    { id: "cricket_cut_throat",  name: "Cut Throat",       hint: "2 humans · Pass & Play" },
+    { id: "cricket_cut_throat_com_easy",   name: "Cut Throat · COM Easy",   hint: "vs COM (easy)" },
+    { id: "cricket_cut_throat_com_normal", name: "Cut Throat · COM Normal", hint: "vs COM (normal)" },
+    { id: "cricket_cut_throat_com_hard",   name: "Cut Throat · COM Hard",   hint: "vs COM (hard)" },
     { id: "practice",            name: "Practice",         hint: "Pick a target, 30 throws" },
   ]);
 
