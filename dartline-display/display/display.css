@@ -443,6 +443,79 @@ html, body {
   animation: roundIntroPop 380ms ease-out;
 }
 
+/* ───── Title screen (mode select via Neural Band) ───── */
+
+.title-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #000;
+  z-index: 50;
+  padding: 16px 32px;
+}
+.title-screen.hidden { display: none; }
+.title-screen__brand {
+  font-family: "Pacifico", "Snell Roundhand", cursive;
+  font-size: 48px;
+  background: linear-gradient(90deg, #00E5FF, #FF2D87);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.0;
+}
+.title-screen__accent {
+  width: 60%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, #00E5FF, #FF2D87, transparent);
+  margin-bottom: 6px;
+  opacity: 0.7;
+}
+.title-screen__nav {
+  color: #9BD8FF;
+  font-size: 16px;
+  opacity: 0.5;
+  line-height: 1.0;
+  letter-spacing: 4px;
+}
+.title-screen__nav--horiz { font-size: 22px; }
+.title-screen__mode {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #00E5FF;
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.45);
+  padding: 4px 0;
+}
+.title-screen__opponent-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+.title-screen__opponent {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #FF2D87;
+  text-shadow: 0 0 12px rgba(255, 45, 135, 0.4);
+}
+.title-screen__opponent.solo {
+  color: #FFB547;
+  text-shadow: 0 0 12px rgba(255, 181, 71, 0.4);
+}
+.title-screen__hint {
+  margin-top: 8px;
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: #FFB547;
+  font-weight: 700;
+  animation: pinchHintBreathe 2.4s ease-in-out infinite;
+}
+
 /* ───── Neural Band pinch hint + recognition pulse ───── */
 
 .pinch-hint {

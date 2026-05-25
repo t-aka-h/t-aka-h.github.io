@@ -162,16 +162,61 @@
   // Routing them through the controller keeps game state single-sourced.
   function handleGlassAction(action) {
     if (action === "primary") {
-      // Pinch = same effect as tapping the big iPhone button. Context-aware
-      // so a single gesture handles START / LOCK / UNLOCK / PLAY AGAIN.
       onMainButtonClick();
-    } else if (action === "back") {
-      // Long-pinch / Escape — drop any lock and re-center the aim.
+      return;
+    }
+    if (action === "back") {
       if (locked) toggleLock();
       if (aimTracker) aimTracker.recalibrate();
+      return;
     }
-    // Other arrow keys are reserved for future use (e.g. navigating
-    // between game modes once Cricket / 301 / 501 land).
+    // Arrow keys are mode-select navigation. Only active when no game is
+    // currently in progress so we don't change the mode mid-throw.
+    if (!game) return;
+    const snap = game.snapshot();
+    if (snap.status === "playing") return;
+    if (action === "arrowup")    cycleMode(-1);
+    if (action === "arrowdown")  cycleMode(+1);
+    if (action === "arrowleft")  cycleOpponent(-1);
+    if (action === "arrowright") cycleOpponent(+1);
+  }
+
+  function cycleMode(direction) {
+    if (!window.DartlineGame) return;
+    const modes = window.DartlineGame.MODE_LIST;
+    const idx = modes.findIndex((m) => m.id === currentModeId);
+    const next = (idx + direction + modes.length) % modes.length;
+    currentModeId = modes[next].id;
+    if (!window.DartlineGame.supportsOpponent(currentModeId)) {
+      currentOpponent = null;
+    }
+    rebuildGame();
+    populateModeList();
+    populateOpponentList();
+    refreshPracticeConfigUI();
+    renderGame();
+    refreshMainButton();
+    sendMaybe({
+      type: "game_state", snapshot: game.snapshot(),
+      result: "mode_change", ts: Date.now(),
+    });
+  }
+
+  function cycleOpponent(direction) {
+    if (!window.DartlineGame) return;
+    if (!window.DartlineGame.supportsOpponent(currentModeId)) return;
+    const opps = window.DartlineGame.OPPONENT_LIST;
+    const idx = opps.findIndex((o) => o.id === currentOpponent);
+    const next = (idx + direction + opps.length) % opps.length;
+    currentOpponent = opps[next].id;
+    rebuildGame();
+    populateOpponentList();
+    renderGame();
+    refreshMainButton();
+    sendMaybe({
+      type: "game_state", snapshot: game.snapshot(),
+      result: "mode_change", ts: Date.now(),
+    });
   }
   function scheduleReconnect() {
     reconnectAttempts += 1;

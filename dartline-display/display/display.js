@@ -30,6 +30,10 @@
     // Neural Band hint + pulse
     pinchHint:       document.getElementById("pinchHint"),
     pinchPulse:      document.getElementById("pinchPulse"),
+    // Title / mode-select screen (idle state)
+    titleScreen:     document.getElementById("titleScreen"),
+    titleMode:       document.getElementById("titleMode"),
+    titleOpponent:   document.getElementById("titleOpponent"),
     // Per-throw chips (recent throws strip below board)
     throwChipsBar: document.getElementById("throwChipsBar"),
     // Cricket / multi-player overlays
@@ -320,6 +324,8 @@
     }
     // Show / hide the "PINCH to start" hint based on game phase.
     updatePinchHint(snap);
+    // Title / mode-select screen (idle only).
+    updateTitleScreen(snap);
     // Cricket-specific UI.
     updateCricketMarks(snap);
     // Trigger Round-Intro / Player-Change overlays based on transitions.
@@ -463,11 +469,10 @@
   function updatePinchHint(snap) {
     lastGameSnapshot = snap;
     if (!els.pinchHint) return;
+    // The title screen has its own PINCH hint; suppress the floating one
+    // while idle so we don't double up.
     let text = "";
-    if (!snap || snap.status === "idle") text = "PINCH to start";
-    else if (snap.status === "finished") text = "PINCH to play again";
-    // While playing the hint is suppressed — the LOCK affordance lives on
-    // the iPhone scoreboard and would be too visually noisy on the glass.
+    if (!snap || snap.status === "finished") text = "PINCH to play again";
     if (text) {
       els.pinchHint.textContent = text;
       els.pinchHint.classList.remove("hidden");
@@ -475,7 +480,34 @@
       els.pinchHint.classList.add("hidden");
     }
   }
+
+  // Title screen — visible only while no game is in progress. Shows the
+  // current game type + opponent so the user can browse / pick via Neural
+  // Band arrows without ever looking at the iPhone.
+  function updateTitleScreen(snap) {
+    if (!els.titleScreen) return;
+    const idle = !snap || snap.status === "idle";
+    els.titleScreen.classList.toggle("hidden", !idle);
+    if (!idle) return;
+    // Mode name
+    const modeName = (window.DartlineGame && window.DartlineGame.MODE_LIST)
+      ? (window.DartlineGame.MODE_LIST.find((m) => m.id === snap.gameType) || {}).name
+      : null;
+    if (modeName) els.titleMode.textContent = modeName.toUpperCase();
+    // Opponent label
+    const opp = snap.comDifficulty || null;
+    let oppLabel = "SOLO";
+    if (opp === "easy")   oppLabel = "COM EASY";
+    if (opp === "normal") oppLabel = "COM NORMAL";
+    if (opp === "hard")   oppLabel = "COM HARD";
+    els.titleOpponent.textContent = oppLabel;
+    els.titleOpponent.classList.toggle("solo", opp == null);
+  }
   updatePinchHint(null);   // show "PINCH to start" on cold boot
+  // Render the title screen with sensible defaults until the controller
+  // sends its first game_state. The controller's heartbeat / sendInitialState
+  // refreshes both within a second of being linked.
+  updateTitleScreen({ status: "idle", gameType: "count_up", comDifficulty: null });
 
   function pulsePinch() {
     if (!els.pinchPulse) return;
