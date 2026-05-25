@@ -175,72 +175,102 @@
       }
     }
 
+    // Dart-hitting-board impact. Two layers:
+    //   1. High-mid noise crack — the "TICK" of the steel tip piercing the
+    //      sisal/cork. Sharp attack, brief tail.
+    //   2. Low-frequency thump sweep — the "THUD" of the board absorbing
+    //      the dart's momentum.
+    // `intensity` 0..1 scales loudness, brightness, and duration so a bull
+    // hit hits harder than a single hit which hits harder than a miss.
+    _impact(startSec, intensity = 1.0) {
+      const i = Math.max(0.4, Math.min(1.2, intensity));
+      const noiseDur  = 0.040 + 0.045 * i;
+      const noiseGain = 0.45 * i;
+      const noiseLpf  = 3500 + 4000 * i;
+      this._noise(startSec, noiseDur, noiseGain, noiseLpf);
+      // Low thump — short sweep from ~250 Hz down into sub-bass.
+      this._sweep(startSec, 0.060 + 0.030 * i, 260, 75, 0.30 * i);
+    }
+
     // ── sound effects ─────────────────────────────────────────────────────
+
+    // All score plays follow the same arc:
+    //   t          → impact (THUNK + low thud)
+    //   t + 0.085  → chime (sweep + chord) so the impact is heard distinctly
+    // The chime delay is short enough not to feel laggy but long enough that
+    // the impact reads as a separate event ("dart sticks, machine chirps").
 
     playRegular() {
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._noise(t, 0.050, 0.42, 5500);
-      this._sweep(t + 0.005, 0.100, 1500, 750, 0.35);
-      this._tone (t + 0.010, 0.280,  880, 0.18);
-      this._tone (t + 0.010, 0.280, 1320, 0.14);
-      this._tone (t + 0.010, 0.280, 1760, 0.10);
+      this._impact(t, 0.7);
+      const c = t + 0.085;
+      this._sweep(c, 0.100, 1500, 750, 0.35);
+      this._tone (c + 0.005, 0.280,  880, 0.18);
+      this._tone (c + 0.005, 0.280, 1320, 0.14);
+      this._tone (c + 0.005, 0.280, 1760, 0.10);
     }
 
     playOuterBull() {
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._noise(t, 0.070, 0.55, 6500);
-      this._sweep(t + 0.008, 0.150, 2800, 340, 0.45);
+      this._impact(t, 0.85);
+      const c = t + 0.085;
+      this._sweep(c, 0.150, 2800, 340, 0.45);
       [659, 880, 988, 1318, 1976].forEach((f) =>
-        this._tone(t + 0.020, 0.350, f, 0.12));
+        this._tone(c + 0.012, 0.350, f, 0.12));
     }
 
     playRing() {
       // For Double / Triple multipliers (except T20 which is treated as Perfect).
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._noise(t, 0.080, 0.60, 7500);
-      this._sweep(t + 0.008, 0.180, 3500, 260, 0.50);
+      this._impact(t, 0.95);
+      const c = t + 0.090;
+      this._sweep(c, 0.180, 3500, 260, 0.50);
       [523, 659, 784, 1047, 1318, 1568].forEach((f) =>
-        this._tone(t + 0.025, 0.380, f, 0.10));
-      this._tone(t + 0.060, 0.700, 1760, 0.08);
+        this._tone(c + 0.015, 0.380, f, 0.10));
+      this._tone(c + 0.050, 0.700, 1760, 0.08);
     }
 
     playBull() {
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._noise(t, 0.100, 0.62, 8000);
-      this._sweep(t + 0.010, 0.250, 4500, 200, 0.55);
+      this._impact(t, 1.0);
+      const c = t + 0.090;
+      this._sweep(c, 0.250, 4500, 200, 0.55);
       [55, 110, 220, 440, 880, 1318, 1760, 2200, 2637].forEach((f) =>
-        this._tone(t + 0.030, 0.450, f, 0.10));
-      this._tone(t + 0.060, 0.900, 1760, 0.10);
-      this._tone(t + 0.200, 1.100, 2640, 0.08);
-      this._missingFundamental(t + 0.020, 0.500, 80, 0.18);
+        this._tone(c + 0.020, 0.450, f, 0.10));
+      this._tone(c + 0.050, 0.900, 1760, 0.10);
+      this._tone(c + 0.190, 1.100, 2640, 0.08);
+      this._missingFundamental(c + 0.010, 0.500, 80, 0.18);
     }
 
     playPerfect() {
       // Used for double bull and T20-class triples.
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._noise(t, 0.120, 0.65, 9000);
-      this._sweep(t + 0.010, 0.300, 5000, 180, 0.60);
+      this._impact(t, 1.1);
+      const c = t + 0.100;
+      this._sweep(c, 0.300, 5000, 180, 0.60);
       // Ascending arpeggio
       [523, 659, 784, 1047].forEach((f, i) =>
-        this._tone(t + 0.040 + i * 0.040, 0.250, f, 0.18, "triangle"));
+        this._tone(c + 0.030 + i * 0.040, 0.250, f, 0.18, "triangle"));
       // 9-note finale chord
       [523, 659, 784, 988, 1175, 1397, 1568, 1865, 2093].forEach((f) =>
-        this._tone(t + 0.200, 0.600, f, 0.08));
-      this._tone(t + 0.100, 1.200, 2093, 0.12);
-      this._tone(t + 0.300, 1.500, 3136, 0.10);
-      this._missingFundamental(t + 0.020, 0.600, 70, 0.20);
+        this._tone(c + 0.190, 0.600, f, 0.08));
+      this._tone(c + 0.090, 1.200, 2093, 0.12);
+      this._tone(c + 0.290, 1.500, 3136, 0.10);
+      this._missingFundamental(c + 0.010, 0.600, 70, 0.20);
     }
 
     playMiss() {
       if (this.muted || !this.ensureContext()) return;
       const t = this._now();
-      this._sweep(t, 0.350, 220, 110, 0.35);
-      this._noise(t, 0.080, 0.15, 1500);
+      // A miss still hits SOMETHING (wall / floor / spider wire) — give it
+      // a soft impact so it doesn't feel like the throw vanished.
+      this._impact(t, 0.45);
+      this._sweep(t + 0.060, 0.350, 220, 110, 0.32);
     }
 
     playAimLock() {
