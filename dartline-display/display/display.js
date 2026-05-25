@@ -203,6 +203,12 @@
       roundLabel = snap.status === "idle"     ? "READY"
                  : snap.status === "finished" ? "FINAL"
                  : `${p.name} · TURN ${Math.floor(snap.round / 2) + 1}`;
+    } else if (snap.gameType === "practice") {
+      const t = snap.targetNumber === 25 ? "BULL" : String(snap.targetNumber);
+      const ring = snap.targetRing === "any" ? "" : ` ${snap.targetRing[0].toUpperCase()}`;
+      roundLabel = snap.status === "idle"     ? `${t}${ring}`
+                 : snap.status === "finished" ? "FINAL"
+                 : `${snap.throwsTaken}/${snap.maxThrows} → ${t}${ring}`;
     } else {
       roundLabel = snap.status === "idle"     ? "READY"
                  : snap.status === "finished" ? "FINAL"
@@ -228,6 +234,8 @@
     } else if (snap.gameType === "cricket_cut_throat") {
       const p = (snap.players || [])[snap.currentPlayer] || { points: 0 };
       primaryNumber = String(p.points);
+    } else if (snap.gameType === "practice") {
+      primaryNumber = String(snap.hits ?? 0);
     } else {
       primaryNumber = String(snap.totalScore ?? 0);
     }
@@ -240,6 +248,8 @@
         isNewBest = snap.throwsTaken > 0 && snap.throwsTaken === snap.best;
       } else if (snap.gameType === "cricket_cut_throat") {
         isNewBest = snap.totalScore > 0 && snap.totalScore === snap.best;
+      } else if (snap.gameType === "practice") {
+        isNewBest = snap.hits > 0 && snap.hits >= snap.best;
       } else {
         isNewBest = snap.totalScore > 0 && snap.totalScore >= snap.best;
       }
@@ -251,6 +261,8 @@
       els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}d` : "BEST —";
     } else if (snap.gameType === "cricket_cut_throat") {
       els.hudBest.textContent = snap.best > 0 ? `LOW ${snap.best}` : "LOW —";
+    } else if (snap.gameType === "practice") {
+      els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}/${snap.maxThrows}` : "BEST —";
     } else {
       els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
     }

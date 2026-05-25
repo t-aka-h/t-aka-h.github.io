@@ -33,7 +33,11 @@
     cricket_count_up:    "dartline-display.bestCricketCountUp",
     cricket_standard:    "dartline-display.bestCricketStandard",
     cricket_cut_throat:  "dartline-display.bestCricketCutThroat",
+    practice:            "dartline-display.bestPractice",
   });
+  function practiceBestKey(targetNumber, targetRing) {
+    return `${STORAGE.practice}.${targetNumber}.${targetRing}`;
+  }
 
   function loadBest(key) {
     try {
@@ -476,8 +480,101 @@
     }
   }
 
+  // ── 6. Practice (single-target, 30 throws) ──────────────────────────────
+  // Pick a target number (15-20 or 25 = Bull) and ring constraint
+  // ("any" / "single" / "double" / "triple") and try to land 30 darts on
+  // it. Tracks hits, current streak, longest streak, hit rate.
+
+  class PracticeGame extends BaseGame {
+    constructor({ targetNumber = 20, targetRing = "any" } = {}) {
+      super();
+      this.gameType = "practice";
+      this.targetNumber = targetNumber;
+      this.targetRing = targetRing;
+      this.maxThrows = 30;
+      this.throwsPerRound = 3;
+      this.totalRounds = this.maxThrows / this.throwsPerRound;
+      this.hits = 0;
+      this.streak = 0;
+      this.longestStreak = 0;
+      this._storageKey = practiceBestKey(targetNumber, targetRing);
+      this.best = loadBest(this._storageKey);
+    }
+    start() {
+      super.start();
+      this.hits = 0;
+      this.streak = 0;
+      this.longestStreak = 0;
+      this.totalScore = 0;
+    }
+    isOnTarget(score) {
+      if (this.targetNumber === 25) {
+        // Both outer and double bull count as the bull target.
+        return score.ring === "outer-bull" || score.ring === "double-bull";
+      }
+      if (score.number !== this.targetNumber) return false;
+      if (this.targetRing === "any")    return true;
+      if (this.targetRing === "single") return score.ring === "single";
+      if (this.targetRing === "double") return score.ring === "double";
+      if (this.targetRing === "triple") return score.ring === "triple";
+      return false;
+    }
+    recordHit(score) {
+      if (this.status !== "playing") return "ignored";
+      const onTarget = this.isOnTarget(score);
+      if (onTarget) {
+        this.hits += 1;
+        this.streak += 1;
+        if (this.streak > this.longestStreak) this.longestStreak = this.streak;
+      } else {
+        this.streak = 0;
+      }
+      const hit = {
+        label: score.label, points: onTarget ? score.points : 0,
+        ring: score.ring, number: score.number, multiplier: score.multiplier,
+        onTarget,
+      };
+      this.rounds[this.round].push(hit);
+      this.lastHit = hit;
+      this.totalScore = this.hits;
+      this.throwInRound += 1;
+
+      const totalThrows = this.round * this.throwsPerRound + this.throwInRound;
+      if (totalThrows >= this.maxThrows) {
+        this.status = "finished";
+        if (this.hits > this.best) {
+          this.best = this.hits;
+          saveBest(this._storageKey, this.best);
+        }
+        return "game_end";
+      }
+      if (this.throwInRound >= this.throwsPerRound) {
+        this.round += 1;
+        this.throwInRound = 0;
+        this.rounds.push([]);
+        return "round_end";
+      }
+      return "throw";
+    }
+    snapshot() {
+      const totalThrows = this.round * this.throwsPerRound + this.throwInRound;
+      return {
+        ...super.snapshot(),
+        targetNumber: this.targetNumber,
+        targetRing:   this.targetRing,
+        maxThrows:    this.maxThrows,
+        totalRounds:  this.totalRounds,
+        hits:         this.hits,
+        streak:       this.streak,
+        longestStreak:this.longestStreak,
+        throwsTaken:  totalThrows,
+        hitRate:      totalThrows > 0 ? this.hits / totalThrows : 0,
+      };
+    }
+  }
+
   // ── Factory + registry ──────────────────────────────────────────────────
-  function makeGame(mode) {
+  function makeGame(mode, options) {
     switch (mode) {
       case "x01_301":            return new X01Game({ startingScore: 301, doubleOut: false });
       case "x01_501":            return new X01Game({ startingScore: 501, doubleOut: false });
@@ -485,6 +582,7 @@
       case "cricket_count_up":   return new CricketCountUpGame();
       case "cricket_standard":   return new CricketStandardGame();
       case "cricket_cut_throat": return new CricketCutThroatGame();
+      case "practice":           return new PracticeGame(options || {});
       case "count_up":
       default:                   return new CountUpGame();
     }
@@ -498,10 +596,12 @@
     { id: "cricket_count_up",    name: "Cricket Count Up", hint: "20→19→…→Bull→ALL" },
     { id: "cricket_standard",    name: "Cricket Standard", hint: "Close 15-20 + Bull, score on closed" },
     { id: "cricket_cut_throat",  name: "Cut Throat",       hint: "2-player, low score wins" },
+    { id: "practice",            name: "Practice",         hint: "Pick a target, 30 throws" },
   ]);
 
   window.DartlineGame = {
     CountUpGame, X01Game, CricketCountUpGame, CricketStandardGame, CricketCutThroatGame,
+    PracticeGame,
     makeGame, MODE_LIST, CRICKET_TARGETS, CRICKET_COUNT_UP_TARGETS,
   };
 })();

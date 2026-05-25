@@ -32,6 +32,9 @@
     modeSelect:        document.getElementById("modeSelect"),
     modeList:          document.getElementById("modeList"),
     scoreboard:        document.getElementById("scoreboard"),
+    practiceConfig:    document.getElementById("practiceConfig"),
+    practiceNumbers:   document.getElementById("practiceNumbers"),
+    practiceRings:     document.getElementById("practiceRings"),
   };
 
   // ── Mini dartboard mirror on the iPhone — Glass remains the main view,
@@ -294,6 +297,7 @@
   // ── Game ────────────────────────────────────────────────────────────────
   let game = window.DartlineGame ? window.DartlineGame.makeGame("count_up") : null;
   let currentModeId = "count_up";
+  let practiceConfig = { targetNumber: 20, targetRing: "any" };
 
   function populateModeList() {
     if (!els.modeList || !window.DartlineGame) return;
@@ -308,8 +312,9 @@
       row.addEventListener("click", () => {
         if (game && game.snapshot().status === "playing") return; // can't change mid-game
         currentModeId = mode.id;
-        game = window.DartlineGame.makeGame(currentModeId);
+        game = window.DartlineGame.makeGame(currentModeId, practiceConfig);
         populateModeList();
+        refreshPracticeConfigUI();
         renderGame();
         refreshMainButton();
         // Notify display so its HUD switches to the new game type's idle view.
@@ -324,14 +329,66 @@
     });
   }
 
+  function refreshPracticeConfigUI() {
+    if (!els.practiceConfig) return;
+    const visible = currentModeId === "practice"
+                 && (!game || game.snapshot().status !== "playing");
+    els.practiceConfig.classList.toggle("hidden", !visible);
+    if (els.practiceNumbers) {
+      els.practiceNumbers.querySelectorAll(".practice-chip").forEach((btn) => {
+        const n = parseInt(btn.dataset.num, 10);
+        btn.classList.toggle("selected", n === practiceConfig.targetNumber);
+      });
+    }
+    if (els.practiceRings) {
+      els.practiceRings.querySelectorAll(".practice-chip").forEach((btn) => {
+        btn.classList.toggle("selected", btn.dataset.ring === practiceConfig.targetRing);
+      });
+    }
+  }
+
+  function bindPracticeConfig() {
+    if (els.practiceNumbers) {
+      els.practiceNumbers.querySelectorAll(".practice-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (game && game.snapshot().status === "playing") return;
+          practiceConfig.targetNumber = parseInt(btn.dataset.num, 10);
+          // Rebuild the practice game so its best-score lookup picks the
+          // right LocalStorage key for this target / ring combo.
+          if (currentModeId === "practice") {
+            game = window.DartlineGame.makeGame("practice", practiceConfig);
+          }
+          refreshPracticeConfigUI();
+          renderGame();
+          refreshMainButton();
+        });
+      });
+    }
+    if (els.practiceRings) {
+      els.practiceRings.querySelectorAll(".practice-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (game && game.snapshot().status === "playing") return;
+          practiceConfig.targetRing = btn.dataset.ring;
+          if (currentModeId === "practice") {
+            game = window.DartlineGame.makeGame("practice", practiceConfig);
+          }
+          refreshPracticeConfigUI();
+          renderGame();
+          refreshMainButton();
+        });
+      });
+    }
+  }
+
   function startNewGame() {
     if (!window.DartlineGame) return;
     // Always make a fresh game instance — handles "PLAY AGAIN" after finish
     // and "START" after a mode change cleanly.
-    game = window.DartlineGame.makeGame(currentModeId);
+    game = window.DartlineGame.makeGame(currentModeId, practiceConfig);
     game.start();
     sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "start", ts: Date.now() });
     refreshGameSection();
+    refreshPracticeConfigUI();
     renderGame();
     refreshMainButton();
   }
@@ -369,6 +426,12 @@
       roundText = snap.status === "playing"
         ? `ROUND ${snap.round + 1}/${snap.totalRounds}  →  ${tgtLabel}`
         : (snap.status === "finished" ? `FINAL` : `8 ROUNDS — READY`);
+    } else if (snap.gameType === "practice") {
+      const t = snap.targetNumber === 25 ? "BULL" : String(snap.targetNumber);
+      const ring = snap.targetRing === "any" ? "" : ` (${snap.targetRing[0].toUpperCase()})`;
+      roundText = snap.status === "playing"
+        ? `${snap.throwsTaken} / ${snap.maxThrows}  →  ${t}${ring}`
+        : (snap.status === "finished" ? `FINAL  ${snap.hits} HITS` : `${t}${ring} · 30 THROWS`);
     } else {
       // count_up
       roundText = snap.status === "idle"   ? `ROUND — / ${snap.totalRounds}`
@@ -392,6 +455,8 @@
       totalText = String(snap.points);
     } else if (snap.gameType === "cricket_cut_throat") {
       totalText = String(snap.players[snap.currentPlayer].points);
+    } else if (snap.gameType === "practice") {
+      totalText = `${snap.hits ?? 0}`;
     } else {
       totalText = String(snap.totalScore);
     }
@@ -441,6 +506,11 @@
       case "cricket_count_up":   return "20→…→BULL→ALL";
       case "cricket_standard":   return "CLOSE 15-20 + BULL";
       case "cricket_cut_throat": return "2 PLAYER · LOW WINS";
+      case "practice": {
+        const t = snap.targetNumber === 25 ? "BULL" : `${snap.targetNumber}`;
+        const r = snap.targetRing === "any" ? "" : ` ${snap.targetRing[0].toUpperCase()}`;
+        return `TARGET ${t}${r} · 30 THROWS`;
+      }
       case "count_up":
       default:                   return "8 ROUNDS × 3 THROWS";
     }
@@ -464,6 +534,8 @@
         finalText = `${snap.throwsTaken} darts`;
       } else if (snap.gameType === "cricket_cut_throat") {
         finalText = `LOW ${snap.totalScore}`;
+      } else if (snap.gameType === "practice") {
+        finalText = `${snap.hits} / ${snap.maxThrows}`;
       } else {
         finalText = `FINAL ${snap.totalScore}`;
       }
@@ -572,7 +644,9 @@
   // ── Boot ────────────────────────────────────────────────────────────────
   initTrackers();
   populateModeList();
+  bindPracticeConfig();
   refreshGameSection();
+  refreshPracticeConfigUI();
   renderGame();
   refreshMainButton();
   els.mainButton.addEventListener("click", onMainButtonClick);

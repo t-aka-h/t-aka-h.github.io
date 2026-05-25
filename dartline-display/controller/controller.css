@@ -228,6 +228,49 @@ html, body {
   margin-top: 1px;
 }
 
+/* ───── practice target config (visible only when mode = practice) ───── */
+.practice-config {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.practice-config.hidden { display: none; }
+.practice-config__title {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--accent-amber);
+  font-weight: 700;
+  text-align: center;
+}
+.practice-config__row {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+.practice-chip {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.practice-chip.selected {
+  background: rgba(255, 181, 71, 0.15);
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+.practice-chip--ring { max-width: 70px; }
+
 .scoreboard__row {
   display: flex;
   justify-content: space-between;
