@@ -137,6 +137,56 @@ html, body {
   gap: 10px;
 }
 
+/* ───── mode select (idle / finished state) ───── */
+.mode-select {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mode-select__title {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  text-align: center;
+}
+.mode-select__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mode-item {
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+.mode-item.selected {
+  background: rgba(0, 229, 255, 0.10);
+  border-color: rgba(0, 229, 255, 0.45);
+}
+.mode-item__name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+.mode-item.selected .mode-item__name {
+  color: var(--accent-cyan);
+}
+.mode-item__hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  margin-top: 1px;
+}
+
 .scoreboard__row {
   display: flex;
   justify-content: space-between;

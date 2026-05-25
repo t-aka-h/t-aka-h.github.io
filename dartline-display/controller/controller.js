@@ -29,6 +29,9 @@
     audioTestButton:   document.getElementById("audioTestButton"),
     miniDartboardCanvas: document.getElementById("miniDartboardCanvas"),
     miniAimOverlay:      document.getElementById("miniAimOverlay"),
+    modeSelect:        document.getElementById("modeSelect"),
+    modeList:          document.getElementById("modeList"),
+    scoreboard:        document.getElementById("scoreboard"),
   };
 
   // ── Mini dartboard mirror on the iPhone — Glass remains the main view,
@@ -289,53 +292,160 @@
   }
 
   // ── Game ────────────────────────────────────────────────────────────────
-  const game = window.DartlineGame ? new window.DartlineGame.CountUpGame() : null;
+  let game = window.DartlineGame ? window.DartlineGame.makeGame("count_up") : null;
+  let currentModeId = "count_up";
+
+  function populateModeList() {
+    if (!els.modeList || !window.DartlineGame) return;
+    els.modeList.innerHTML = "";
+    window.DartlineGame.MODE_LIST.forEach((mode) => {
+      const row = document.createElement("div");
+      row.className = "mode-item" + (mode.id === currentModeId ? " selected" : "");
+      row.dataset.modeId = mode.id;
+      row.innerHTML =
+        `<div class="mode-item__name">${mode.name}</div>` +
+        `<div class="mode-item__hint">${mode.hint}</div>`;
+      row.addEventListener("click", () => {
+        if (game && game.snapshot().status === "playing") return; // can't change mid-game
+        currentModeId = mode.id;
+        game = window.DartlineGame.makeGame(currentModeId);
+        populateModeList();
+        renderGame();
+        refreshMainButton();
+        // Notify display so its HUD switches to the new game type's idle view.
+        sendMaybe({
+          type: "game_state",
+          snapshot: game.snapshot(),
+          result: "mode_change",
+          ts: Date.now(),
+        });
+      });
+      els.modeList.appendChild(row);
+    });
+  }
 
   function startNewGame() {
-    if (!game) return;
+    if (!window.DartlineGame) return;
+    // Always make a fresh game instance — handles "PLAY AGAIN" after finish
+    // and "START" after a mode change cleanly.
+    game = window.DartlineGame.makeGame(currentModeId);
     game.start();
     sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "start", ts: Date.now() });
+    refreshGameSection();
     renderGame();
     refreshMainButton();
+  }
+
+  function refreshGameSection() {
+    if (!els.modeSelect || !els.scoreboard) return;
+    const snap = game ? game.snapshot() : null;
+    const isPlaying = snap && snap.status === "playing";
+    els.modeSelect.classList.toggle("hidden", !!isPlaying);
+    els.scoreboard.classList.toggle("hidden", !isPlaying && snap && snap.status !== "finished");
   }
 
   function renderGame() {
     if (!game) return;
     const snap = game.snapshot();
-    // Round chip
-    if (snap.status === "idle") {
-      els.roundChip.textContent = `ROUND — / ${snap.totalRounds}`;
-    } else if (snap.status === "finished") {
-      els.roundChip.textContent = `FINAL`;
+    // Round chip — game-type aware.
+    let roundText = "";
+    if (snap.gameType === "x01") {
+      const t = snap.throwsTaken || 0;
+      roundText = snap.status === "playing"
+        ? `TURN ${snap.round + 1}  ·  ${t} darts`
+        : (snap.status === "finished" ? `FINAL  ${t} darts` : `${snap.startingScore} — READY`);
+    } else if (snap.gameType === "cricket_standard") {
+      const closed = snap.targets.filter((t) => snap.marks[t] >= 3).length;
+      roundText = snap.status === "playing"
+        ? `${closed} / ${snap.targets.length} CLOSED`
+        : (snap.status === "finished" ? `ALL CLOSED` : `READY`);
+    } else if (snap.gameType === "cricket_cut_throat") {
+      roundText = snap.status === "playing"
+        ? `${snap.players[snap.currentPlayer].name} · TURN ${Math.floor(snap.round / 2) + 1}`
+        : (snap.status === "finished" ? `FINAL` : `2P — READY`);
+    } else if (snap.gameType === "cricket_count_up") {
+      const tgts = snap.currentTargets || [];
+      const tgtLabel = tgts.length === 1 ? (tgts[0] === 25 ? "BULL" : String(tgts[0])) : "ALL";
+      roundText = snap.status === "playing"
+        ? `ROUND ${snap.round + 1}/${snap.totalRounds}  →  ${tgtLabel}`
+        : (snap.status === "finished" ? `FINAL` : `8 ROUNDS — READY`);
     } else {
-      els.roundChip.textContent = `ROUND ${snap.round + 1} / ${snap.totalRounds}`;
+      // count_up
+      roundText = snap.status === "idle"   ? `ROUND — / ${snap.totalRounds}`
+                : snap.status === "finished" ? `FINAL`
+                : `ROUND ${snap.round + 1} / ${snap.totalRounds}`;
     }
+    els.roundChip.textContent = roundText;
+
     // 3-dot throw indicator
     const dots = els.throwDots.querySelectorAll(".dot");
     dots.forEach((dot, idx) => {
       dot.classList.toggle("filled", idx < snap.throwInRound && snap.status === "playing");
     });
-    if (snap.status === "finished") {
-      // After finish: light all 3 dots amber.
-      dots.forEach((dot) => dot.classList.add("filled"));
+    if (snap.status === "finished") dots.forEach((dot) => dot.classList.add("filled"));
+
+    // TOTAL number — depends on game type.
+    let totalText;
+    if (snap.gameType === "x01") {
+      totalText = String(snap.remaining);
+    } else if (snap.gameType === "cricket_standard") {
+      totalText = String(snap.points);
+    } else if (snap.gameType === "cricket_cut_throat") {
+      totalText = String(snap.players[snap.currentPlayer].points);
+    } else {
+      totalText = String(snap.totalScore);
     }
-    // Total
-    els.totalValue.textContent = String(snap.totalScore);
+    els.totalValue.textContent = totalText;
     const totalEl = els.totalValue.parentElement;
-    const isNewBest = snap.status === "finished" && snap.totalScore > 0 && snap.totalScore >= snap.best;
+    // "new best" highlight: count_up / cricket_count_up / cricket_standard
+    // → higher score is better; x01 / cut_throat → lower-is-better.
+    let isNewBest = false;
+    if (snap.status === "finished") {
+      if (snap.gameType === "x01") {
+        isNewBest = snap.throwsTaken > 0 && snap.throwsTaken === snap.best;
+      } else if (snap.gameType === "cricket_cut_throat") {
+        isNewBest = snap.totalScore > 0 && snap.totalScore === snap.best;
+      } else {
+        isNewBest = snap.totalScore > 0 && snap.totalScore >= snap.best;
+      }
+    }
     totalEl.classList.toggle("new-best", isNewBest);
-    // Best
-    els.bestChip.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
+
+    // Best chip label varies by game.
+    if (snap.gameType === "x01") {
+      els.bestChip.textContent = snap.best > 0 ? `BEST ${snap.best} darts` : "BEST —";
+    } else if (snap.gameType === "cricket_cut_throat") {
+      els.bestChip.textContent = snap.best > 0 ? `LOW ${snap.best}` : "LOW —";
+    } else {
+      els.bestChip.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
+    }
+
     // Last hit
     if (snap.lastHit) {
-      els.lastHitChip.textContent =
-        `${snap.lastHit.label}  ${snap.lastHit.points > 0 ? "+" : ""}${snap.lastHit.points}`;
+      const tail = snap.lastHit.bust ? " BUST" :
+                   (snap.lastHit.points !== 0
+                      ? `  ${snap.lastHit.points > 0 ? "+" : ""}${snap.lastHit.points}`
+                      : "");
+      els.lastHitChip.textContent = `${snap.lastHit.label}${tail}`;
     } else {
       els.lastHitChip.textContent = "";
     }
+
+    refreshGameSection();
   }
 
   // ── Main button (state-aware) ───────────────────────────────────────────
+  function modeSubLabel(snap) {
+    switch (snap.gameType) {
+      case "x01": return `${snap.startingScore}${snap.doubleOut ? " · DOUBLE OUT" : ""}`;
+      case "cricket_count_up":   return "20→…→BULL→ALL";
+      case "cricket_standard":   return "CLOSE 15-20 + BULL";
+      case "cricket_cut_throat": return "2 PLAYER · LOW WINS";
+      case "count_up":
+      default:                   return "8 ROUNDS × 3 THROWS";
+    }
+  }
+
   function refreshMainButton() {
     if (!game) return;
     const snap = game.snapshot();
@@ -343,13 +453,21 @@
     if (snap.status === "idle") {
       els.mainButton.dataset.mode = "start";
       els.mainButtonLabel.textContent = "START";
-      els.mainButtonSub.textContent = "8 ラウンド × 3 投";
+      els.mainButtonSub.textContent = modeSubLabel(snap);
       return;
     }
     if (snap.status === "finished") {
       els.mainButton.dataset.mode = "start";
       els.mainButtonLabel.textContent = "PLAY AGAIN";
-      els.mainButtonSub.textContent = `FINAL ${snap.totalScore}`;
+      let finalText;
+      if (snap.gameType === "x01") {
+        finalText = `${snap.throwsTaken} darts`;
+      } else if (snap.gameType === "cricket_cut_throat") {
+        finalText = `LOW ${snap.totalScore}`;
+      } else {
+        finalText = `FINAL ${snap.totalScore}`;
+      }
+      els.mainButtonSub.textContent = finalText;
       return;
     }
     // playing
@@ -453,6 +571,8 @@
 
   // ── Boot ────────────────────────────────────────────────────────────────
   initTrackers();
+  populateModeList();
+  refreshGameSection();
   renderGame();
   refreshMainButton();
   els.mainButton.addEventListener("click", onMainButtonClick);

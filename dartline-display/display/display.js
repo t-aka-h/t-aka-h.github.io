@@ -173,14 +173,36 @@
   // ── Game HUD ────────────────────────────────────────────────────────────
   function renderGameState(snap, result) {
     if (!snap) return;
-    // Round label
-    if (snap.status === "idle") {
-      els.hudRoundLabel.textContent = "READY";
-    } else if (snap.status === "finished") {
-      els.hudRoundLabel.textContent = "FINAL";
+    // Round label — game-type aware.
+    let roundLabel = "";
+    if (snap.gameType === "x01") {
+      roundLabel = snap.status === "idle"     ? `${snap.startingScore || 501}`
+                 : snap.status === "finished" ? `FINAL`
+                 : `TURN ${snap.round + 1}`;
+    } else if (snap.gameType === "cricket_count_up") {
+      const tgts = snap.currentTargets || [];
+      const tgtLabel = tgts.length === 1 ? (tgts[0] === 25 ? "BULL" : String(tgts[0])) : "ALL";
+      roundLabel = snap.status === "idle"     ? "READY"
+                 : snap.status === "finished" ? "FINAL"
+                 : `R${snap.round + 1} → ${tgtLabel}`;
+    } else if (snap.gameType === "cricket_standard") {
+      const targets = snap.targets || [];
+      const closed = targets.filter((t) => (snap.marks || {})[t] >= 3).length;
+      roundLabel = snap.status === "idle"     ? "READY"
+                 : snap.status === "finished" ? "FINAL"
+                 : `${closed} / ${targets.length} CLOSED`;
+    } else if (snap.gameType === "cricket_cut_throat") {
+      const p = (snap.players || [])[snap.currentPlayer] || { name: "P?" };
+      roundLabel = snap.status === "idle"     ? "READY"
+                 : snap.status === "finished" ? "FINAL"
+                 : `${p.name} · TURN ${Math.floor(snap.round / 2) + 1}`;
     } else {
-      els.hudRoundLabel.textContent = `ROUND ${snap.round + 1} / ${snap.totalRounds}`;
+      roundLabel = snap.status === "idle"     ? "READY"
+                 : snap.status === "finished" ? "FINAL"
+                 : `ROUND ${snap.round + 1} / ${snap.totalRounds}`;
     }
+    els.hudRoundLabel.textContent = roundLabel;
+
     // 3 dots
     const dots = els.hudDots.querySelectorAll(".hudDot");
     dots.forEach((dot, idx) => {
@@ -189,16 +211,50 @@
         : snap.status === "finished";
       dot.classList.toggle("filled", filled);
     });
-    // Total
-    els.hudTotal.textContent = String(snap.totalScore);
-    const isNewBest = snap.status === "finished" && snap.totalScore > 0 && snap.totalScore >= snap.best;
-    els.hudTotal.classList.toggle("new-best", isNewBest);
-    // Best
-    els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
 
-    // Game-over modal
+    // Primary big number — depends on game type.
+    let primaryNumber;
+    if (snap.gameType === "x01") {
+      primaryNumber = String(snap.remaining ?? snap.startingScore ?? 0);
+    } else if (snap.gameType === "cricket_standard") {
+      primaryNumber = String(snap.points ?? 0);
+    } else if (snap.gameType === "cricket_cut_throat") {
+      const p = (snap.players || [])[snap.currentPlayer] || { points: 0 };
+      primaryNumber = String(p.points);
+    } else {
+      primaryNumber = String(snap.totalScore ?? 0);
+    }
+    els.hudTotal.textContent = primaryNumber;
+
+    // "new best" highlight — semantics differ per game.
+    let isNewBest = false;
+    if (snap.status === "finished") {
+      if (snap.gameType === "x01") {
+        isNewBest = snap.throwsTaken > 0 && snap.throwsTaken === snap.best;
+      } else if (snap.gameType === "cricket_cut_throat") {
+        isNewBest = snap.totalScore > 0 && snap.totalScore === snap.best;
+      } else {
+        isNewBest = snap.totalScore > 0 && snap.totalScore >= snap.best;
+      }
+    }
+    els.hudTotal.classList.toggle("new-best", isNewBest);
+
+    // Best label — also game-aware.
+    if (snap.gameType === "x01") {
+      els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}d` : "BEST —";
+    } else if (snap.gameType === "cricket_cut_throat") {
+      els.hudBest.textContent = snap.best > 0 ? `LOW ${snap.best}` : "LOW —";
+    } else {
+      els.hudBest.textContent = snap.best > 0 ? `BEST ${snap.best}` : "BEST —";
+    }
+
+    // Game-over modal — show the game-appropriate final score.
     if (snap.status === "finished" && result === "game_end") {
-      els.gameOverScore.textContent = String(snap.totalScore);
+      let finalNumber;
+      if (snap.gameType === "x01") finalNumber = `${snap.throwsTaken}d`;
+      else if (snap.gameType === "cricket_cut_throat") finalNumber = String(snap.totalScore);
+      else finalNumber = String(snap.totalScore);
+      els.gameOverScore.textContent = finalNumber;
       els.gameOverBadge.classList.toggle("hidden", !isNewBest);
       els.gameOverModal.classList.remove("hidden");
       els.gameOverModal.setAttribute("aria-hidden", "false");
