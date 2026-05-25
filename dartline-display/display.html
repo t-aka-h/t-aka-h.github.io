@@ -39,6 +39,8 @@
       </div>
     </section>
 
+    <div id="cricketMarksBar" class="cricket-marks hidden" aria-hidden="true"></div>
+
     <footer class="hud-bottom">
       <span class="hud-bottom__best" id="hudBest">BEST —</span>
       <span class="hud-bottom__session">Dartline Display · <span id="session">—</span></span>
@@ -54,6 +56,17 @@
 
     <div id="pinchHint" class="pinch-hint hidden">PINCH to start</div>
     <div id="pinchPulse" class="pinch-pulse" aria-hidden="true">✓</div>
+
+    <div id="roundIntroOverlay" class="round-intro hidden" aria-hidden="true">
+      <div class="round-intro__round" id="roundIntroRound">ROUND 1</div>
+      <div class="round-intro__arrow">→</div>
+      <div class="round-intro__target" id="roundIntroTarget">20</div>
+    </div>
+
+    <div id="playerChangeOverlay" class="player-change hidden" aria-hidden="true">
+      <div class="player-change__label">YOUR TURN</div>
+      <div class="player-change__name" id="playerChangeName">PLAYER 2</div>
+    </div>
   </main>
 
   <script src="shared/protocol.js"></script>

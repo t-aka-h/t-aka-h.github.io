@@ -267,6 +267,149 @@ html, body {
   letter-spacing: 3px;
 }
 
+/* ───── Cricket marks bar (Standard / Cut Throat / Count Up) ───── */
+
+.cricket-marks {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 48px;
+  display: flex;
+  justify-content: space-evenly;
+  gap: 4px;
+  z-index: 40;
+  pointer-events: none;
+}
+.cricket-marks.hidden { display: none; }
+
+.cricket-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 50px;
+  padding: 4px 6px;
+  background: rgba(8, 5, 26, 0.55);
+  border-radius: 8px;
+  border: 1px solid rgba(75, 60, 130, 0.4);
+}
+.cricket-mark--closed {
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 50, 70, 0.55);
+}
+
+.cricket-mark__num {
+  font-family: "Menlo", monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #9BD8FF;
+  font-weight: 700;
+}
+.cricket-mark--closed .cricket-mark__num { color: #00E5FF; }
+
+.cricket-mark__marks {
+  font-family: "Menlo", monospace;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #FFFFFF;
+  min-height: 22px;
+  line-height: 1.0;
+}
+.cricket-mark--closed .cricket-mark__marks {
+  color: #00E5FF;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+}
+
+/* For Cut Throat we render two rows (P1 / P2) */
+.cricket-marks--cut .cricket-mark {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+}
+.cricket-marks--cut .cricket-mark__marks {
+  font-size: 14px;
+  min-height: 0;
+}
+
+/* ───── Round Intro (Cricket Count Up) ───── */
+
+.round-intro {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(6, 3, 13, 0.88);
+  z-index: 90;
+  opacity: 1;
+  transition: opacity 350ms ease-out;
+}
+.round-intro.hidden { opacity: 0; pointer-events: none; }
+.round-intro__round {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: #FFB547;
+}
+.round-intro__arrow {
+  font-size: 28px;
+  color: #9BD8FF;
+  letter-spacing: 4px;
+}
+.round-intro__target {
+  font-size: 200px;
+  font-weight: 900;
+  color: #00E5FF;
+  text-shadow:
+    0 0 24px rgba(0, 229, 255, 0.7),
+    0 0 60px rgba(0, 229, 255, 0.3);
+  line-height: 1;
+  letter-spacing: -2px;
+  animation: roundIntroPop 380ms ease-out;
+}
+@keyframes roundIntroPop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+
+/* ───── Player Change Announcement (Cut Throat / multi-player) ───── */
+
+.player-change {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(6, 3, 13, 0.85);
+  z-index: 91;
+  opacity: 1;
+  transition: opacity 320ms ease-out;
+}
+.player-change.hidden { opacity: 0; pointer-events: none; }
+.player-change__label {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #FFB547;
+}
+.player-change__name {
+  font-size: 120px;
+  font-weight: 900;
+  color: #FF2D87;
+  text-shadow:
+    0 0 24px rgba(255, 45, 135, 0.7),
+    0 0 60px rgba(255, 45, 135, 0.3);
+  animation: roundIntroPop 380ms ease-out;
+}
+
 /* ───── Neural Band pinch hint + recognition pulse ───── */
 
 .pinch-hint {

@@ -30,6 +30,13 @@
     // Neural Band hint + pulse
     pinchHint:       document.getElementById("pinchHint"),
     pinchPulse:      document.getElementById("pinchPulse"),
+    // Cricket / multi-player overlays
+    cricketMarksBar: document.getElementById("cricketMarksBar"),
+    roundIntroOverlay: document.getElementById("roundIntroOverlay"),
+    roundIntroRound:   document.getElementById("roundIntroRound"),
+    roundIntroTarget:  document.getElementById("roundIntroTarget"),
+    playerChangeOverlay: document.getElementById("playerChangeOverlay"),
+    playerChangeName:    document.getElementById("playerChangeName"),
   };
 
   els.session.textContent = sessionId;
@@ -270,6 +277,135 @@
     }
     // Show / hide the "PINCH to start" hint based on game phase.
     updatePinchHint(snap);
+    // Cricket-specific UI.
+    updateCricketMarks(snap);
+    // Trigger Round-Intro / Player-Change overlays based on transitions.
+    handleAnnouncements(snap, result);
+  }
+
+  // Track what we already announced so we don't fire on every heartbeat.
+  let _lastAnnRound = -1;
+  let _lastAnnPlayer = -1;
+  let _lastAnnGameType = null;
+
+  function handleAnnouncements(snap, result) {
+    // Reset trackers when game type changes (e.g. mode switch).
+    if (snap.gameType !== _lastAnnGameType) {
+      _lastAnnRound = -1;
+      _lastAnnPlayer = -1;
+      _lastAnnGameType = snap.gameType;
+    }
+
+    if (snap.status === "playing") {
+      // Cricket Count Up — new round → show R + target intro.
+      if (snap.gameType === "cricket_count_up") {
+        if (snap.round !== _lastAnnRound) {
+          const tgts = snap.currentTargets || [];
+          const targetLabel = tgts.length === 1
+            ? (tgts[0] === 25 ? "BULL" : String(tgts[0]))
+            : "ALL";
+          if (result !== "rejoin") showRoundIntro(snap.round + 1, targetLabel);
+          _lastAnnRound = snap.round;
+        }
+      }
+      // Cut Throat — turn changed → show P1/P2 announcement.
+      if (snap.gameType === "cricket_cut_throat") {
+        if (snap.currentPlayer !== _lastAnnPlayer) {
+          if (_lastAnnPlayer !== -1 && result !== "rejoin") {
+            const p = (snap.players || [])[snap.currentPlayer];
+            if (p) showPlayerChange(p.name);
+          }
+          _lastAnnPlayer = snap.currentPlayer;
+        }
+      }
+    } else {
+      _lastAnnRound = -1;
+      _lastAnnPlayer = -1;
+    }
+  }
+
+  function showRoundIntro(roundNum, targetLabel) {
+    if (!els.roundIntroOverlay) return;
+    els.roundIntroRound.textContent = `ROUND ${roundNum}`;
+    els.roundIntroTarget.textContent = targetLabel;
+    els.roundIntroOverlay.classList.remove("hidden");
+    if (sound) sound.playAimEnter();
+    clearTimeout(showRoundIntro._t);
+    showRoundIntro._t = setTimeout(() => {
+      els.roundIntroOverlay.classList.add("hidden");
+    }, 1900);
+  }
+
+  function showPlayerChange(playerName) {
+    if (!els.playerChangeOverlay) return;
+    els.playerChangeName.textContent = playerName;
+    els.playerChangeOverlay.classList.remove("hidden");
+    if (sound) sound.playAimEnter();
+    clearTimeout(showPlayerChange._t);
+    showPlayerChange._t = setTimeout(() => {
+      els.playerChangeOverlay.classList.add("hidden");
+    }, 2200);
+  }
+
+  function updateCricketMarks(snap) {
+    if (!els.cricketMarksBar) return;
+    const isCricketSP = snap.gameType === "cricket_standard"
+                     || snap.gameType === "cricket_count_up";
+    const isCricketCT = snap.gameType === "cricket_cut_throat";
+    if (!isCricketSP && !isCricketCT || snap.status === "idle") {
+      els.cricketMarksBar.classList.add("hidden");
+      return;
+    }
+    els.cricketMarksBar.classList.remove("hidden");
+    els.cricketMarksBar.classList.toggle("cricket-marks--cut", isCricketCT);
+
+    const targets = snap.targets ||
+      (snap.gameType === "cricket_count_up"
+        ? [20, 19, 18, 17, 16, 15, 25]
+        : []);
+    const marksByTarget = isCricketCT
+      ? null    // rendered specially below
+      : (snap.marks || {});
+    const activeTargets = (snap.currentTargets || []);
+
+    els.cricketMarksBar.innerHTML = "";
+    targets.forEach((target) => {
+      const wrap = document.createElement("div");
+      wrap.className = "cricket-mark";
+      const numLabel = target === 25 ? "BULL" : String(target);
+
+      if (isCricketCT) {
+        const p1m = (snap.players[0].marks || {})[target] || 0;
+        const p2m = (snap.players[1].marks || {})[target] || 0;
+        const closed = p1m >= 3 && p2m >= 3;
+        if (closed) wrap.classList.add("cricket-mark--closed");
+        wrap.innerHTML =
+          `<span class="cricket-mark__marks">${marksGlyph(p1m)}</span>` +
+          `<span class="cricket-mark__num">${numLabel}</span>` +
+          `<span class="cricket-mark__marks">${marksGlyph(p2m)}</span>`;
+      } else if (snap.gameType === "cricket_count_up") {
+        // Highlight the round's active target(s).
+        const isActive = activeTargets.includes(target);
+        if (isActive) wrap.classList.add("cricket-mark--closed");
+        wrap.innerHTML =
+          `<div class="cricket-mark__num">${numLabel}</div>` +
+          `<div class="cricket-mark__marks">${isActive ? "→" : "·"}</div>`;
+      } else {
+        const m = marksByTarget[target] || 0;
+        if (m >= 3) wrap.classList.add("cricket-mark--closed");
+        wrap.innerHTML =
+          `<div class="cricket-mark__num">${numLabel}</div>` +
+          `<div class="cricket-mark__marks">${marksGlyph(m)}</div>`;
+      }
+      els.cricketMarksBar.appendChild(wrap);
+    });
+  }
+
+  function marksGlyph(n) {
+    if (n <= 0) return "·";
+    if (n === 1) return "/";
+    if (n === 2) return "X";
+    return "⊗";
   }
 
   // ── Neural Band integration ────────────────────────────────────────────
