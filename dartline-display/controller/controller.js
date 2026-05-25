@@ -27,7 +27,17 @@
     aimStateChip:    document.getElementById("aimStateChip"),
     recalibrateButton: document.getElementById("recalibrateButton"),
     audioTestButton:   document.getElementById("audioTestButton"),
+    miniDartboardCanvas: document.getElementById("miniDartboardCanvas"),
+    miniAimOverlay:      document.getElementById("miniAimOverlay"),
   };
+
+  // ── Mini dartboard mirror on the iPhone — Glass remains the main view,
+  //    this is for setup / fallback / glancing while the user is between
+  //    throws. Uses the same Canvas renderer the Glass uses.
+  const miniBoard = (els.miniDartboardCanvas && window.DartlineDartboardCanvas)
+    ? new window.DartlineDartboardCanvas(els.miniDartboardCanvas)
+    : null;
+  if (miniBoard) miniBoard.draw();
 
   els.sessionId.textContent = sessionId;
 
@@ -226,10 +236,17 @@
     sendMaybe({ type: "aim_state", state, ts: Date.now() });
     if (state === "aiming" && sound) sound.playAimEnter();
     refreshMainButton();
+    // Mirror calibration overlay on the iPhone canvas too.
+    if (els.miniAimOverlay) {
+      els.miniAimOverlay.classList.toggle("hidden", state === "aiming");
+    }
   }
 
   function onAim(aim) {
     lastAimSent = aim;
+    // Mirror live aim onto the iPhone canvas at full 60 fps locally (no
+    // throttling — only the over-the-wire path is throttled to 30 Hz).
+    if (miniBoard) miniBoard.setAim({ x: aim.x, y: aim.y });
     const now = Date.now();
     if (now - lastAimSentAt < AIM_SEND_INTERVAL_MS) return;
     lastAimSentAt = now;
@@ -347,6 +364,7 @@
     }
     els.aimStateChip.dataset.state = locked ? "locked" : aimStateNow;
     els.aimStateChip.textContent = locked ? "LOCKED" : aimStateNow.toUpperCase();
+    if (miniBoard) miniBoard.setLock(locked, locked ? lockedAim : null);
     refreshMainButton();
   }
 
@@ -377,6 +395,11 @@
         result,
         ts: Date.now(),
       });
+      // Mirror the hit on the iPhone canvas too.
+      if (miniBoard) miniBoard.addHit(landing.x, landing.y, score);
+      // Brief local impact tap on the iPhone speaker so the user feels the
+      // hit in their throwing hand. The Glass plays the full score chime.
+      if (sound) sound._impact(sound._now(), 0.6);
       if ((result === "round_end" || result === "game_end") && locked) {
         toggleLock();
       }

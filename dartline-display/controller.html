@@ -23,6 +23,12 @@
       <button id="permissionButton" class="primary">センサーを有効化</button>
     </section>
 
+    <section class="mini-board">
+      <canvas id="miniDartboardCanvas" class="mini-board__canvas"></canvas>
+      <div id="miniAimOverlay" class="mini-board__overlay">CALIBRATING…</div>
+      <div class="mini-board__hint">Main view → Glass</div>
+    </section>
+
     <section id="scoreboard" class="scoreboard">
       <div class="scoreboard__row">
         <div class="scoreboard__chip" id="roundChip">ROUND — / 8</div>
@@ -67,6 +73,7 @@
   <script src="shared/sound.js"></script>
   <script src="shared/dartboard.js"></script>
   <script src="shared/game.js"></script>
+  <script src="display/dartboard.js"></script>
   <script src="controller/controller.js"></script>
 </body>
 </html>
