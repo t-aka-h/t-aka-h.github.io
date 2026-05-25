@@ -329,10 +329,12 @@
     // Force value (0..1) that yields the smallest deviation.
     idealForce: 0.55,
 
-    // Vertical offset per unit of (force − idealForce). 0.42 means a
-    // maxed-out force=1.0 throw drifts about (1.0 − 0.55) × 0.42 ≈ +0.19,
-    // i.e. ~1/5 of the board radius above the aim point.
-    verticalWeight: 0.42,
+    // Vertical offset per unit of (force − idealForce). Real-darts wrist
+    // mechanics: a HARD throw over-rotates and pushes the dart DOWN; a
+    // soft throw under-rotates and the dart lobs UP. So strong = −y,
+    // weak = +y. With verticalWeight = 0.42, force=1.0 → −0.19, force=0
+    // → +0.23.
+    verticalWeight: -0.42,
 
     // Base scatter applied even on a "perfect" throw — small but visible.
     // Keeps T20 from being trivially repeatable.
