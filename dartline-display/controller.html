@@ -18,6 +18,8 @@
 <body>
   <main id="app">
     <header class="brand">
+      <button id="statsButton" class="brand__icon brand__icon--left" aria-label="Stats">📊</button>
+      <button id="historyButton" class="brand__icon brand__icon--right" aria-label="History">📜</button>
       <h1 class="brand__title">Dartline Display</h1>
       <p class="brand__subtitle">CONTROLLER</p>
       <div class="brand__accent">
@@ -108,6 +110,26 @@
     </footer>
   </main>
 
+  <div id="statsModal" class="modal hidden" aria-hidden="true">
+    <div class="modal__panel">
+      <div class="modal__head">
+        <span class="modal__title">CAREER STATS</span>
+        <button class="modal__close" data-close="stats">✕</button>
+      </div>
+      <div id="statsBody" class="modal__body"></div>
+    </div>
+  </div>
+
+  <div id="historyModal" class="modal hidden" aria-hidden="true">
+    <div class="modal__panel">
+      <div class="modal__head">
+        <span class="modal__title">PLAY HISTORY</span>
+        <button class="modal__close" data-close="history">✕</button>
+      </div>
+      <div id="historyBody" class="modal__body"></div>
+    </div>
+  </div>
+
   <script src="shared/protocol.js"></script>
   <script src="shared/motion.js"></script>
   <script src="shared/sound.js"></script>
@@ -115,6 +137,7 @@
   <script src="shared/dartboard.js"></script>
   <script src="shared/game.js"></script>
   <script src="shared/ai.js"></script>
+  <script src="shared/stats.js"></script>
   <script src="display/dartboard.js"></script>
   <script src="controller/controller.js"></script>
 </body>

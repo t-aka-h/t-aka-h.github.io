@@ -270,6 +270,36 @@ html, body {
   letter-spacing: 3px;
 }
 
+/* ───── Per-throw chips (recent 10 throws under the board) ───── */
+.throw-chips {
+  position: fixed;
+  left: 28px;
+  right: 28px;
+  bottom: 90px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  z-index: 35;
+  pointer-events: none;
+}
+.throw-chip {
+  font-family: "Menlo", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(8, 5, 26, 0.7);
+  color: #FFFFFF;
+  border: 1px solid rgba(75, 60, 130, 0.5);
+}
+.throw-chip--double { color: #00E5FF; border-color: rgba(0, 229, 255, 0.5); }
+.throw-chip--triple { color: #FFB547; border-color: rgba(255, 181, 71, 0.55); }
+.throw-chip--bull   { color: #FF2D87; border-color: rgba(255, 45, 135, 0.55); }
+.throw-chip--miss   { color: #9B92C0; opacity: 0.65; }
+
 /* ───── Cricket marks bar (Standard / Cut Throat / Count Up) ───── */
 
 .cricket-marks {

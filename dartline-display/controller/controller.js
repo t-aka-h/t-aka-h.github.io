@@ -35,6 +35,12 @@
     practiceConfig:    document.getElementById("practiceConfig"),
     practiceNumbers:   document.getElementById("practiceNumbers"),
     practiceRings:     document.getElementById("practiceRings"),
+    statsButton:       document.getElementById("statsButton"),
+    historyButton:     document.getElementById("historyButton"),
+    statsModal:        document.getElementById("statsModal"),
+    statsBody:         document.getElementById("statsBody"),
+    historyModal:      document.getElementById("historyModal"),
+    historyBody:       document.getElementById("historyBody"),
   };
 
   // ── Mini dartboard mirror on the iPhone — Glass remains the main view,
@@ -612,6 +618,9 @@
     // Score the LANDING (not the intent) and advance the game.
     if (game && window.DartlineDartboard && game.snapshot().status === "playing") {
       const score = window.DartlineDartboard.scoreAt(landing.x, landing.y);
+      // Career stats: count every human throw (skip duplicate counting for
+      // COM-driven throws — they go through a separate path).
+      if (window.DartlineStats) window.DartlineStats.recordThrow(score);
       const result = game.recordHit(score);
       renderGame();
       sendMaybe({
@@ -620,6 +629,23 @@
         result,
         ts: Date.now(),
       });
+      // Record game-end into the play history if this hit ended it.
+      if (result === "game_end" && window.DartlineStats) {
+        const finalSnap = game.snapshot();
+        const wasBest = (() => {
+          if (finalSnap.gameType === "x01") {
+            return finalSnap.throwsTaken === finalSnap.best && finalSnap.throwsTaken > 0;
+          }
+          if (finalSnap.gameType === "cricket_cut_throat") {
+            return finalSnap.totalScore === finalSnap.best && finalSnap.totalScore > 0;
+          }
+          if (finalSnap.gameType === "practice") {
+            return finalSnap.hits >= finalSnap.best && finalSnap.hits > 0;
+          }
+          return finalSnap.totalScore >= finalSnap.best && finalSnap.totalScore > 0;
+        })();
+        window.DartlineStats.recordGameEnd(finalSnap, wasBest);
+      }
       // Mirror the hit on the iPhone canvas too.
       if (miniBoard) miniBoard.addHit(landing.x, landing.y, score);
       // Brief local impact tap on the iPhone speaker so the user feels the
@@ -734,6 +760,77 @@
     });
   }
   refreshAudioChip();
+
+  // ── Stats / history modals ────────────────────────────────────────────
+  if (els.statsButton) els.statsButton.addEventListener("click", openStatsModal);
+  if (els.historyButton) els.historyButton.addEventListener("click", openHistoryModal);
+  document.querySelectorAll(".modal__close").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const which = btn.dataset.close;
+      if (which === "stats")   els.statsModal.classList.add("hidden");
+      if (which === "history") els.historyModal.classList.add("hidden");
+    });
+  });
+  [els.statsModal, els.historyModal].forEach((modal) => {
+    if (!modal) return;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.classList.add("hidden");
+    });
+  });
+
+  function openStatsModal() {
+    if (!window.DartlineStats || !els.statsBody) return;
+    const s = window.DartlineStats.getStats();
+    const row = (label, value) =>
+      `<div class="stats-row"><span class="stats-row__label">${label}</span>` +
+      `<span class="stats-row__value">${value}</span></div>`;
+    els.statsBody.innerHTML =
+      row("Games played",      s.totalGames) +
+      row("Total throws",      s.totalThrows) +
+      row("Total points",      s.totalPoints) +
+      row("Bull hits",         s.bullHits) +
+      row("Double-bull hits",  s.doubleBullHits) +
+      row("T20 hits",          s.triple20Hits) +
+      row("Perfect-class hits",s.perfectHits) +
+      row("Misses",            s.misses) +
+      row("Bull hit rate",     (window.DartlineStats.bullHitRate() * 100).toFixed(1) + " %") +
+      row("T20 hit rate",      (window.DartlineStats.t20HitRate() * 100).toFixed(1) + " %") +
+      row("Avg pts / throw",   window.DartlineStats.averagePointsPerThrow().toFixed(2));
+    els.statsModal.classList.remove("hidden");
+  }
+
+  function openHistoryModal() {
+    if (!window.DartlineStats || !els.historyBody) return;
+    const hist = window.DartlineStats.getHistory();
+    const keys = Object.keys(hist).sort();
+    if (keys.length === 0) {
+      els.historyBody.innerHTML =
+        `<div class="stats-row"><span class="stats-row__label">No games played yet — finish a game first.</span></div>`;
+    } else {
+      const renderEntry = (entry) => {
+        const d = new Date(entry.ts);
+        const date = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        let score;
+        if (entry.gameType === "x01") score = `${entry.throwsTaken}d`;
+        else if (entry.gameType === "practice") score = `${entry.hits}/${entry.maxThrows}`;
+        else score = String(entry.finalScore);
+        const badge = entry.wasNewBest ? `<span class="history-entry__badge">BEST</span>` : "";
+        return `<div class="history-entry">` +
+               `<span class="history-entry__date">${date}</span>` +
+               `<span class="history-entry__score">${score}</span>` +
+               badge +
+               `</div>`;
+      };
+      els.historyBody.innerHTML = keys.map((key) => {
+        const entries = hist[key].slice(0, 8);   // show up to 8 most-recent per mode
+        const title = key.replace(/_/g, " ").toUpperCase();
+        return `<div class="history-mode"><div class="history-mode__title">${title}</div>` +
+               entries.map(renderEntry).join("") +
+               `</div>`;
+      }).join("");
+    }
+    els.historyModal.classList.remove("hidden");
+  }
   connect();
   if (needsPermission()) {
     els.permissionCard.classList.remove("hidden");

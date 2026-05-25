@@ -30,6 +30,8 @@
     // Neural Band hint + pulse
     pinchHint:       document.getElementById("pinchHint"),
     pinchPulse:      document.getElementById("pinchPulse"),
+    // Per-throw chips (recent throws strip below board)
+    throwChipsBar: document.getElementById("throwChipsBar"),
     // Cricket / multi-player overlays
     cricketMarksBar: document.getElementById("cricketMarksBar"),
     roundIntroOverlay: document.getElementById("roundIntroOverlay"),
@@ -152,6 +154,10 @@
     if (!board) return;
     board.setLock(locked, lockedAim);
   }
+  // Rolling buffer of the most recent throws to feed the chips strip.
+  const MAX_THROW_CHIPS = 10;
+  const recentThrows = [];
+
   function handleThrowOnBoard(msg) {
     if (!board || !window.DartlineDartboard) return;
     const x = typeof msg.x === "number" ? msg.x : 0;
@@ -160,6 +166,25 @@
     board.addHit(x, y, score);
     showScoreToast(score);
     if (sound) sound.playForScore(score);
+    pushThrowChip(score);
+  }
+
+  function pushThrowChip(score) {
+    recentThrows.push(score);
+    if (recentThrows.length > MAX_THROW_CHIPS) recentThrows.shift();
+    renderThrowChips();
+  }
+
+  function renderThrowChips() {
+    if (!els.throwChipsBar) return;
+    els.throwChipsBar.innerHTML = recentThrows.map((s) => {
+      let cls = "throw-chip";
+      if (s.ring === "double-bull" || s.ring === "outer-bull") cls += " throw-chip--bull";
+      else if (s.multiplier === 3) cls += " throw-chip--triple";
+      else if (s.multiplier === 2) cls += " throw-chip--double";
+      else if (s.ring === "miss")  cls += " throw-chip--miss";
+      return `<span class="${cls}">${s.label}</span>`;
+    }).join("");
   }
 
   function showScoreToast(score) {
@@ -286,6 +311,12 @@
     } else if (snap.status !== "finished") {
       els.gameOverModal.classList.add("hidden");
       els.gameOverModal.setAttribute("aria-hidden", "true");
+    }
+    // Reset the rolling per-throw chips when a new game starts so the
+    // strip doesn't carry stale entries from the previous match.
+    if (result === "start" || result === "mode_change") {
+      recentThrows.length = 0;
+      renderThrowChips();
     }
     // Show / hide the "PINCH to start" hint based on game phase.
     updatePinchHint(snap);
