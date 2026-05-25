@@ -35,6 +35,7 @@
     practiceConfig:    document.getElementById("practiceConfig"),
     practiceNumbers:   document.getElementById("practiceNumbers"),
     practiceRings:     document.getElementById("practiceRings"),
+    opponentList:      document.getElementById("opponentList"),
     statsButton:       document.getElementById("statsButton"),
     historyButton:     document.getElementById("historyButton"),
     statsModal:        document.getElementById("statsModal"),
@@ -301,9 +302,22 @@
   }
 
   // ── Game ────────────────────────────────────────────────────────────────
-  let game = window.DartlineGame ? window.DartlineGame.makeGame("count_up") : null;
   let currentModeId = "count_up";
+  let currentOpponent = null;    // null = solo; "easy" / "normal" / "hard"
   let practiceConfig = { targetNumber: 20, targetRing: "any" };
+  let game = window.DartlineGame
+    ? window.DartlineGame.makeGame(currentModeId, { comDifficulty: currentOpponent })
+    : null;
+
+  function gameOptions() {
+    return currentModeId === "practice"
+      ? practiceConfig
+      : { comDifficulty: currentOpponent };
+  }
+  function rebuildGame() {
+    if (!window.DartlineGame) return;
+    game = window.DartlineGame.makeGame(currentModeId, gameOptions());
+  }
 
   function populateModeList() {
     if (!els.modeList || !window.DartlineGame) return;
@@ -316,14 +330,18 @@
         `<div class="mode-item__name">${mode.name}</div>` +
         `<div class="mode-item__hint">${mode.hint}</div>`;
       row.addEventListener("click", () => {
-        if (game && game.snapshot().status === "playing") return; // can't change mid-game
+        if (game && game.snapshot().status === "playing") return;
         currentModeId = mode.id;
-        game = window.DartlineGame.makeGame(currentModeId, practiceConfig);
+        // Practice has no opponent — force solo when switching to it.
+        if (!window.DartlineGame.supportsOpponent(currentModeId)) {
+          currentOpponent = null;
+        }
+        rebuildGame();
         populateModeList();
+        populateOpponentList();
         refreshPracticeConfigUI();
         renderGame();
         refreshMainButton();
-        // Notify display so its HUD switches to the new game type's idle view.
         sendMaybe({
           type: "game_state",
           snapshot: game.snapshot(),
@@ -332,6 +350,35 @@
         });
       });
       els.modeList.appendChild(row);
+    });
+  }
+
+  function populateOpponentList() {
+    if (!els.opponentList || !window.DartlineGame) return;
+    const disabled = !window.DartlineGame.supportsOpponent(currentModeId);
+    els.opponentList.classList.toggle("disabled", disabled);
+    els.opponentList.innerHTML = "";
+    window.DartlineGame.OPPONENT_LIST.forEach((opp) => {
+      const row = document.createElement("div");
+      row.className = "opponent-chip" + (opp.id === currentOpponent ? " selected" : "");
+      row.dataset.id = opp.id === null ? "null" : opp.id;
+      row.textContent = opp.name;
+      row.addEventListener("click", () => {
+        if (game && game.snapshot().status === "playing") return;
+        if (disabled) return;
+        currentOpponent = opp.id;
+        rebuildGame();
+        populateOpponentList();
+        renderGame();
+        refreshMainButton();
+        sendMaybe({
+          type: "game_state",
+          snapshot: game.snapshot(),
+          result: "mode_change",
+          ts: Date.now(),
+        });
+      });
+      els.opponentList.appendChild(row);
     });
   }
 
@@ -388,9 +435,7 @@
 
   function startNewGame() {
     if (!window.DartlineGame) return;
-    // Always make a fresh game instance — handles "PLAY AGAIN" after finish
-    // and "START" after a mode change cleanly.
-    game = window.DartlineGame.makeGame(currentModeId, practiceConfig);
+    rebuildGame();
     game.start();
     comTurnPending = false;
     sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "start", ts: Date.now() });
@@ -398,7 +443,6 @@
     refreshPracticeConfigUI();
     renderGame();
     refreshMainButton();
-    // If P1 itself is COM (rare — would need bot-vs-bot setup), trigger now.
     maybeScheduleCOMTurn("start");
   }
 
@@ -683,15 +727,15 @@
     if (!game || !window.DartlineAI) return;
     const snap = game.snapshot();
     if (snap.status !== "playing") return;
-    if (snap.gameType !== "cricket_cut_throat") return;
-    if (lastResult !== "player_change" && lastResult !== "start") return;
-    const cur = snap.players[snap.currentPlayer];
+    // Now generic — any game whose current player is a COM gets auto-driven.
+    if (lastResult !== "player_change" && lastResult !== "round_end" &&
+        lastResult !== "bust" && lastResult !== "start") return;
+    const cur = (snap.players || [])[snap.currentPlayer ?? 0];
     if (!cur || cur.type !== "com") return;
     if (comTurnPending) return;
     comTurnPending = true;
 
     const ai = new window.DartlineAI.COMAI(cur.difficulty || "normal");
-    let throwIdx = 0;
 
     function comThrow() {
       if (!game || game.snapshot().status !== "playing") {
@@ -705,7 +749,6 @@
         return;
       }
       const plan = ai.plan(liveSnap);
-      // Send a throw message so the display draws the hit normally.
       sendMaybe({
         type: "throw",
         x: plan.x, y: plan.y,
@@ -723,27 +766,28 @@
         result,
         ts: Date.now(),
       });
-      throwIdx += 1;
-      // If the COM's round just ended, stop scheduling — control returns
-      // to the human via player_change (or to ourselves if both are COM,
-      // which is supported by recursing back into maybeScheduleCOMTurn).
-      if (result === "player_change" || result === "game_end") {
+      // Game-end is also recorded into stats / history.
+      if (result === "game_end" && window.DartlineStats) {
+        const fs = game.snapshot();
+        window.DartlineStats.recordGameEnd(fs, false);
+      }
+      if (result === "player_change" || result === "round_end" ||
+          result === "bust" || result === "game_end") {
         comTurnPending = false;
         refreshMainButton();
-        maybeScheduleCOMTurn(result);
+        if (result !== "game_end") maybeScheduleCOMTurn(result);
         return;
       }
-      // Otherwise queue the next COM throw with a dramatic delay.
       setTimeout(comThrow, 1500);
     }
 
-    // Initial delay so the announcement overlay has time to play.
     setTimeout(comThrow, 2200);
   }
 
   // ── Boot ────────────────────────────────────────────────────────────────
   initTrackers();
   populateModeList();
+  populateOpponentList();
   bindPracticeConfig();
   refreshGameSection();
   refreshPracticeConfigUI();
