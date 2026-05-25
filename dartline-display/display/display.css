@@ -22,8 +22,11 @@ html, body {
   width: 600px;
   height: 600px;
   display: grid;
-  grid-template-rows: 70px 1fr 44px;
-  padding: 10px 16px;
+  grid-template-rows: 64px 1fr 56px;
+  /* Generous bottom + side padding so the Meta Ray-Ban Display's safe-area
+     crop doesn't clip the BEST / status text in the corners. The visible
+     region on the glass is narrower than the 600x600 logical viewport. */
+  padding: 8px 28px 24px 28px;
 }
 
 /* ───── HUD top — brand · round/dots · total ───── */
@@ -271,9 +274,9 @@ html, body {
 
 .cricket-marks {
   position: fixed;
-  left: 8px;
-  right: 8px;
-  bottom: 48px;
+  left: 28px;
+  right: 28px;
+  bottom: 56px;
   display: flex;
   justify-content: space-evenly;
   gap: 4px;

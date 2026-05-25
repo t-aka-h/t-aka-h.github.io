@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#06030D">
   <title>Dartline Display — Controller</title>
+  <link rel="icon" type="image/png" sizes="32x32"  href="assets/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png">
+  <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
@@ -15,7 +20,18 @@
     <header class="brand">
       <h1 class="brand__title">Dartline Display</h1>
       <p class="brand__subtitle">CONTROLLER</p>
-      <div class="brand__accent"></div>
+      <div class="brand__accent">
+        <svg class="brand__dart" viewBox="0 0 60 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- shaft -->
+          <rect x="14" y="7" width="32" height="2" fill="#FFB547"/>
+          <!-- tip -->
+          <polygon points="46,5 56,8 46,11" fill="#D5DCE6"/>
+          <polygon points="50,7 54,8 50,9" fill="#FFFFFF"/>
+          <!-- fletching -->
+          <polygon points="14,7 4,3 8,8 4,13 14,9" fill="#FF2D87"/>
+          <polygon points="14,7 10,5 12,8 10,11 14,9" fill="#FF6FA9"/>
+        </svg>
+      </div>
     </header>
 
     <section id="permissionCard" class="card hidden">
