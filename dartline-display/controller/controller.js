@@ -85,10 +85,6 @@
     ws.addEventListener("open", () => {
       reconnectAttempts = 0;
       setStatus("connected", "connected");
-      // Re-broadcast game state so a freshly opened display catches up.
-      if (game) {
-        sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
-      }
     });
     ws.addEventListener("message", (event) => {
       try {
@@ -96,10 +92,14 @@
         if (msg.type === "hello") {
           const hasDisplay = (msg.peers || []).includes("display");
           setStatus(hasDisplay ? "linked" : "waiting display", hasDisplay ? "connected" : "waiting");
+          // Display may already be connected — push current state in case
+          // it loaded before us and missed the live updates.
+          if (hasDisplay) sendInitialState();
         } else if (msg.type === "peer_joined" && msg.role === "display") {
           setStatus("linked", "connected");
-          // Push state to the newly-arrived display.
-          if (game) sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
+          // New display joined — replay current state so it doesn't sit on
+          // its boot-time "calibrating" overlay forever.
+          sendInitialState();
         } else if (msg.type === "peer_left" && msg.role === "display") {
           setStatus("waiting display", "waiting");
         }
@@ -107,6 +107,20 @@
     });
     ws.addEventListener("close", () => { setStatus("disconnected", "error"); scheduleReconnect(); });
     ws.addEventListener("error", () => { setStatus("error", "error"); });
+  }
+
+  // Resend the controller's current state — used when a display joins (or
+  // when we discover a display is already connected on hello).
+  function sendInitialState() {
+    sendMaybe({ type: "aim_state", state: aimStateNow, ts: Date.now() });
+    if (locked) {
+      sendMaybe({ type: "lock", x: lockedAim.x, y: lockedAim.y, ts: Date.now() });
+    } else {
+      sendMaybe({ type: "unlock", ts: Date.now() });
+    }
+    if (game) {
+      sendMaybe({ type: "game_state", snapshot: game.snapshot(), result: "rejoin", ts: Date.now() });
+    }
   }
   function scheduleReconnect() {
     reconnectAttempts += 1;
