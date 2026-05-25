@@ -306,5 +306,78 @@
     }
   }
 
-  window.DartlineMotion = { ThrowDetector, AimTracker, DEFAULTS, AIM_DEFAULTS };
+  // ──────────────────────────────────────────────────────────────────────────
+  // ThrowResolver — turns a (lockedAim, force, peak) tuple into the actual
+  // landing point on the dartboard. Web port of iOS Dartline's ThrowResolver
+  // (Day 1.10): "the aim is fixed, but the QUALITY of the throw motion
+  // decides how far the dart drifts from it."
+  //
+  // We don't have CoreMotion's pitch/roll deltas at release time in the Web
+  // version — only the linear-accel peak from DeviceMotion. So we model the
+  // resolver around `force` alone:
+  //
+  //   force ≈ idealForce → tight scatter around the aim
+  //   force >  idealForce → throw is too strong → drifts UP (+y)
+  //   force <  idealForce → throw is weak → falls SHORT (−y)
+  //   error magnitude     → horizontal scatter widens
+  //
+  // The output is clamped to a sane radius so a wild throw can MISS the
+  // board but won't fly to (10, 10).
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const RESOLVER_DEFAULTS = {
+    // Force value (0..1) that yields the smallest deviation.
+    idealForce: 0.55,
+
+    // Vertical offset per unit of (force − idealForce). 0.42 means a
+    // maxed-out force=1.0 throw drifts about (1.0 − 0.55) × 0.42 ≈ +0.19,
+    // i.e. ~1/5 of the board radius above the aim point.
+    verticalWeight: 0.42,
+
+    // Base scatter applied even on a "perfect" throw — small but visible.
+    // Keeps T20 from being trivially repeatable.
+    baseSpread: 0.05,
+
+    // Additional scatter per unit of force error. With error 0.25 (e.g.
+    // force=0.8 or 0.3), this adds 0.125 to the horizontal spread.
+    errorSpread: 0.50,
+
+    // Clamp the resolved landing inside [-maxRadius, +maxRadius] on each
+    // axis. Just past the double ring so misses can still land in the
+    // outer dead zone of the canvas.
+    maxRadius: 1.15,
+  };
+
+  class ThrowResolver {
+    constructor(options = {}) {
+      this.opts = { ...RESOLVER_DEFAULTS, ...options };
+    }
+
+    // aim: { x, y } the LOCKED aim point (or live aim if not locked)
+    // force: 0..1 normalized throw force from ThrowDetector
+    // returns: { x, y, dx, dy } — the actual landing + offset components
+    resolve(aim, force) {
+      const { idealForce, verticalWeight, baseSpread, errorSpread,
+              maxRadius } = this.opts;
+      const forceError = (typeof force === "number" ? force : idealForce) - idealForce;
+      const verticalBias = forceError * verticalWeight;
+      const errMag = Math.abs(forceError);
+      const horizSpread = baseSpread + errMag * errorSpread;
+      // Symmetric uniform jitter — good enough for arcade-style feel.
+      const horizJitter = (Math.random() * 2 - 1) * horizSpread;
+      const vertNoise   = (Math.random() * 2 - 1) * baseSpread * 0.7;
+      const x = clamp(aim.x + horizJitter,        -maxRadius, maxRadius);
+      const y = clamp(aim.y + verticalBias + vertNoise, -maxRadius, maxRadius);
+      return { x, y, dx: x - aim.x, dy: y - aim.y };
+    }
+  }
+
+  function clamp(v, lo, hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+
+  window.DartlineMotion = {
+    ThrowDetector, AimTracker, ThrowResolver,
+    DEFAULTS, AIM_DEFAULTS, RESOLVER_DEFAULTS,
+  };
 })();

@@ -136,6 +136,7 @@
   const latest = { ax: 0, ay: 0, az: 0, alpha: 0, beta: 0, gamma: 0 };
 
   let throwDetector = null;
+  let throwResolver = null;
   let aimTracker = null;
   let aimStateNow = "calibrating";
   let locked = false;
@@ -145,6 +146,7 @@
     if (!window.DartlineMotion) return;
     throwDetector = new window.DartlineMotion.ThrowDetector();
     throwDetector.on(onThrow);
+    throwResolver = new window.DartlineMotion.ThrowResolver();
     aimTracker = new window.DartlineMotion.AimTracker();
     aimTracker.onStateChange(onAimState);
     aimTracker.onAim(onAim);
@@ -321,16 +323,22 @@
   // ── Throw handler ───────────────────────────────────────────────────────
   function onThrow(event) {
     if (sound) sound.playThrowSnap();
-    const aim = locked ? lockedAim : lastAimSent;
+    const baseAim = locked ? lockedAim : lastAimSent;
+    // Apply ThrowResolver: turn (aim, force) into the actual landing point.
+    // This gives the game challenge — perfect intent isn't perfect outcome.
+    const landing = throwResolver
+      ? throwResolver.resolve(baseAim, event.force)
+      : { x: baseAim.x, y: baseAim.y };
     sendMaybe({
       type: "throw",
-      x: aim.x, y: aim.y,
+      x: landing.x, y: landing.y,
       force: event.force, peak: event.peak,
       ts: event.ts, locked,
+      aimX: baseAim.x, aimY: baseAim.y,   // original intent — for diagnostics
     });
-    // Score it and advance the game.
+    // Score the LANDING (not the intent) and advance the game.
     if (game && window.DartlineDartboard && game.snapshot().status === "playing") {
-      const score = window.DartlineDartboard.scoreAt(aim.x, aim.y);
+      const score = window.DartlineDartboard.scoreAt(landing.x, landing.y);
       const result = game.recordHit(score);
       renderGame();
       sendMaybe({
@@ -339,8 +347,6 @@
         result,
         ts: Date.now(),
       });
-      // Auto-release lock between rounds and at game end so we don't carry
-      // a stale aim across rounds.
       if ((result === "round_end" || result === "game_end") && locked) {
         toggleLock();
       }
