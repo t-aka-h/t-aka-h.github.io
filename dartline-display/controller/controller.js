@@ -112,6 +112,8 @@
           sendInitialState();
         } else if (msg.type === "peer_left" && msg.role === "display") {
           setStatus("waiting display", "waiting");
+        } else if (msg.type === "glass_action") {
+          handleGlassAction(msg.action);
         }
       } catch (_) {}
     });
@@ -141,6 +143,23 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     sendMaybe({ type: "aim_state", state: aimStateNow, ts: Date.now() });
   }, 1500);
+
+  // Glass-side gestures (Meta Neural Band pinch / swipe arrive as keydown
+  // events on the display, which forwards them as glass_action messages).
+  // Routing them through the controller keeps game state single-sourced.
+  function handleGlassAction(action) {
+    if (action === "primary") {
+      // Pinch = same effect as tapping the big iPhone button. Context-aware
+      // so a single gesture handles START / LOCK / UNLOCK / PLAY AGAIN.
+      onMainButtonClick();
+    } else if (action === "back") {
+      // Long-pinch / Escape — drop any lock and re-center the aim.
+      if (locked) toggleLock();
+      if (aimTracker) aimTracker.recalibrate();
+    }
+    // Other arrow keys are reserved for future use (e.g. navigating
+    // between game modes once Cricket / 301 / 501 land).
+  }
   function scheduleReconnect() {
     reconnectAttempts += 1;
     const delay = Math.min(500 * Math.pow(2, reconnectAttempts), MAX_BACKOFF_MS);

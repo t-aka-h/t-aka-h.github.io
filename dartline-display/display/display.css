@@ -266,3 +266,58 @@ html, body {
   font-size: 14px;
   letter-spacing: 3px;
 }
+
+/* ───── Neural Band pinch hint + recognition pulse ───── */
+
+.pinch-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #FFB547;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 60;
+  text-shadow: 0 0 12px rgba(255, 181, 71, 0.4);
+  /* Subtle pulse animation so it reads as "actionable" */
+  animation: pinchHintBreathe 2.4s ease-in-out infinite;
+}
+.pinch-hint.hidden { display: none; }
+
+@keyframes pinchHintBreathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1.00; }
+}
+
+.pinch-pulse {
+  position: fixed;
+  bottom: 56px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 229, 255, 0.18);
+  border: 2px solid #00E5FF;
+  color: #00E5FF;
+  font-size: 20px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 70;
+}
+
+.pinch-pulse.active {
+  animation: pinchPulse 420ms ease-out forwards;
+}
+
+@keyframes pinchPulse {
+  0%   { opacity: 0;   transform: scale(0.5); box-shadow: 0 0 0 rgba(0, 229, 255, 0.8); }
+  20%  { opacity: 1;   transform: scale(1.15); box-shadow: 0 0 18px rgba(0, 229, 255, 0.7); }
+  100% { opacity: 0;   transform: scale(1.40); box-shadow: 0 0 30px rgba(0, 229, 255, 0); }
+}

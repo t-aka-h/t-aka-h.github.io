@@ -27,6 +27,9 @@
     gameOverModal:   document.getElementById("gameOverModal"),
     gameOverScore:   document.getElementById("gameOverScore"),
     gameOverBadge:   document.getElementById("gameOverBadge"),
+    // Neural Band hint + pulse
+    pinchHint:       document.getElementById("pinchHint"),
+    pinchPulse:      document.getElementById("pinchPulse"),
   };
 
   els.session.textContent = sessionId;
@@ -209,7 +212,72 @@
       els.gameOverModal.classList.add("hidden");
       els.gameOverModal.setAttribute("aria-hidden", "true");
     }
+    // Show / hide the "PINCH to start" hint based on game phase.
+    updatePinchHint(snap);
   }
+
+  // ── Neural Band integration ────────────────────────────────────────────
+  // The Meta Neural Band fires Enter (pinch) and arrow-key events into the
+  // focused Web App. We forward those gestures over the relay so the
+  // controller — which owns game state — can act on them. The user can
+  // then play with eyes fixed on the glass and the iPhone purely held as
+  // a dart, no glance at the phone screen needed.
+
+  let lastGameSnapshot = null;
+
+  function updatePinchHint(snap) {
+    lastGameSnapshot = snap;
+    if (!els.pinchHint) return;
+    let text = "";
+    if (!snap || snap.status === "idle") text = "PINCH to start";
+    else if (snap.status === "finished") text = "PINCH to play again";
+    // While playing the hint is suppressed — the LOCK affordance lives on
+    // the iPhone scoreboard and would be too visually noisy on the glass.
+    if (text) {
+      els.pinchHint.textContent = text;
+      els.pinchHint.classList.remove("hidden");
+    } else {
+      els.pinchHint.classList.add("hidden");
+    }
+  }
+  updatePinchHint(null);   // show "PINCH to start" on cold boot
+
+  function pulsePinch() {
+    if (!els.pinchPulse) return;
+    els.pinchPulse.classList.remove("active");
+    void els.pinchPulse.offsetWidth;
+    els.pinchPulse.classList.add("active");
+  }
+
+  function sendGlassAction(action) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "glass_action", action, ts: Date.now() }));
+    } catch (_) {}
+    pulsePinch();
+  }
+
+  window.addEventListener("keydown", (e) => {
+    // Pinch / select.
+    if (e.key === "Enter" || e.key === " ") {
+      sendGlassAction("primary");
+      e.preventDefault();
+      return;
+    }
+    // Back gesture — long-pinch on Neural Band fires Escape in the
+    // wearable runtime per Meta's docs.
+    if (e.key === "Escape" || e.key === "Backspace") {
+      sendGlassAction("back");
+      e.preventDefault();
+      return;
+    }
+    // Optional navigation gestures (Neural Band swipe = arrow keys) —
+    // currently unused but routed so the controller can adopt them later.
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+      sendGlassAction(e.key.toLowerCase());
+      e.preventDefault();
+    }
+  });
 
   connect();
 })();
