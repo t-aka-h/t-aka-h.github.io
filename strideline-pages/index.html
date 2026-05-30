@@ -3,77 +3,119 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Strideline — 中学受験の学習スケジュール</title>
+<title>Strideline — 中学受験の学習スケジュール / Study Schedule for Exam Prep</title>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-    background: #050614;
-    color: #EAF0FF;
+    background: #fafcff;
+    color: #1a2238;
     max-width: 720px;
     margin: 0 auto;
-    padding: 56px 20px 80px;
+    padding: 40px 20px 80px;
     line-height: 1.8;
   }
-  h1 { color: #EAF0FF; font-size: 32px; margin-bottom: 4px; }
-  .tag { color: #5B8AFF; font-size: 15px; font-weight: 600; }
-  h2 { color: rgba(234,240,255,0.92); margin-top: 36px; font-size: 18px; }
-  p, li { color: rgba(234,240,255,0.80); }
-  a { color: #5B8AFF; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .cards { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
-  .card {
-    flex: 1 1 200px;
-    background: rgba(91,138,255,0.08);
-    border: 1px solid rgba(91,138,255,0.25);
-    border-radius: 16px;
-    padding: 20px;
+  h1 { color: #1a2238; font-size: 32px; }
+  h2 { color: #5b8aff; margin-top: 28px; font-size: 20px; }
+  p, li { color: #2a3858; }
+  a { color: #5b8aff; }
+  .tagline { color: #5b8aff; font-size: 17px; font-weight: 600; margin-top: 4px; }
+  .nav { margin: 20px 0 28px; }
+  .nav a {
+    display: inline-block;
+    color: #5b8aff;
+    margin-right: 12px;
+    padding: 8px 14px;
+    border: 1px solid rgba(91,138,255,0.3);
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
   }
-  .card h3 { color: #5B8AFF; margin: 0 0 6px; font-size: 16px; }
-  .card p { font-size: 13px; margin: 0; color: rgba(234,240,255,0.7); }
-  .last { color: rgba(234,240,255,0.40); font-size: 12px; margin-top: 40px; }
-  ul.feat { padding-left: 18px; }
+  .nav a:hover { background: rgba(91,138,255,0.08); }
+  hr.divider { border: 0; border-top: 1px solid rgba(91,138,255,0.3); margin: 60px 0 40px; }
+  .lang-hint { color: rgba(26,34,56,0.55); font-size: 13px; margin-top: 16px; }
+  .features { background: rgba(91,138,255,0.05); padding: 20px 24px; border-radius: 12px; margin: 24px 0; }
+  .features li { margin-bottom: 6px; }
 </style>
 </head>
 <body>
 
-<h1>Strideline</h1>
-<p class="tag">中学受験の「やったこと」が見える学習スケジュール</p>
+<p class="lang-hint">English follows the Japanese version below — scroll down for English.</p>
 
-<p>Strideline（ストライドライン）は、中学受験にのぞむお子さま（主に小学4〜6年生）とご家庭のための、タイムブロッキング型の学習スケジュールアプリです。「何を・どれだけやったか」をシンプルに記録し、毎日の積み重ねを可視化します。</p>
+<!-- ===================== Japanese ===================== -->
+<h1 id="ja">Strideline</h1>
+<p class="tagline">中学受験を、続けやすく。</p>
 
-<div class="cards">
-  <a class="card" href="./manual.html">
-    <h3>使い方マニュアル →</h3>
-    <p>予定の追加・時間計測・カレンダー・統計など、機能の使い方</p>
-  </a>
-  <a class="card" href="./support.html">
-    <h3>サポート / FAQ →</h3>
-    <p>よくある質問・不具合報告・お問い合わせ</p>
-  </a>
-  <a class="card" href="./privacy.html">
-    <h3>プライバシーポリシー →</h3>
-    <p>データの取り扱いについて</p>
-  </a>
+<p>「今日、何をどれだけやったか」が、ひと目で分かる学習スケジュールアプリ。</p>
+
+<p>Strideline は、中学受験を控えた小学 4〜6 年生のお子さんと、ご家族のために作られた、タイムブロッキング型の学習記録アプリです。「朝に予定を書く → タップで計測 → 履歴に残る」の三歩のループだけで、毎日の学習が静かに積み上がっていきます。受験生だけでなく、目標を持って毎日努力するすべての人にお使いいただけます。</p>
+
+<div class="features">
+<h2 style="margin-top: 0;">主な機能</h2>
+<ul>
+  <li>タイムブロッキング: 予定と実測時間を紐づけて記録</li>
+  <li>タイマー: タップで計測開始 / 停止。Live Activity 対応</li>
+  <li>進捗リング: 今日の達成率と実測時間を中央表示</li>
+  <li>縦長タイムライン: 1 日のスケジュールを縦スクロール</li>
+  <li>カウントダウン: 試験までの日数をホーム画面とウィジェットに</li>
+  <li>統計ページ: 教科別 / 日別 / 曜日別の学習時間集計</li>
+  <li>カレンダー: 13 ヶ月縦スクロール + 学習量ヒートマップ</li>
+  <li>複数プロフィール: きょうだいで使い分け (Pro)</li>
+  <li>ホーム画面ウィジェット & ロック画面 Live Activity</li>
+</ul>
 </div>
 
-<h2>主な機能</h2>
-<ul class="feat">
-  <li>タイムブロッキングで今日の学習を組み立て</li>
-  <li>ワンタップで学習時間を計測・記録</li>
-  <li>予定時間と実測時間をひと目で比較</li>
-  <li>カレンダーで月単位の学習量と天気を確認</li>
-  <li>入試・模試までのカウントダウン</li>
-  <li>教科別・日別の学習統計</li>
-  <li>Apple Intelligence による今日のおすすめ提案（Beta）</li>
+<h2>料金</h2>
+<p>Free 版: 1 プロフィール、基本機能すべて、3 テーマ、カウントダウン 3 件まで</p>
+<p>Pro 版: 買い切り ¥300。最大 5 プロフィール、全 28 テーマ、無制限カウントダウン、高度な統計、3D カルーセル表示、PDF エクスポート、保護者ダッシュボード</p>
+<p>サブスクリプションは導入していません (買い切り 1 回のみ)。</p>
+
+<h2>プライバシー</h2>
+<p>第三者 SDK ゼロ・広告ゼロ・トラッキングゼロ。学習データは端末ローカルにのみ保存されます。</p>
+
+<div class="nav">
+  <a href="./privacy.html">プライバシーポリシー</a>
+  <a href="./support.html">サポート / FAQ</a>
+  <a href="./manual.html">使い方マニュアル</a>
+</div>
+
+<hr class="divider">
+
+<!-- ===================== English ===================== -->
+<h1 id="en">Strideline</h1>
+<p class="tagline">Pace your study. Own the day.</p>
+
+<p>A study schedule app that shows, at a glance, what you did today and how long it took.</p>
+
+<p>Strideline is built for 4th–6th grade students preparing for entrance exams, and for the families supporting them. The loop is simple: plan in the morning, tap to time your work, and the history quietly stacks up. Beyond exam prep, it serves anyone with a goal worth working toward every day.</p>
+
+<div class="features">
+<h2 style="margin-top: 0;">Key Features</h2>
+<ul>
+  <li>Time blocking: planned blocks bound to actual recorded times</li>
+  <li>Timer: tap to start / stop. Live Activity supported</li>
+  <li>Progress ring: today's completion rate and total time at center</li>
+  <li>Vertical timeline: the whole day in one scroll</li>
+  <li>Countdowns: days until exams and mocks — on Home Screen and Widget</li>
+  <li>Statistics: by-subject, by-day, by-weekday aggregates</li>
+  <li>Calendar: 13 months vertically scrollable + study volume heatmap</li>
+  <li>Multiple profiles: for siblings (Pro)</li>
+  <li>Home Screen widget & Lock Screen Live Activity</li>
 </ul>
+</div>
 
-<h2>お問い合わせ</h2>
-<p>ご質問・ご要望は <a href="mailto:trim.hoist.6b@icloud.com">trim.hoist.6b@icloud.com</a> までお寄せください。</p>
+<h2>Pricing</h2>
+<p>Free: 1 profile, all core features, 3 themes, up to 3 countdowns.</p>
+<p>Pro: a one-time purchase of $4.99. Up to 5 profiles, all 28 themes, unlimited countdowns, advanced statistics, 3D carousel view, PDF export, parent dashboard.</p>
+<p>No subscriptions, ever.</p>
 
-<h2>その他のアプリ</h2>
-<p>同じ開発者の他のアプリは <a href="https://t-aka-h.github.io/">こちら</a> からご覧いただけます。</p>
+<h2>Privacy</h2>
+<p>Zero third-party SDKs, zero ads, zero tracking. All study data is stored locally on your device.</p>
 
-<p class="last">Strideline · © 2026 Takanori Hamuro</p>
+<div class="nav">
+  <a href="./privacy.html">Privacy Policy</a>
+  <a href="./support.html">Support / FAQ</a>
+  <a href="./manual.html">Manual</a>
+</div>
 
 </body>
 </html>
