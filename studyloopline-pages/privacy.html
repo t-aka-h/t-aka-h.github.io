@@ -70,7 +70,7 @@
 <p>Studyloopline does <strong>not</strong> request camera access. The App itself never accesses the camera.</p>
 
 <h2>Local Storage</h2>
-<p>The App stores the following data locally on your device. This data never leaves your device unless you explicitly enable the "Connect your own engine" feature.</p>
+<p>The App stores the following data locally on your device. This data never leaves your device unless you explicitly enable the Personal Backend feature.</p>
 <ul>
   <li>Practice answer history (which problems you've solved, correct/incorrect, timestamp)</li>
   <li>Level Check results (which level you were assigned, accuracy)</li>
@@ -84,23 +84,23 @@
 <ul>
   <li>SwiftUI — UI framework</li>
   <li>SwiftData — local data persistence</li>
-  <li>AVFoundation — audio playback (only when "Connect your own engine" is configured)</li>
+  <li>AVFoundation — audio playback (only when Personal Backend is configured)</li>
   <li>StoreKit — version checking (no purchases)</li>
 </ul>
 
 <h2>Children</h2>
 <p>The App is suitable for all ages (Apple Age Rating 4+). It does not knowingly collect data from children.</p>
 
-<h2>"Connect your own engine" (Strictly Optional Advanced Feature)</h2>
+<h2>Personal Backend (Optional)</h2>
 <p><strong>This feature is strictly optional and is not enabled by default.</strong> Most users will never use it, and the App is fully functional without it (the Lab modules, Level Check, the 177 Practice problems, and the Calculator all work entirely offline).</p>
-<p>Studyloopline includes an optional advanced feature that lets you connect the App to <strong>your own self-hosted learning engine</strong> — typically a Cloudflare Worker + R2 bucket that <strong>you</strong> run yourself, executing an open-source learning loop (Claude Code + NotebookLM, etc). This feature exists for users who want to build their own personalized statistics tutor; it is <strong>not</strong> a service we provide.</p>
+<p>Studyloopline includes an optional advanced feature that lets you connect the App to <strong>a personal backend that you run yourself</strong> — typically a Cloudflare Worker + R2 bucket on <strong>your</strong> own account, executing an open-source learning loop (Claude Code + NotebookLM, etc). This feature exists for users who want to build their own personalized statistics tutor; it is <strong>not</strong> a service we provide.</p>
 <p>This feature is <strong>hidden by default</strong> and must be unlocked explicitly by the user. <strong>Unless you take explicit action to enable and configure it, the App makes no outbound network requests for learning content.</strong> When (and only when) enabled and configured, the App communicates exclusively with <strong>the server URL you specify</strong>, using a token <strong>you</strong> control:</p>
 <ul>
   <li>The App fetches today's questions and audio mini-lecture from your server.</li>
-  <li>The App submits your answers to your server (so your engine can grade and adapt to your level).</li>
+  <li>The App submits your answers to your server (so your backend can grade and adapt to your level).</li>
   <li>The App fetches past lectures, feedback messages, and a personal changelog from your server.</li>
 </ul>
-<p>The developer of Studyloopline has <strong>no access</strong> to data exchanged between your device and your engine. Your engine is yours; your data stays in your own Cloudflare account and your own R2 bucket. The developer never sees your engine URL or your token, and operates no shared backend for this feature.</p>
+<p>The developer of Studyloopline has <strong>no access</strong> to data exchanged between your device and your personal backend. Your backend is yours; your data stays in your own account. The developer never sees your server URL or your token, and operates no shared backend for this feature.</p>
 <p>You can disable this feature at any time from the App's settings, which clears the saved server URL and token from your device.</p>
 <p>When this feature is configured, the App can stream audio mini-lectures from your own server using Apple's AVFoundation (playback category, to allow background playback). No audio recording occurs.</p>
 
@@ -135,7 +135,7 @@
 <p>本アプリは<strong>カメラへのアクセスを要求しません</strong>。本アプリがカメラにアクセスすることはありません。</p>
 
 <h2>ローカルストレージ</h2>
-<p>本アプリは以下のデータをデバイス上にローカル保存します。「自分のエンジンに接続」機能を明示的に有効化しない限り、これらのデータがデバイスを離れることはありません。</p>
+<p>本アプリは以下のデータをデバイス上にローカル保存します。パーソナルバックエンド機能を明示的に有効化しない限り、これらのデータがデバイスを離れることはありません。</p>
 <ul>
   <li>練習問題の回答履歴（解いた問題・正誤・タイムスタンプ）</li>
   <li>レベル判定結果（判定されたレベル・正答率）</li>
@@ -149,23 +149,23 @@
 <ul>
   <li>SwiftUI — UI フレームワーク</li>
   <li>SwiftData — ローカルデータ永続化</li>
-  <li>AVFoundation — 音声再生（「自分のエンジンに接続」設定時のみ）</li>
+  <li>AVFoundation — 音声再生（パーソナルバックエンド設定時のみ）</li>
   <li>StoreKit — バージョン確認（課金はありません）</li>
 </ul>
 
 <h2>子ども</h2>
 <p>本アプリは全年齢対象（Apple Age Rating 4+）です。子どもからの情報収集は一切行いません。</p>
 
-<h2>「自分のエンジンに接続」（完全に任意の上級機能）</h2>
+<h2>パーソナルバックエンド（任意）</h2>
 <p><strong>本機能は完全に任意で、初期状態では無効です。</strong>ほとんどのユーザーはこの機能を使う必要はなく、本アプリは本機能を使わなくても完全に動作します（実験室・レベル判定・177 問の練習・電卓はすべてオフラインで利用できます）。</p>
-<p>本アプリには、<strong>あなた自身で運営する学習エンジン</strong>に接続できる任意の上級機能があります。エンジンは通常、<strong>あなた自身が</strong>動かす Cloudflare Worker + R2 バケットで、オープンソースの学習ループ（Claude Code + NotebookLM など）を実行します。この機能は、自分専用のパーソナル統計チューターを構築したいユーザー向けに存在するものであり、開発者が提供するサービスでは<strong>ありません</strong>。</p>
+<p>本アプリには、<strong>あなた自身が運営するパーソナルバックエンド</strong>に接続できる任意の上級機能があります。バックエンドは通常、<strong>あなた自身の</strong>アカウントで動かす Cloudflare Worker + R2 バケットで、オープンソースの学習ループ（Claude Code + NotebookLM など）を実行します。この機能は、自分専用のパーソナル統計チューターを構築したいユーザー向けに存在するものであり、開発者が提供するサービスでは<strong>ありません</strong>。</p>
 <p>本機能は<strong>初期状態では隠されており</strong>、ユーザー自身が明示的に有効化する必要があります。<strong>あなたが明示的に有効化・設定しない限り、本アプリは学習コンテンツに関する外部通信を一切行いません。</strong>有効化・設定した場合に限り、本アプリは <strong>あなたが指定したサーバー URL とのみ</strong>、<strong>あなたが</strong>管理するトークンを使って通信します:</p>
 <ul>
   <li>本アプリは、あなたのサーバーから今日の問題と音声ミニ講義を取得します。</li>
-  <li>本アプリは、あなたのサーバーに回答を送信します（あなたのエンジンが採点とパーソナライゼーションを行えるように）。</li>
+  <li>本アプリは、あなたのサーバーに回答を送信します（あなたのバックエンドが採点とパーソナライゼーションを行えるように）。</li>
   <li>本アプリは、あなたのサーバーから過去の講義・フィードバック・変更履歴を取得します。</li>
 </ul>
-<p>Studyloopline の開発者は、あなたのデバイスとあなたのエンジンの間でやり取りされるデータには<strong>一切アクセスできません</strong>。あなたのエンジンはあなたのもので、データはあなた自身の Cloudflare アカウントと R2 バケットに留まります。開発者があなたのエンジン URL やトークンを見ることはなく、本機能のために開発者が共通バックエンドを運営することもありません。</p>
+<p>Studyloopline の開発者は、あなたのデバイスとあなたのパーソナルバックエンドの間でやり取りされるデータには<strong>一切アクセスできません</strong>。バックエンドはあなたのもので、データはあなた自身のアカウントに留まります。開発者があなたのサーバー URL やトークンを見ることはなく、本機能のために開発者が共通バックエンドを運営することもありません。</p>
 <p>本機能は、アプリの設定画面からいつでも無効化できます。無効化するとデバイスに保存されたサーバー URL とトークンは消去されます。</p>
 <p>本機能を設定した場合、Apple の AVFoundation を用いてあなた自身のサーバーから音声ミニ講義をストリーミング再生できます（バックグラウンド再生のため playback カテゴリ）。録音は一切行いません。</p>
 
