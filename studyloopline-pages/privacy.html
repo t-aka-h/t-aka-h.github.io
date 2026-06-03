@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studyloopline — Privacy Policy</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #050614;
+    color: #e8eef8;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+    line-height: 1.7;
+  }
+  h1 { color: #e8eef8; }
+  h2 { color: rgba(232,238,248,0.85); margin-top: 28px; }
+  p, li { color: rgba(232,238,248,0.78); }
+  a { color: #6cb8ff; }
+  code {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    background: rgba(91, 138, 255, 0.10);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #b4c8ff;
+  }
+  .last { color: rgba(232,238,248,0.40); font-size: 12px; }
+  .langtoggle {
+    margin: 8px 0 24px;
+    font-size: 13px;
+    color: rgba(232, 238, 248, 0.55);
+  }
+  .langtoggle a { margin-right: 12px; }
+  hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.10);
+    margin: 48px 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Studyloopline — Privacy Policy</h1>
+<p class="last">Last updated: 2026-06-03 (v1.0 — initial release)</p>
+
+<div class="langtoggle">
+  <a href="#en">English</a>
+  <a href="#ja">日本語</a>
+</div>
+
+<section id="en">
+
+<p>Studyloopline ("the App") is developed and operated by an independent developer. This Privacy Policy describes how the App handles user information.</p>
+
+<h2>Summary</h2>
+<ul>
+  <li>The App does <strong>not</strong> collect personal data on developer servers.</li>
+  <li>The App does <strong>not</strong> contain analytics SDKs.</li>
+  <li>The App does <strong>not</strong> display advertisements.</li>
+  <li>The App does <strong>not</strong> contain in-app purchases.</li>
+  <li>All learning progress is stored locally on your device using iOS UserDefaults / SwiftData.</li>
+</ul>
+
+<h2>Data Collection</h2>
+<p>The App does not collect any personal data on developer servers. Local learning state — practice answer history, Level Check results, accuracy by topic, learning streak, theme preference — is stored on your device using iOS standard storage (UserDefaults and SwiftData). This data never leaves your device.</p>
+
+<h2>"Connect your own engine" (Optional Advanced Feature)</h2>
+<p>Studyloopline includes an optional advanced feature that lets you connect the App to <strong>your own self-hosted learning engine</strong>. The engine is typically a Cloudflare Worker + R2 bucket that you run yourself, executing an open-source learning loop (Claude Code + NotebookLM, etc).</p>
+<p>This feature is <strong>hidden by default</strong> and must be unlocked explicitly. When enabled and configured, the App communicates only with <strong>the server URL you specify</strong>, using a token you control:</p>
+<ul>
+  <li>The App fetches today's questions and audio mini-lecture from your server.</li>
+  <li>The App submits your answers to your server (so your engine can grade and adapt to your level).</li>
+  <li>The App fetches past lectures, feedback messages, and a personal changelog from your server.</li>
+</ul>
+<p>The developer of Studyloopline has <strong>no access</strong> to data exchanged between your device and your engine. Your engine is yours; your data stays in your own Cloudflare account and your own R2 bucket. The developer never sees your engine URL or token.</p>
+<p>If you do not configure this feature, the App makes no outbound network requests for learning content.</p>
+
+<h2>Audio Playback</h2>
+<p>When connected to your own engine, the App can stream audio mini-lectures using Apple's AVFoundation. Audio is streamed from your own server only. The App requests AVAudioSession in playback category to allow background audio playback. No audio recording occurs.</p>
+
+<h2>Camera (QR Code Scanning)</h2>
+<p>Studyloopline does <strong>not</strong> request camera access. The "Connect your own engine" QR code is read by the iPhone's standard Camera app, which then deep-links to Studyloopline. The App itself never accesses the camera.</p>
+
+<h2>Local Storage</h2>
+<p>The App stores the following data locally on your device. This data never leaves your device unless you explicitly enable the "Connect your own engine" feature.</p>
+<ul>
+  <li>Practice answer history (which problems you've solved, correct/incorrect, timestamp)</li>
+  <li>Level Check results (which level you were assigned, accuracy)</li>
+  <li>Theme preference (Sky / Ocean / Sunset / Forest / Lavender / Mono)</li>
+  <li>UI preferences (Japanese / English language follows iOS system setting)</li>
+</ul>
+<p>You can delete this data at any time by uninstalling the App.</p>
+
+<h2>Third Parties</h2>
+<p>Studyloopline does <strong>not</strong> integrate with any third-party SDKs, analytics services, advertising networks, or data brokers. The App uses only Apple's first-party frameworks:</p>
+<ul>
+  <li>SwiftUI — UI framework</li>
+  <li>SwiftData — local data persistence</li>
+  <li>AVFoundation — audio playback (only when "Connect your own engine" is configured)</li>
+  <li>StoreKit — version checking (no purchases)</li>
+</ul>
+
+<h2>Children</h2>
+<p>The App is suitable for all ages (Apple Age Rating 4+). It does not knowingly collect data from children.</p>
+
+<h2>Changes to this Policy</h2>
+<p>If we change this Privacy Policy, we will update the "Last updated" date above. Material changes will be communicated through the App's release notes.</p>
+
+<h2>Contact</h2>
+<p>If you have any questions about this Privacy Policy, please contact us <a href="mailto:trim.hoist.6b@icloud.com">here</a>.</p>
+
+</section>
+
+<hr>
+
+<section id="ja">
+
+<h1>Studyloopline — プライバシーポリシー</h1>
+<p>Studyloopline（以下「本アプリ」）は、個人開発者によって開発・運営されています。本ポリシーは、本アプリにおけるユーザー情報の取扱いを説明します。</p>
+
+<h2>サマリー</h2>
+<ul>
+  <li>本アプリは開発者サーバーに個人情報を<strong>送信しません</strong>。</li>
+  <li>本アプリは分析 SDK を<strong>含みません</strong>。</li>
+  <li>本アプリは広告を<strong>表示しません</strong>。</li>
+  <li>本アプリはアプリ内課金を<strong>含みません</strong>。</li>
+  <li>学習進捗はすべてデバイス上に UserDefaults / SwiftData でローカル保存されます。</li>
+</ul>
+
+<h2>データ収集</h2>
+<p>本アプリは開発者サーバーに個人情報を一切収集しません。学習状態（練習問題の回答履歴・レベル判定結果・トピック別正答率・連続学習日数・テーマ設定）は、iOS 標準ストレージ（UserDefaults および SwiftData）でデバイス上にローカル保存されます。これらのデータがデバイスを離れることはありません。</p>
+
+<h2>「自分のエンジンに接続」（任意の上級機能）</h2>
+<p>本アプリには、<strong>あなた自身で運営する学習エンジン</strong>に接続できる任意の機能があります。エンジンは通常、あなた自身が動かす Cloudflare Worker + R2 バケットで、オープンソースの学習ループ（Claude Code + NotebookLM など）を実行します。</p>
+<p>この機能は<strong>初期状態では隠されており</strong>、明示的に有効化する必要があります。有効化して設定すると、本アプリは <strong>あなたが指定したサーバー URL とのみ</strong>、あなたが管理するトークンを使って通信します:</p>
+<ul>
+  <li>本アプリは、あなたのサーバーから今日の問題と音声ミニ講義を取得します。</li>
+  <li>本アプリは、あなたのサーバーに回答を送信します（あなたのエンジンが採点とパーソナライゼーションを行えるように）。</li>
+  <li>本アプリは、あなたのサーバーから過去の講義・フィードバック・変更履歴を取得します。</li>
+</ul>
+<p>Studyloopline の開発者は、あなたのデバイスとあなたのエンジンの間でやり取りされるデータには<strong>一切アクセスできません</strong>。あなたのエンジンはあなたのもので、データはあなた自身の Cloudflare アカウントと R2 バケットに留まります。開発者があなたのエンジン URL やトークンを見ることはありません。</p>
+<p>この機能を設定しない場合、本アプリは学習コンテンツの取得を目的とした外部通信を行いません。</p>
+
+<h2>音声再生</h2>
+<p>「自分のエンジンに接続」機能が有効な場合、本アプリは Apple の AVFoundation を用いて、あなた自身のサーバーから音声ミニ講義をストリーミング再生できます。本アプリが他のサーバーから音声を再生することはありません。バックグラウンド再生のため AVAudioSession を playback カテゴリで使用します。録音は一切行いません。</p>
+
+<h2>カメラ（QR コード読み取り）</h2>
+<p>本アプリは<strong>カメラへのアクセスを要求しません</strong>。「自分のエンジンに接続」用の QR コードは iPhone 標準のカメラアプリで読み取り、ディープリンクで本アプリを開く方式です。本アプリがカメラにアクセスすることはありません。</p>
+
+<h2>ローカルストレージ</h2>
+<p>本アプリは以下のデータをデバイス上にローカル保存します。「自分のエンジンに接続」機能を明示的に有効化しない限り、これらのデータがデバイスを離れることはありません。</p>
+<ul>
+  <li>練習問題の回答履歴（解いた問題・正誤・タイムスタンプ）</li>
+  <li>レベル判定結果（判定されたレベル・正答率）</li>
+  <li>テーマ設定（Sky / Ocean / Sunset / Forest / Lavender / Mono）</li>
+  <li>UI 設定（日本語 / 英語は iOS のシステム設定に従います）</li>
+</ul>
+<p>これらのデータは本アプリをアンインストールするだけで完全に削除されます。</p>
+
+<h2>第三者サービス</h2>
+<p>Studyloopline は第三者 SDK・分析サービス・広告ネットワーク・データブローカーと一切連携していません。本アプリは Apple の純正フレームワークのみを利用しています:</p>
+<ul>
+  <li>SwiftUI — UI フレームワーク</li>
+  <li>SwiftData — ローカルデータ永続化</li>
+  <li>AVFoundation — 音声再生（「自分のエンジンに接続」設定時のみ）</li>
+  <li>StoreKit — バージョン確認（課金はありません）</li>
+</ul>
+
+<h2>子ども</h2>
+<p>本アプリは全年齢対象（Apple Age Rating 4+）です。子どもからの情報収集は一切行いません。</p>
+
+<h2>本ポリシーの変更</h2>
+<p>本ポリシーを変更する場合は、上部の「Last updated」日付を更新します。重要な変更はアプリのリリースノートでもお知らせします。</p>
+
+<h2>お問い合わせ</h2>
+<p>本プライバシーポリシーについてご質問がある場合は、<a href="mailto:trim.hoist.6b@icloud.com">こちらまで</a>ご連絡ください。</p>
+
+</section>
+
+</body>
+</html>
