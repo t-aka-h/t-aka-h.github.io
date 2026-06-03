@@ -66,16 +66,17 @@
 <h2>Data Collection</h2>
 <p>The App does not collect any personal data on developer servers. Local learning state — practice answer history, Level Check results, accuracy by topic, learning streak, theme preference — is stored on your device using iOS standard storage (UserDefaults and SwiftData). This data never leaves your device.</p>
 
-<h2>"Connect your own engine" (Optional Advanced Feature)</h2>
-<p>Studyloopline includes an optional advanced feature that lets you connect the App to <strong>your own self-hosted learning engine</strong>. The engine is typically a Cloudflare Worker + R2 bucket that you run yourself, executing an open-source learning loop (Claude Code + NotebookLM, etc).</p>
-<p>This feature is <strong>hidden by default</strong> and must be unlocked explicitly. When enabled and configured, the App communicates only with <strong>the server URL you specify</strong>, using a token you control:</p>
+<h2>"Connect your own engine" (Strictly Optional Advanced Feature)</h2>
+<p><strong>This feature is strictly optional and is not enabled by default.</strong> Most users will never use it, and the App is fully functional without it (the Lab modules, Level Check, the 177 Practice problems, and the Calculator all work entirely offline).</p>
+<p>Studyloopline includes an optional advanced feature that lets you connect the App to <strong>your own self-hosted learning engine</strong> — typically a Cloudflare Worker + R2 bucket that <strong>you</strong> run yourself, executing an open-source learning loop (Claude Code + NotebookLM, etc). This feature exists for users who want to build their own personalized statistics tutor; it is <strong>not</strong> a service we provide.</p>
+<p>This feature is <strong>hidden by default</strong> and must be unlocked explicitly by the user. <strong>Unless you take explicit action to enable and configure it, the App makes no outbound network requests for learning content.</strong> When (and only when) enabled and configured, the App communicates exclusively with <strong>the server URL you specify</strong>, using a token <strong>you</strong> control:</p>
 <ul>
   <li>The App fetches today's questions and audio mini-lecture from your server.</li>
   <li>The App submits your answers to your server (so your engine can grade and adapt to your level).</li>
   <li>The App fetches past lectures, feedback messages, and a personal changelog from your server.</li>
 </ul>
-<p>The developer of Studyloopline has <strong>no access</strong> to data exchanged between your device and your engine. Your engine is yours; your data stays in your own Cloudflare account and your own R2 bucket. The developer never sees your engine URL or token.</p>
-<p>If you do not configure this feature, the App makes no outbound network requests for learning content.</p>
+<p>The developer of Studyloopline has <strong>no access</strong> to data exchanged between your device and your engine. Your engine is yours; your data stays in your own Cloudflare account and your own R2 bucket. The developer never sees your engine URL or your token, and operates no shared backend for this feature.</p>
+<p>You can disable this feature at any time from the App's settings, which clears the saved server URL and token from your device.</p>
 
 <h2>Audio Playback</h2>
 <p>When connected to your own engine, the App can stream audio mini-lectures using Apple's AVFoundation. Audio is streamed from your own server only. The App requests AVAudioSession in playback category to allow background audio playback. No audio recording occurs.</p>
@@ -132,16 +133,17 @@
 <h2>データ収集</h2>
 <p>本アプリは開発者サーバーに個人情報を一切収集しません。学習状態（練習問題の回答履歴・レベル判定結果・トピック別正答率・連続学習日数・テーマ設定）は、iOS 標準ストレージ（UserDefaults および SwiftData）でデバイス上にローカル保存されます。これらのデータがデバイスを離れることはありません。</p>
 
-<h2>「自分のエンジンに接続」（任意の上級機能）</h2>
-<p>本アプリには、<strong>あなた自身で運営する学習エンジン</strong>に接続できる任意の機能があります。エンジンは通常、あなた自身が動かす Cloudflare Worker + R2 バケットで、オープンソースの学習ループ（Claude Code + NotebookLM など）を実行します。</p>
-<p>この機能は<strong>初期状態では隠されており</strong>、明示的に有効化する必要があります。有効化して設定すると、本アプリは <strong>あなたが指定したサーバー URL とのみ</strong>、あなたが管理するトークンを使って通信します:</p>
+<h2>「自分のエンジンに接続」（完全に任意の上級機能）</h2>
+<p><strong>本機能は完全に任意で、初期状態では無効です。</strong>ほとんどのユーザーはこの機能を使う必要はなく、本アプリは本機能を使わなくても完全に動作します（実験室・レベル判定・177 問の練習・電卓はすべてオフラインで利用できます）。</p>
+<p>本アプリには、<strong>あなた自身で運営する学習エンジン</strong>に接続できる任意の上級機能があります。エンジンは通常、<strong>あなた自身が</strong>動かす Cloudflare Worker + R2 バケットで、オープンソースの学習ループ（Claude Code + NotebookLM など）を実行します。この機能は、自分専用のパーソナル統計チューターを構築したいユーザー向けに存在するものであり、開発者が提供するサービスでは<strong>ありません</strong>。</p>
+<p>本機能は<strong>初期状態では隠されており</strong>、ユーザー自身が明示的に有効化する必要があります。<strong>あなたが明示的に有効化・設定しない限り、本アプリは学習コンテンツに関する外部通信を一切行いません。</strong>有効化・設定した場合に限り、本アプリは <strong>あなたが指定したサーバー URL とのみ</strong>、<strong>あなたが</strong>管理するトークンを使って通信します:</p>
 <ul>
   <li>本アプリは、あなたのサーバーから今日の問題と音声ミニ講義を取得します。</li>
   <li>本アプリは、あなたのサーバーに回答を送信します（あなたのエンジンが採点とパーソナライゼーションを行えるように）。</li>
   <li>本アプリは、あなたのサーバーから過去の講義・フィードバック・変更履歴を取得します。</li>
 </ul>
-<p>Studyloopline の開発者は、あなたのデバイスとあなたのエンジンの間でやり取りされるデータには<strong>一切アクセスできません</strong>。あなたのエンジンはあなたのもので、データはあなた自身の Cloudflare アカウントと R2 バケットに留まります。開発者があなたのエンジン URL やトークンを見ることはありません。</p>
-<p>この機能を設定しない場合、本アプリは学習コンテンツの取得を目的とした外部通信を行いません。</p>
+<p>Studyloopline の開発者は、あなたのデバイスとあなたのエンジンの間でやり取りされるデータには<strong>一切アクセスできません</strong>。あなたのエンジンはあなたのもので、データはあなた自身の Cloudflare アカウントと R2 バケットに留まります。開発者があなたのエンジン URL やトークンを見ることはなく、本機能のために開発者が共通バックエンドを運営することもありません。</p>
+<p>本機能は、アプリの設定画面からいつでも無効化できます。無効化するとデバイスに保存されたサーバー URL とトークンは消去されます。</p>
 
 <h2>音声再生</h2>
 <p>「自分のエンジンに接続」機能が有効な場合、本アプリは Apple の AVFoundation を用いて、あなた自身のサーバーから音声ミニ講義をストリーミング再生できます。本アプリが他のサーバーから音声を再生することはありません。バックグラウンド再生のため AVAudioSession を playback カテゴリで使用します。録音は一切行いません。</p>
