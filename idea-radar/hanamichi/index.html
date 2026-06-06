@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06040b">
+<title>Hanamichi（花道）— あなたが主役。歓声を浴びる推され体験</title>
+<meta name="description" content="暗転した会場の真ん中に立つあなたが主役。お辞儀すると数万人の歓声と拍手が爆発する、5秒で誰でもステージの主役になれる推され活アプリ。完全オンデバイス。">
+<style>
+  :root{
+    --bg:#06040b; --ink:#f6f2ff; --gold:#ffd9a0; --mag:#ff3da6; --cyan:#37e6ff; --violet:#8b5bff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#000;overflow:hidden;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;
+  }
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .layer{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;}
+  .hidden{display:none!important;}
+
+  /* START */
+  #start .title{font-size:clamp(46px,16vw,82px);font-weight:800;letter-spacing:.16em;
+    background:linear-gradient(180deg,#fff,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(255,217,160,.25);line-height:.98;}
+  #start .kanji{font-size:clamp(20px,7vw,34px);letter-spacing:.5em;color:var(--gold);margin:.4em 0 0;opacity:.85;text-indent:.5em;}
+  #start .sub{margin-top:18px;font-size:15px;line-height:1.8;color:#cfc6e6;max-width:300px;}
+  .lens{margin-top:14px;font-size:11px;letter-spacing:.18em;color:#7d749a;}
+  .cta{margin-top:38px;border:none;cursor:pointer;
+    font-size:19px;font-weight:800;letter-spacing:.12em;color:#1a0d12;
+    background:linear-gradient(180deg,#ffe7c2,var(--gold));
+    padding:18px 46px;border-radius:999px;
+    box-shadow:0 0 0 1px rgba(255,217,160,.6),0 14px 50px rgba(255,170,90,.45);
+    transition:transform .15s;}
+  .cta:active{transform:scale(.95);}
+  .credit{position:fixed;bottom:16px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.16em;color:#5a5276;}
+
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;}
+  #meterWrap{position:absolute;top:env(safe-area-inset-top,12px);left:18px;right:18px;margin-top:12px;}
+  #meterLabel{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.18em;color:#cabfe6;margin-bottom:7px;text-shadow:0 1px 6px #000;}
+  #meterTrack{height:11px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+  #meterFill{height:100%;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,var(--cyan),var(--violet),var(--mag),var(--gold));
+    box-shadow:0 0 16px rgba(255,61,166,.7);transition:width .25s cubic-bezier(.2,.9,.2,1);}
+  #coachWrap{position:absolute;left:0;right:0;bottom:max(env(safe-area-inset-bottom,0px),26px);text-align:center;padding:0 24px;}
+  #coach{display:inline-block;font-size:15px;font-weight:700;letter-spacing:.04em;color:#fff;
+    background:rgba(12,8,22,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    padding:11px 20px;border-radius:999px;border:1px solid rgba(255,217,160,.25);
+    box-shadow:0 6px 26px rgba(0,0,0,.5);transition:opacity .4s;}
+  #coach .small{display:block;font-size:11px;font-weight:500;letter-spacing:.1em;color:#b6abd6;margin-top:3px;}
+
+  /* RESULT */
+  #result{background:rgba(4,2,9,.0);}
+  #result .panel{display:flex;flex-direction:column;align-items:center;animation:pop .5s cubic-bezier(.2,1.3,.3,1) both;}
+  @keyframes pop{from{opacity:0;transform:scale(.86) translateY(14px);}to{opacity:1;transform:none;}}
+  #result .crown{font-size:34px;letter-spacing:.3em;color:var(--gold);text-indent:.3em;}
+  #grade{font-size:clamp(30px,10vw,52px);font-weight:800;line-height:1.05;margin:6px 0 2px;
+    background:linear-gradient(180deg,#fff,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 38px rgba(255,217,160,.3);}
+  #starring{font-size:13px;letter-spacing:.28em;color:#cfc6e6;margin-bottom:20px;}
+  #audience{font-size:clamp(56px,22vw,108px);font-weight:800;line-height:.9;letter-spacing:-.02em;
+    background:linear-gradient(180deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 50px rgba(139,91,255,.4);}
+  #audienceCap{font-size:13px;letter-spacing:.22em;color:#b6abd6;margin-top:6px;}
+  #best{margin-top:14px;font-size:12px;letter-spacing:.12em;color:#8d84ab;}
+  .btnrow{margin-top:30px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .btn{border:none;cursor:pointer;font-size:15px;font-weight:800;letter-spacing:.08em;
+    padding:15px 26px;border-radius:999px;transition:transform .15s;}
+  .btn:active{transform:scale(.94);}
+  .btn.primary{color:#1a0d12;background:linear-gradient(180deg,#ffe7c2,var(--gold));box-shadow:0 10px 34px rgba(255,170,90,.4);}
+  .btn.ghost{color:#fff;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;mix-blend-mode:screen;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="flash"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="meterWrap">
+      <div id="meterLabel"><span>歓声メーター</span><span id="meterPct">0%</span></div>
+      <div id="meterTrack"><div id="meterFill"></div></div>
+    </div>
+    <div id="coachWrap">
+      <div id="coach">長押しで深くお辞儀<span class="small">押し込むほど大喝采。離すと歓声が爆発</span></div>
+    </div>
+  </div>
+
+  <!-- START -->
+  <div id="start" class="layer">
+    <div class="title">HANAMICHI</div>
+    <div class="kanji">花道</div>
+    <div class="sub">暗転した会場の真ん中に、あなた。<br>お辞儀すれば、数万人の歓声が爆発する。<br>5秒で、誰でもステージの主役。</div>
+    <button class="cta" id="goBtn">ステージへ ▶</button>
+    <div class="lens">IDEA RADAR · L03 推され活 / VSING</div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result" class="layer hidden">
+    <div class="panel">
+      <div class="crown">★</div>
+      <div id="grade">STANDING OVATION</div>
+      <div id="starring">本日の主演 — YOU</div>
+      <div id="audience">0</div>
+      <div id="audienceCap">人が熱狂した</div>
+      <div id="best"></div>
+      <div class="btnrow">
+        <button class="btn primary" id="shareBtn">主演カードを保存／共有</button>
+        <button class="btn ghost" id="againBtn">もう一度ステージへ</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="credit">完全オンデバイス · 音が出ます 🔊</div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Hanamichi（花道）— single-file, no deps. Canvas + WebAudio.
+   ============================================================ */
+const cv = document.getElementById('game');
+const cx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+  cx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- AUDIO ---------- */
+const ACtx = window.AudioContext || window.webkitAudioContext;
+let ctx=null, master=null, noiseBuf=null, murmurGain=null, murmurFilter=null;
+let tameOsc=null, tameGain=null, tameFilt=null;
+let audioReady=false;
+
+function makeNoiseBuffer(seconds){
+  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*seconds), ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return buf;
+}
+function initAudio(){
+  if(audioReady) return;
+  ctx = new ACtx();
+  master = ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+  noiseBuf = makeNoiseBuffer(2.2);
+  // continuous crowd murmur (the quiet hall before the bow)
+  const src = ctx.createBufferSource(); src.buffer=noiseBuf; src.loop=true;
+  murmurFilter = ctx.createBiquadFilter(); murmurFilter.type='bandpass';
+  murmurFilter.frequency.value=620; murmurFilter.Q.value=0.5;
+  murmurGain = ctx.createGain(); murmurGain.gain.value=0.035;
+  src.connect(murmurFilter); murmurFilter.connect(murmurGain); murmurGain.connect(master);
+  src.start();
+  audioReady=true;
+}
+function now(){ return ctx.currentTime; }
+
+// single clap = short filtered noise burst with fast decay
+function clap(vol){
+  const s=ctx.createBufferSource(); s.buffer=noiseBuf;
+  const f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=1400+Math.random()*1800;
+  const g=ctx.createGain(); const t=now();
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(vol, t+0.004);
+  g.gain.exponentialRampToValueAtTime(0.0008, t+0.05+Math.random()*0.05);
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(t, Math.random()*1.6, 0.14); s.stop(t+0.22);
+}
+function applause(n, spreadMs, vol){
+  for(let i=0;i<n;i++) setTimeout(()=>{ if(audioReady) clap(vol*(0.5+Math.random()*0.6)); }, Math.random()*spreadMs);
+}
+// crowd roar = swelling lowpassed noise + sub-bass missing-fundamental + clap shower
+function roar(intensity, dur){
+  intensity=Math.max(0.2,Math.min(1,intensity)); dur=dur||1.6;
+  const t=now();
+  const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=500;
+  const g=ctx.createGain(); g.gain.value=0;
+  s.connect(lp); lp.connect(g); g.connect(master);
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(0.36*intensity, t+0.16);
+  g.gain.setValueAtTime(0.34*intensity, t+dur*0.55);
+  g.gain.exponentialRampToValueAtTime(0.0008, t+dur);
+  lp.frequency.setValueAtTime(480,t);
+  lp.frequency.linearRampToValueAtTime(400+1500*intensity, t+0.2);
+  lp.frequency.exponentialRampToValueAtTime(380, t+dur);
+  s.start(t); s.stop(t+dur+0.1);
+  // sub bass swell (55Hz + harmonics → felt in the chest)
+  const bg=ctx.createGain(); bg.gain.value=0; bg.connect(master);
+  [50,55,110,165,220,275].forEach((fr,i)=>{
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=fr;
+    const og=ctx.createGain(); og.gain.value = i<2?0.55:0.16/i;
+    o.connect(og); og.connect(bg); o.start(t); o.stop(t+dur+0.1);
+  });
+  bg.gain.setValueAtTime(0,t);
+  bg.gain.linearRampToValueAtTime(0.5*intensity, t+0.14);
+  bg.gain.exponentialRampToValueAtTime(0.0008, t+dur);
+  const lfo=ctx.createOscillator(); lfo.frequency.value=5.5; const lg=ctx.createGain(); lg.gain.value=0.22*intensity;
+  lfo.connect(lg); lg.connect(bg.gain); lfo.start(t); lfo.stop(t+dur);
+  // clap shower
+  applause(Math.round(26*intensity), dur*0.7*1000, 0.42*intensity);
+}
+// tension hum while bowing (the held breath of the hall)
+function startTame(){
+  if(!audioReady||tameOsc) return;
+  const t=now();
+  tameOsc=ctx.createOscillator(); tameOsc.type='sawtooth'; tameOsc.frequency.value=58;
+  tameFilt=ctx.createBiquadFilter(); tameFilt.type='lowpass'; tameFilt.frequency.value=180;
+  tameGain=ctx.createGain(); tameGain.gain.value=0.0001;
+  tameOsc.connect(tameFilt); tameFilt.connect(tameGain); tameGain.connect(master);
+  tameOsc.start(t);
+  tameGain.gain.exponentialRampToValueAtTime(0.07, t+1.3);
+  tameOsc.frequency.linearRampToValueAtTime(150, t+1.4);
+  tameFilt.frequency.linearRampToValueAtTime(420, t+1.4);
+}
+function stopTame(){
+  if(!tameOsc) return;
+  const t=now();
+  try{ tameGain.gain.cancelScheduledValues(t); tameGain.gain.setValueAtTime(Math.max(0.0001,tameGain.gain.value),t);
+    tameGain.gain.exponentialRampToValueAtTime(0.0001,t+0.07); tameOsc.stop(t+0.09);}catch(e){}
+  tameOsc=null;
+}
+
+/* ---------- HAPTICS ---------- */
+function vibe(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+/* ---------- GAME STATE ---------- */
+const S = { boot:0, play:1, finale:2, done:3 };
+let state=S.boot;
+let meter=0;            // 0..100
+let audience=0;
+let presence=0.18;      // forward step amount 0..1 (cosmetic)
+let bestBow=0;          // peak bow intensity this run
+let bowing=false, bowStart=0, bowAmt=0, leanVis=0;
+let tilt=0;             // device forward tilt contribution 0..1
+let flashT=0;           // visual flash timer
+let ovationGlow=0;
+let timeNow=0;
+
+/* particles */
+const confetti=[]; const dust=[];
+const COL=['#ff3da6','#37e6ff','#8b5bff','#ffd9a0','#7CFFB2','#ff7847'];
+function spawnConfetti(n, power){
+  for(let i=0;i<n;i++){
+    confetti.push({
+      x:W*0.5+(Math.random()-0.5)*W*0.5, y:H*0.36+(Math.random()-0.5)*40,
+      vx:(Math.random()-0.5)*7*power, vy:-(2+Math.random()*7)*power,
+      w:5+Math.random()*8, h:8+Math.random()*12, rot:Math.random()*6.28, vr:(Math.random()-0.5)*0.5,
+      col:COL[(Math.random()*COL.length)|0], life:1
+    });
+  }
+}
+function initDust(){
+  dust.length=0;
+  for(let i=0;i<46;i++) dust.push({x:Math.random()*W,y:Math.random()*H*0.7,r:0.6+Math.random()*1.8,
+    a:0.05+Math.random()*0.18, vy:-(0.05+Math.random()*0.18), ph:Math.random()*6.28});
+}
+initDust();
+
+/* crowd silhouette rows */
+const crowd=[];
+function initCrowd(){
+  crowd.length=0;
+  const rows=4;
+  for(let r=0;r<rows;r++){
+    const cnt=Math.floor(W/26)+r*2;
+    for(let i=0;i<cnt;i++){
+      crowd.push({x:(i+ (r%2?0.5:0))*(W/cnt), row:r, ph:Math.random()*6.28, s:7+Math.random()*5});
+    }
+  }
+}
+initCrowd();
+window.addEventListener('resize',()=>{initCrowd();initDust();});
+
+/* ---------- RENDER ---------- */
+function draw(dt){
+  timeNow += dt;
+  // background
+  const bg=cx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a0716'); bg.addColorStop(0.55,'#06040b'); bg.addColorStop(1,'#020108');
+  cx.fillStyle=bg; cx.fillRect(0,0,W,H);
+
+  const cxp=W*0.5;
+  const stageY=H*0.70;                  // floor line
+  const figH=Math.min(H*0.34, W*0.78);  // silhouette height
+  const figY=stageY;                     // feet
+  // spotlight: tightens as you bow / steps forward
+  const focus = 0.5 + presence*0.25 + leanVis*0.25;
+  drawSpotlight(cxp, H*0.02, stageY, figH, focus);
+
+  // floor glow ellipse
+  cx.save();
+  const fg=cx.createRadialGradient(cxp,stageY,2,cxp,stageY,figH*0.9);
+  fg.addColorStop(0,'rgba(255,217,160,'+(0.22+ovationGlow*0.3)+')');
+  fg.addColorStop(1,'rgba(255,217,160,0)');
+  cx.fillStyle=fg; cx.beginPath(); cx.ellipse(cxp,stageY,figH*0.62,figH*0.16,0,0,6.2832); cx.fill();
+  cx.restore();
+
+  // crowd silhouettes (foreground bottom), flicker with cheer
+  drawCrowd(stageY+figH*0.12);
+
+  // dust motes drifting in the light beam
+  cx.save();
+  for(const d of dust){
+    d.y+=d.vy*dt*60; d.ph+=dt; if(d.y<-4){d.y=H*0.72;d.x=Math.random()*W;}
+    const tw=0.5+0.5*Math.sin(d.ph*2);
+    cx.globalAlpha=d.a*tw*(0.5+focus*0.5);
+    cx.fillStyle='#ffe9c8'; cx.beginPath(); cx.arc(d.x,d.y,d.r,0,6.2832); cx.fill();
+  }
+  cx.restore();
+
+  // the star (you)
+  drawStar(cxp, figY, figH, leanVis, presence);
+
+  // confetti
+  drawConfetti(dt);
+
+  // ovation glow decay
+  ovationGlow=Math.max(0, ovationGlow-dt*0.6);
+  if(flashT>0){ flashT=Math.max(0,flashT-dt*2.6);
+    document.getElementById('flash').style.opacity=(flashT*0.85).toFixed(3); }
+}
+
+function drawSpotlight(x,topY,baseY,figH,focus){
+  cx.save();
+  const halfTop=18*focus, halfBase=figH*(0.62+ (1-focus)*0.5);
+  const grad=cx.createLinearGradient(0,topY,0,baseY+figH*0.2);
+  grad.addColorStop(0,'rgba(255,224,180,'+(0.30+ovationGlow*0.35)+')');
+  grad.addColorStop(0.5,'rgba(255,210,150,'+(0.10+ovationGlow*0.18)+')');
+  grad.addColorStop(1,'rgba(255,200,140,0)');
+  cx.fillStyle=grad; cx.beginPath();
+  cx.moveTo(x-halfTop,topY); cx.lineTo(x+halfTop,topY);
+  cx.lineTo(x+halfBase,baseY+figH*0.2); cx.lineTo(x-halfBase,baseY+figH*0.2);
+  cx.closePath(); cx.fill();
+  // source flare
+  const fl=cx.createRadialGradient(x,topY,1,x,topY,60);
+  fl.addColorStop(0,'rgba(255,240,210,.9)'); fl.addColorStop(1,'rgba(255,240,210,0)');
+  cx.fillStyle=fl; cx.beginPath(); cx.arc(x,topY,60,0,6.2832); cx.fill();
+  cx.restore();
+}
+
+function drawCrowd(y){
+  cx.save();
+  const cheer=ovationGlow;
+  for(const p of crowd){
+    const bob=Math.sin(timeNow*3+p.ph)*(1.5+cheer*7);
+    const yy=y+p.row*9 - bob;
+    cx.fillStyle='rgba(8,5,16,0.96)';
+    cx.beginPath(); cx.ellipse(p.x, yy+p.s*0.9, p.s*0.7, p.s*0.55,0,0,6.2832); cx.fill(); // shoulders
+    cx.beginPath(); cx.arc(p.x, yy, p.s*0.42,0,6.2832); cx.fill();                         // head
+    if(cheer>0.05){ // raised-hand sparks during ovation
+      cx.globalAlpha=cheer*(0.4+0.6*Math.random());
+      cx.fillStyle=COL[(p.ph*COL.length)|0%COL.length]||'#ffd9a0';
+      cx.fillRect(p.x-1, yy-p.s*1.1-bob, 2, p.s*0.7);
+      cx.globalAlpha=1;
+    }
+  }
+  cx.restore();
+}
+
+function drawStar(x, feetY, figH, lean, pres){
+  cx.save();
+  const scale=0.9+pres*0.18;
+  const h=figH*scale;
+  const headR=h*0.10;
+  const hipY=feetY-h*0.42;
+  const shY=feetY-h*0.78;
+  const headY=feetY-h*0.92;
+  // lean forward pivot at hips
+  const lx = lean* h*0.30; // horizontal head offset when bowing
+  const ly = lean* h*0.10;
+  cx.translate(0,0);
+  cx.fillStyle='#000';
+  cx.strokeStyle='#05030a';
+  // legs
+  cx.lineWidth=h*0.085; cx.lineCap='round';
+  cx.beginPath(); cx.moveTo(x-h*0.07,feetY); cx.lineTo(x-h*0.05,hipY); cx.stroke();
+  cx.beginPath(); cx.moveTo(x+h*0.07,feetY); cx.lineTo(x+h*0.05,hipY); cx.stroke();
+  // torso (leans)
+  cx.lineWidth=h*0.13;
+  cx.beginPath(); cx.moveTo(x,hipY); cx.lineTo(x+lx, shY+ly); cx.stroke();
+  // arms (sweep down when bowing — a stage bow)
+  cx.lineWidth=h*0.06;
+  const ax=x+lx, ay=shY+ly;
+  const armDrop=lean*h*0.22;
+  cx.beginPath(); cx.moveTo(ax,ay); cx.lineTo(ax-h*0.16, ay+h*0.20+armDrop); cx.stroke();
+  cx.beginPath(); cx.moveTo(ax,ay); cx.lineTo(ax+h*0.16, ay+h*0.20+armDrop); cx.stroke();
+  // head
+  cx.beginPath(); cx.arc(x+lx*1.25, headY+ly*1.3, headR,0,6.2832); cx.fill();
+  // rim light from spotlight (gold edge)
+  cx.globalCompositeOperation='lighter';
+  cx.strokeStyle='rgba(255,217,160,'+(0.35+ovationGlow*0.4)+')'; cx.lineWidth=2;
+  cx.beginPath(); cx.arc(x+lx*1.25, headY+ly*1.3, headR+1,-1.9,0.6); cx.stroke();
+  cx.restore();
+}
+
+function drawConfetti(dt){
+  cx.save();
+  for(let i=confetti.length-1;i>=0;i--){
+    const p=confetti[i];
+    p.vy+=14*dt; p.vx*=0.992; p.x+=p.vx*dt*60; p.y+=p.vy*dt*60; p.rot+=p.vr;
+    if(p.y>H+30){ confetti.splice(i,1); continue; }
+    cx.save(); cx.translate(p.x,p.y); cx.rotate(p.rot);
+    cx.fillStyle=p.col; cx.globalAlpha=0.95;
+    cx.fillRect(-p.w/2,-p.h/2,p.w,p.h*(0.5+0.5*Math.abs(Math.cos(p.rot))));
+    cx.restore();
+  }
+  cx.restore();
+}
+
+/* ---------- LOOP ---------- */
+let last=performance.now();
+function loop(t){
+  const dt=Math.min(0.05,(t-last)/1000); last=t;
+  // update bow amount while holding
+  if(bowing){
+    const held=(t-bowStart)/1000;
+    bowAmt=Math.min(1, held/1.5);                  // press time → depth
+    const target=Math.min(1, Math.max(bowAmt, tilt)); // tilt augments
+    leanVis += (target-leanVis)*Math.min(1,dt*8);
+    if(target>bestBow) bestBow=target;
+  } else {
+    leanVis += (0 - leanVis)*Math.min(1,dt*6);
+  }
+  draw(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- INPUT ---------- */
+function isUI(el){ return el && (el.closest('.cta')||el.closest('.btn')); }
+
+function pressStart(e){
+  if(state!==S.play) return;
+  if(isUI(e.target)) return;
+  bowing=true; bowStart=performance.now(); bowAmt=0;
+  startTame();
+  vibe(8);
+}
+function pressEnd(e){
+  if(state!==S.play || !bowing) return;
+  bowing=false; stopTame();
+  const depth=Math.min(1, Math.max(bowAmt, tilt));
+  if(depth < 0.16){
+    // quick tap → step forward + light applause
+    presence=Math.min(1, presence+0.06);
+    applause(8, 240, 0.32);
+    meterAdd(3); vibe(12);
+    setCoach();
+  } else {
+    // a real bow → cheer explosion, scaled to depth + a tame bonus
+    triggerCheer(depth);
+  }
+}
+cv.addEventListener('pointerdown', pressStart);
+window.addEventListener('pointerup', pressEnd);
+window.addEventListener('pointercancel', pressEnd);
+
+function triggerCheer(depth){
+  const intensity=Math.min(1, depth*0.85+0.2);
+  // tame bonus: holding to the brink before release feels best
+  presence=Math.min(1, presence+0.05);
+  meterAdd(14+intensity*16);
+  const add=Math.round(intensity*(900+Math.random()*1600));
+  audience+=add;
+  // FX
+  flashT=0.4+intensity*0.5;
+  ovationGlow=Math.min(1.2, ovationGlow+0.5+intensity*0.6);
+  spawnConfetti(Math.round(40+intensity*120), 0.7+intensity*0.9);
+  roar(intensity, 1.5+intensity*0.6);
+  vibe([0,18,30,18, Math.round(120+intensity*160)]);
+  if(meter>=100 && state===S.play){ finale(); }
+  else setCoach();
+}
+function meterAdd(v){
+  meter=Math.min(100, meter+v);
+  document.getElementById('meterFill').style.width=meter+'%';
+  document.getElementById('meterPct').textContent=Math.round(meter)+'%';
+}
+
+let coachStage=0;
+function setCoach(){
+  const c=document.getElementById('coach');
+  let html;
+  if(meter<35) html='長押しで深くお辞儀<span class="small">押し込むほど大喝采。離すと歓声が爆発</span>';
+  else if(meter<75) html='いいぞ、会場が温まってきた<span class="small">もっと深く、長く、タメてから離す</span>';
+  else html='メーターを満たせ！<span class="small">あと少しでスタンディングオベーション</span>';
+  c.innerHTML=html;
+}
+
+/* ---------- DEVICE TILT (augments bow on phones) ---------- */
+function onTilt(ev){
+  // beta: front/back tilt in degrees. Holding phone up then tipping forward.
+  let b=ev.beta; if(b==null) return;
+  // map 20°(upright-ish)→0 .. 75°(tipped forward)→1
+  const v=(b-20)/55;
+  tilt=Math.max(0,Math.min(1,v));
+}
+
+/* ---------- FLOW ---------- */
+function startGame(){
+  initAudio();
+  if(ctx && ctx.state==='suspended') ctx.resume();
+  // iOS motion permission (best-effort)
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined' &&
+       typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().then(p=>{
+        if(p==='granted') window.addEventListener('deviceorientation', onTilt);
+      }).catch(()=>{});
+    } else if('ondeviceorientation' in window){
+      window.addEventListener('deviceorientation', onTilt);
+    }
+  }catch(e){}
+  meter=0; audience=0; presence=0.18; bestBow=0; ovationGlow=0; confetti.length=0;
+  document.getElementById('meterFill').style.width='0%';
+  document.getElementById('meterPct').textContent='0%';
+  document.getElementById('start').classList.add('hidden');
+  document.getElementById('result').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  state=S.play; setCoach();
+  // a gentle welcome ripple of applause
+  setTimeout(()=>applause(10,500,0.3),300);
+}
+
+function finale(){
+  state=S.finale;
+  document.getElementById('coach').innerHTML='— STANDING OVATION —<span class="small">総立ち。割れんばかりの拍手</span>';
+  // peak: tame silence → explosion
+  ovationGlow=1.2; flashT=0.95;
+  spawnConfetti(240, 1.8);
+  audience+=Math.round(2500+Math.random()*4000);
+  vibe([0,40,60,40,60,40,260]);
+  roar(1, 2.4);
+  setTimeout(()=>{ if(audioReady) roar(0.9,1.8); spawnConfetti(120,1.4); }, 900);
+  setTimeout(showResult, 2400);
+}
+
+function gradeFor(aud, peak){
+  if(aud>=14000 || peak>=0.96) return {g:'伝説の主演', e:'LEGEND'};
+  if(aud>=8500)  return {g:'スタンディングオベーション', e:'STANDING OVATION'};
+  if(aud>=4000)  return {g:'大喝采', e:'BRAVO'};
+  return {g:'まばらな拍手', e:'ENCORE?'};
+}
+function fmt(n){ return n.toLocaleString('en-US'); }
+
+function showResult(){
+  state=S.done;
+  document.getElementById('hud').classList.add('hidden');
+  const gr=gradeFor(audience,bestBow);
+  document.getElementById('grade').textContent=gr.g;
+  document.getElementById('audience').textContent=fmt(audience);
+  // high score
+  let best=0; try{best=parseInt(localStorage.getItem('hanamichi_best')||'0',10)||0;}catch(e){}
+  let isNew=false;
+  if(audience>best){ best=audience; isNew=true; try{localStorage.setItem('hanamichi_best',String(best));}catch(e){} }
+  document.getElementById('best').textContent=(isNew?'★ 自己最高記録更新！  ':'これまでの最高 ')+fmt(best)+' 人';
+  document.getElementById('result').classList.remove('hidden');
+  // lingering applause
+  applause(18, 1400, 0.28);
+}
+
+document.getElementById('goBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+
+/* ---------- SHARE CARD (9:16) ---------- */
+function buildCard(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+  const g=c.getContext('2d');
+  const bg=g.createLinearGradient(0,0,0,1920);
+  bg.addColorStop(0,'#0a0716'); bg.addColorStop(0.55,'#06040b'); bg.addColorStop(1,'#020108');
+  g.fillStyle=bg; g.fillRect(0,0,1080,1920);
+  // spotlight
+  const sp=g.createLinearGradient(0,120,0,1300);
+  sp.addColorStop(0,'rgba(255,224,180,.34)'); sp.addColorStop(0.5,'rgba(255,210,150,.12)'); sp.addColorStop(1,'rgba(255,200,140,0)');
+  g.fillStyle=sp; g.beginPath(); g.moveTo(500,120); g.lineTo(580,120); g.lineTo(880,1320); g.lineTo(200,1320); g.closePath(); g.fill();
+  const fl=g.createRadialGradient(540,140,2,540,140,140); fl.addColorStop(0,'rgba(255,240,210,.9)'); fl.addColorStop(1,'rgba(255,240,210,0)');
+  g.fillStyle=fl; g.beginPath(); g.arc(540,140,140,0,6.2832); g.fill();
+  // floor glow
+  const fg=g.createRadialGradient(540,1300,4,540,1300,520); fg.addColorStop(0,'rgba(255,217,160,.4)'); fg.addColorStop(1,'rgba(255,217,160,0)');
+  g.fillStyle=fg; g.beginPath(); g.ellipse(540,1300,480,150,0,0,6.2832); g.fill();
+  // star silhouette bowing
+  g.save(); g.translate(540,1300); g.fillStyle='#000'; g.strokeStyle='#05030a'; g.lineCap='round';
+  const h=720, lean=0.5;
+  g.lineWidth=h*0.085; g.beginPath(); g.moveTo(-h*0.07,0); g.lineTo(-h*0.05,-h*0.42); g.stroke();
+  g.beginPath(); g.moveTo(h*0.07,0); g.lineTo(h*0.05,-h*0.42); g.stroke();
+  g.lineWidth=h*0.13; g.beginPath(); g.moveTo(0,-h*0.42); g.lineTo(lean*h*0.30,-h*0.78+lean*h*0.1); g.stroke();
+  const ax=lean*h*0.30, ay=-h*0.78+lean*h*0.1; g.lineWidth=h*0.06;
+  g.beginPath(); g.moveTo(ax,ay); g.lineTo(ax-h*0.16,ay+h*0.2+lean*h*0.22); g.stroke();
+  g.beginPath(); g.moveTo(ax,ay); g.lineTo(ax+h*0.16,ay+h*0.2+lean*h*0.22); g.stroke();
+  g.beginPath(); g.arc(lean*h*0.375,-h*0.92+lean*h*0.13,h*0.1,0,6.2832); g.fill();
+  g.restore();
+  // confetti sprinkle
+  for(let i=0;i<140;i++){ g.save(); g.translate(Math.random()*1080,Math.random()*1300); g.rotate(Math.random()*6.28);
+    g.fillStyle=COL[(Math.random()*COL.length)|0]; g.globalAlpha=.9; g.fillRect(-7,-10,14,20); g.restore(); }
+  g.globalAlpha=1;
+  // text
+  const gr=gradeFor(audience,bestBow);
+  g.textAlign='center';
+  g.fillStyle='#ffd9a0'; g.font='600 40px -apple-system,sans-serif'; g.fillText('★  本日の主演  ★',540,250);
+  g.fillStyle='#fff'; g.font='800 130px -apple-system,sans-serif'; g.fillText('YOU',540,400);
+  g.fillStyle='#cfc6e6'; g.font='600 38px -apple-system,sans-serif'; g.fillText(gr.g,540,470);
+  // audience number
+  const ng=g.createLinearGradient(0,1480,0,1640); ng.addColorStop(0,'#37e6ff'); ng.addColorStop(1,'#8b5bff');
+  g.fillStyle=ng; g.font='800 200px -apple-system,sans-serif'; g.fillText(fmt(audience),540,1620);
+  g.fillStyle='#b6abd6'; g.font='600 44px -apple-system,sans-serif'; g.fillText('人が熱狂した',540,1700);
+  // footer
+  g.fillStyle='#7d749a'; g.font='500 30px -apple-system,sans-serif';
+  g.fillText('HANAMICHI 花道  ·  あなたが主役の推され体験',540,1840);
+  return c;
+}
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  const card=buildCard();
+  card.toBlob(async (blob)=>{
+    const file=new File([blob],'hanamichi.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], title:'本日の主演', text:'観客'+fmt(audience)+'人が熱狂 — Hanamichi 花道'}); return; }catch(e){}
+    }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download='hanamichi.png'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  },'image/png');
+});
+
+/* ---------- test hook (harmless; used for automated verification) ---------- */
+window.__HANAMICHI={
+  start:startGame,
+  bow:(d)=>{ if(state===S.play) triggerCheer(d==null?0.8:d); },
+  finish:()=>{ if(state===S.play){ meter=100; finale(); } },
+  state:()=>({state,meter:Math.round(meter),audience}),
+};
+</script>
+</body>
+</html>
