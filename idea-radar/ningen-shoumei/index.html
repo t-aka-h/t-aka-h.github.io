@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<title>人間証明 — Ningen Shoumei</title>
+<meta name="description" content="逆CAPTCHA。完璧になぞると「AI判定」で失格。手のブレ・緩急・ためらい＝人間らしさを出した者だけが通れる、さかさまの人間認証ゲー。">
+<style>
+  :root{
+    --bg:#05060a; --bg2:#0a0d18;
+    --cyan:#00e5ff; --cyan-dim:#0a5a66;
+    --mag:#ff2d87; --amber:#ffce4d;
+    --ink:#eaf6ff; --sub:#7d8aa6;
+    --good:#36e7a0;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Segoe UI",system-ui,sans-serif;
+    overflow:hidden; overscroll-behavior:none; touch-action:none;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    max-width:520px;margin:0 auto;}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;text-align:center;transition:opacity .35s ease;}
+  .hidden{opacity:0;pointer-events:none;}
+  .logo{font-weight:900;letter-spacing:.18em;line-height:1.05;}
+  .logo .jp{font-size:13vw;background:linear-gradient(180deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 30px rgba(0,229,255,.35);}
+  .logo .en{font-size:3.4vw;letter-spacing:.5em;color:var(--sub);margin-top:6px;}
+  @media(min-width:480px){.logo .jp{font-size:62px}.logo .en{font-size:15px}}
+  .tag{margin:22px 8px 8px;color:var(--sub);font-size:14px;line-height:1.7;max-width:340px;}
+  .tag b{color:var(--cyan);font-weight:700;}
+  .btn{margin-top:26px;border:none;cursor:pointer;font-weight:800;letter-spacing:.08em;
+    color:#021016;background:linear-gradient(180deg,#7ff4ff,var(--cyan));
+    padding:16px 40px;border-radius:40px;font-size:17px;
+    box-shadow:0 0 28px rgba(0,229,255,.45),0 8px 24px rgba(0,0,0,.5);}
+  .btn:active{transform:translateY(1px) scale(.99);}
+  .btn.ghost{background:transparent;color:var(--cyan);border:1.5px solid var(--cyan-dim);box-shadow:none;padding:13px 28px;font-size:15px;}
+  .btn.mag{background:linear-gradient(180deg,#ff7ab0,var(--mag));color:#1a0010;box-shadow:0 0 28px rgba(255,45,135,.45),0 8px 24px rgba(0,0,0,.5);}
+  .foot{position:absolute;bottom:14px;color:#39435c;font-size:11px;letter-spacing:.12em;}
+  /* PLAY */
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:0;left:0;right:0;padding:16px 18px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;}
+  .hud .lvl{font-weight:800;letter-spacing:.1em;font-size:13px;color:var(--sub);}
+  .hud .lvl b{color:var(--cyan);font-size:16px;}
+  .hud .streak{font-size:13px;color:var(--amber);font-weight:800;letter-spacing:.05em;}
+  .prompt{position:absolute;top:54px;left:0;right:0;text-align:center;pointer-events:none;}
+  .prompt .t{font-size:15px;color:var(--ink);font-weight:700;}
+  .prompt .s{font-size:12px;color:var(--sub);margin-top:3px;letter-spacing:.04em;}
+  .meter{position:absolute;left:14px;bottom:90px;width:8px;height:44%;border-radius:8px;background:rgba(255,255,255,.06);overflow:hidden;pointer-events:none;}
+  .meter .fill{position:absolute;left:0;right:0;bottom:0;height:0%;background:linear-gradient(0deg,var(--mag),var(--amber) 45%,var(--cyan));transition:height .12s linear;}
+  .meter .band{position:absolute;left:-4px;right:-4px;border-top:1.5px dashed rgba(0,229,255,.5);border-bottom:1.5px dashed rgba(0,229,255,.5);background:rgba(0,229,255,.06);}
+  .meter-lab{position:absolute;left:26px;bottom:90px;font-size:10px;color:var(--sub);letter-spacing:.15em;writing-mode:vertical-rl;height:44%;display:flex;align-items:center;pointer-events:none;}
+  .analyzing{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(5,6,10,.55);pointer-events:none;opacity:0;transition:opacity .2s;}
+  .analyzing.on{opacity:1;}
+  .analyzing .a{font-weight:900;letter-spacing:.4em;font-size:18px;color:var(--cyan);text-shadow:0 0 20px rgba(0,229,255,.6);}
+  /* RESULT */
+  #resultScreen{justify-content:center;}
+  .verdict{font-weight:900;letter-spacing:.05em;line-height:1.1;}
+  .verdict .big{font-size:54px;}
+  .pct{font-size:84px;font-weight:900;line-height:1;margin:6px 0 2px;letter-spacing:-.02em;}
+  .vsub{font-size:15px;color:var(--sub);margin-top:4px;max-width:320px;}
+  .axes{display:flex;gap:14px;margin:24px 0 6px;width:100%;max-width:340px;justify-content:center;}
+  .axis{flex:1;}
+  .axis .nm{font-size:11px;color:var(--sub);letter-spacing:.08em;margin-bottom:5px;}
+  .axis .bar{height:7px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden;}
+  .axis .bar i{display:block;height:100%;width:0%;border-radius:7px;transition:width .6s cubic-bezier(.2,.8,.2,1);}
+  .axis .vv{font-size:11px;color:var(--ink);margin-top:4px;font-weight:700;}
+  .rbtns{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;justify-content:center;}
+  .credit{position:absolute;bottom:12px;font-size:10px;color:#38425a;letter-spacing:.1em;text-align:center;width:100%;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE -->
+  <section id="titleScreen" class="screen">
+    <div class="logo"><div class="jp">人間証明</div><div class="en">NINGEN&nbsp;SHOUMEI</div></div>
+    <p class="tag">逆CAPTCHA。お題をなぞれ。<br>でも<b>完璧すぎると「AI判定」で失格</b>。<br>手のブレ・緩急・ためらい＝<b>人間らしさ</b>を出した者だけが通れる。</p>
+    <button class="btn" id="startBtn">人間か証明する</button>
+    <button class="btn ghost" id="howBtn" style="margin-top:14px">あそびかた</button>
+    <div class="foot">Idea Radar · ワイルドカード · 完全オンデバイス</div>
+  </section>
+
+  <!-- PLAY -->
+  <section id="playScreen" class="screen hidden">
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="lvl">LEVEL <b id="lvlNum">1</b></div>
+      <div class="streak" id="streakLab">🔥 0</div>
+    </div>
+    <div class="prompt">
+      <div class="t" id="promptT">図形をなぞって</div>
+      <div class="s" id="promptS">ロボットみたいに正確だと失格</div>
+    </div>
+    <div class="meter"><div class="band" id="meterBand"></div><div class="fill" id="meterFill"></div></div>
+    <div class="meter-lab">HUMANITY</div>
+    <div class="analyzing" id="analyzing">
+      <div class="a" id="analyzingT">ANALYZING</div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="resultScreen" class="screen hidden">
+    <div class="verdict" id="verdict"></div>
+    <div class="pct" id="pct">0%</div>
+    <div class="vsub" id="vsub"></div>
+    <div class="axes">
+      <div class="axis"><div class="nm">ブレ Jitter</div><div class="bar"><i id="axJ"></i></div><div class="vv" id="axJv">0</div></div>
+      <div class="axis"><div class="nm">緩急 Tempo</div><div class="bar"><i id="axT"></i></div><div class="vv" id="axTv">0</div></div>
+      <div class="axis"><div class="nm">ためらい</div><div class="bar"><i id="axH"></i></div><div class="vv" id="axHv">0</div></div>
+    </div>
+    <div class="rbtns">
+      <button class="btn" id="nextBtn">つぎへ</button>
+      <button class="btn ghost" id="shareBtn">結果をシェア</button>
+    </div>
+    <div class="credit">#人間証明 · t-aka-h.github.io/idea-radar</div>
+  </section>
+
+</div>
+
+<canvas id="cardCanvas" width="1080" height="1920" style="display:none"></canvas>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const clamp01=v=>clamp(v,0,1);
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+// ---------- Screens ----------
+const screens={title:$('#titleScreen'),play:$('#playScreen'),result:$('#resultScreen')};
+function show(name){for(const k in screens){screens[k].classList.toggle('hidden',k!==name);}}
+
+// ---------- Audio (WebAudio, missing-fundamental low end) ----------
+let AC=null;
+function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended')AC.resume(); return AC; }
+function tone(freq,t0,dur,type,gain,glideTo){
+  const c=ac(); if(!c)return; const o=c.createOscillator(),g=c.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+  if(glideTo)o.frequency.exponentialRampToValueAtTime(Math.max(20,glideTo),t0+dur);
+  g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(gain,t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0008,t0+dur);
+  o.connect(g); g.connect(c.master); o.start(t0); o.stop(t0+dur+0.05);
+}
+function subBass(t0,dur,base,gain){ // missing fundamental: stack harmonics of a low base
+  [2,3,4,5].forEach((h,i)=>tone(base*h,t0,dur,'sine',(gain||0.5)*(1-i*0.16)));
+}
+function setupMaster(){ const c=ac(); if(!c||c.master)return; const m=c.createGain(); m.gain.value=0.9; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200; m.connect(lp); lp.connect(c.destination); c.master=m; }
+let drone=null;
+function startDrone(){ const c=ac(); if(!c)return; setupMaster(); stopDrone();
+  const g=c.createGain(); g.gain.value=0; g.gain.linearRampToValueAtTime(0.16,c.currentTime+0.4); g.connect(c.master);
+  const oscs=[30,45,60,90].map((f,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=f;const og=c.createGain();og.gain.value=[0.6,0.4,0.3,0.18][i];o.connect(og);og.connect(g);o.start();return o;});
+  drone={g,oscs};
+}
+function stopDrone(){ if(!drone)return; const c=ac(); try{drone.g.gain.linearRampToValueAtTime(0,c.currentTime+0.25);const d=drone;setTimeout(()=>d.oscs.forEach(o=>{try{o.stop();}catch(e){}}),300);}catch(e){} drone=null; }
+function sfxAnalyze(){ const c=ac(); if(!c)return; setupMaster(); const t=c.currentTime; subBass(t,0.9,33,0.35); tone(420,t,0.9,'triangle',0.05,260); }
+function sfxPass(){ const c=ac(); if(!c)return; setupMaster(); const t=c.currentTime; [0,1,2,3].forEach(i=>tone([523,659,784,1046][i],t+i*0.07,0.5,'triangle',0.16)); tone(1568,t+0.28,0.7,'sine',0.08); subBass(t,0.7,55,0.4); }
+function sfxFail(){ const c=ac(); if(!c)return; setupMaster(); const t=c.currentTime; tone(300,t,0.7,'sawtooth',0.14,70); subBass(t,0.7,30,0.45); tone(140,t+0.05,0.5,'square',0.06,120); }
+function vib(p){ try{navigator.vibrate&&navigator.vibrate(p);}catch(e){} }
+
+// ---------- Canvas / DPR ----------
+const stage=$('#stage'); const ctx=stage.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); const r=stage.getBoundingClientRect(); W=r.width; H=r.height;
+  stage.width=Math.round(W*DPR); stage.height=Math.round(H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); buildShape(); }
+window.addEventListener('resize',resize);
+
+// ---------- Levels & shapes ----------
+const LEVELS=[
+  {name:'なぞり線',  shape:'line',   band:[28,98]},
+  {name:'円',        shape:'circle', band:[34,95]},
+  {name:'波',        shape:'wave',   band:[40,90]},
+  {name:'星',        shape:'star',   band:[46,86]},
+  {name:'渦巻き',    shape:'spiral', band:[52,82]},
+];
+let level=0, streak=0;
+let guide=[], guideLen=0;
+
+function buildShape(){
+  const kind=LEVELS[level].shape;
+  const cx=W/2, cy=H*0.52, R=Math.min(W,H)*0.30;
+  const pts=[];
+  if(kind==='line'){ const y=cy, x0=W*0.18, x1=W*0.82; for(let i=0;i<=40;i++){const t=i/40;pts.push({x:lerp(x0,x1,t),y:y+Math.sin(t*Math.PI)*R*0.10});} }
+  else if(kind==='circle'){ for(let i=0;i<=72;i++){const a=-Math.PI/2 + i/72*Math.PI*2;pts.push({x:cx+Math.cos(a)*R,y:cy+Math.sin(a)*R});} }
+  else if(kind==='wave'){ for(let i=0;i<=64;i++){const t=i/64;pts.push({x:lerp(W*0.16,W*0.84,t),y:cy+Math.sin(t*Math.PI*3)*R*0.55});} }
+  else if(kind==='star'){ const sp=5; for(let i=0;i<=sp*2;i++){const a=-Math.PI/2+i/(sp*2)*Math.PI*2;const rr=(i%2===0)?R:R*0.42;pts.push({x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr});} }
+  else if(kind==='spiral'){ for(let i=0;i<=120;i++){const t=i/120;const a=t*Math.PI*5;const rr=R*0.18+R*0.82*t;pts.push({x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr});} }
+  guide=pts; guideLen=pathLength(pts);
+}
+function pathLength(p){let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i].x-p[i-1].x,p[i].y-p[i-1].y);return L;}
+
+// ---------- Particles ----------
+let parts=[];
+function spawnTrail(x,y,col){ parts.push({x,y,vx:(Math.random()-.5)*.6,vy:(Math.random()-.5)*.6-0.3,life:1,col,r:Math.random()*2+1}); }
+function burst(x,y,col,n,spd){ for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=Math.random()*spd;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,col,r:Math.random()*3+1.5});} }
+
+// ---------- Trace state ----------
+let tracing=false, pts=[], busy=false, glitch=0;
+function startPlay(){
+  busy=false; tracing=false; pts=[]; glitch=0;
+  $('#lvlNum').textContent=level+1;
+  $('#streakLab').textContent='🔥 '+streak;
+  $('#promptT').textContent=LEVELS[level].name+'をなぞって';
+  $('#promptS').textContent= level===0 ? 'ロボットみたいに正確だと失格' :
+     ['','まっすぐ正確すぎ注意','一定の速さは機械っぽい','迷い・震えも人間らしさ','カクカク等速はAI判定'][level];
+  // meter band visual
+  const b=LEVELS[level].band, bandEl=$('#meterBand'); const mh=bandEl.parentElement.clientHeight;
+  bandEl.style.bottom=(b[0]/100*mh)+'px'; bandEl.style.height=((b[1]-b[0])/100*mh)+'px';
+  $('#meterFill').style.height='0%';
+  show('play'); resize(); startDrone();
+}
+
+function pos(e){ const r=stage.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:t.clientX-r.left,y:t.clientY-r.top}; }
+function onDown(e){ if(busy)return; e.preventDefault(); ac(); setupMaster(); tracing=true; pts=[]; const p=pos(e); pts.push({x:p.x,y:p.y,t:performance.now()}); vib(6); }
+function onMove(e){ if(!tracing||busy)return; e.preventDefault(); const p=pos(e); const last=pts[pts.length-1];
+  if(last && Math.hypot(p.x-last.x,p.y-last.y)<1.2)return; pts.push({x:p.x,y:p.y,t:performance.now()});
+  spawnTrail(p.x,p.y,'cyan'); if(pts.length%5===0)vib(4);
+  // live humanity preview
+  if(pts.length>14){ const a=analyze(pts,guideLen); if(!a.short){ $('#meterFill').style.height=a.human.toFixed(0)+'%'; } }
+}
+function onUp(e){ if(!tracing||busy)return; tracing=false; const a=analyze(pts,guideLen);
+  if(a.short){ $('#promptS').textContent='もっとしっかりなぞって！'; $('#promptS').style.color='var(--amber)'; setTimeout(()=>{$('#promptS').style.color='';startPlay();},700); return; }
+  runVerdict(a);
+}
+stage.addEventListener('pointerdown',onDown);
+stage.addEventListener('pointermove',onMove);
+window.addEventListener('pointerup',onUp);
+// touch fallbacks
+stage.addEventListener('touchstart',onDown,{passive:false});
+stage.addEventListener('touchmove',onMove,{passive:false});
+window.addEventListener('touchend',onUp);
+
+// ---------- Analysis ----------
+function std(a){ if(a.length<2)return 0; const m=a.reduce((x,y)=>x+y,0)/a.length; return Math.sqrt(a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length); }
+function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function analyze(p,glen){
+  if(p.length<12) return {short:true};
+  const dirs=[],speeds=[]; let L=0;
+  for(let i=1;i<p.length;i++){ const dx=p[i].x-p[i-1].x,dy=p[i].y-p[i-1].y,d=Math.hypot(dx,dy);
+    const dt=Math.max((p[i].t-p[i-1].t)/1000,0.004); L+=d;
+    if(d>0.3)dirs.push(Math.atan2(dy,dx)); speeds.push(d/dt); }
+  const dur=(p[p.length-1].t-p[0].t)/1000;
+  if(L < glen*0.38 || dur<0.32 || dirs.length<6) return {short:true};
+  const turns=[]; for(let i=1;i<dirs.length;i++){ let d=dirs[i]-dirs[i-1]; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; turns.push(d); }
+  // remove the slowly-varying intended curvature: use deviation of turn from local median-ish (use diff of turns)
+  const dturns=[]; for(let i=1;i<turns.length;i++)dturns.push(turns[i]-turns[i-1]);
+  const jitterRaw=std(dturns);                       // high-freq wobble
+  const mV=mean(speeds);
+  const tempoRaw=mV>0? std(speeds)/mV : 0;           // coefficient of variation
+  let slow=0; const thr=mV*0.20; for(const v of speeds) if(v<thr)slow++;
+  const hesRaw=slow/speeds.length;
+  const jitter=clamp01((jitterRaw-0.02)/(0.55-0.02))*100;
+  const tempo =clamp01((tempoRaw-0.10)/(0.95-0.10))*100;
+  const hes   =clamp01((hesRaw-0.015)/(0.30-0.015))*100;
+  const human=0.46*jitter+0.34*tempo+0.20*hes;
+  return {jitter,tempo,hes,human:clamp(human,0,100),len:L,dur};
+}
+
+// ---------- Verdict ----------
+let lastResult=null;
+function runVerdict(a){
+  busy=true; const an=$('#analyzing'); $('#analyzingT').textContent='ANALYZING';
+  an.classList.add('on'); glitch=0; sfxAnalyze(); vib(12);
+  // scan animation handled in render via flag
+  scanT=0; scanning=true;
+  setTimeout(()=>{
+    an.classList.remove('on'); scanning=false;
+    const b=LEVELS[level].band; let outcome;
+    if(a.human<b[0]) outcome='AI'; else if(a.human>b[1]) outcome='MESSY'; else outcome='PASS';
+    decide(a,outcome);
+  },1050);
+}
+function titleFor(h,b){ const t=(h-b[0])/(b[1]-b[0]);
+  if(t<0.34)return 'ギリ人間'; if(t<0.7)return 'まちがいなく人間'; return 'カオス寄りの人間'; }
+function decide(a,outcome){
+  lastResult={a,outcome,level:level+1};
+  const V=$('#verdict'),P=$('#pct'),S=$('#vsub');
+  const cx=W/2,cy=H*0.5;
+  if(outcome==='PASS'){
+    streak++; sfxPass(); vib([20,40,120]); burst(cx,cy,'gold',120,6);
+    V.innerHTML='<span class="big" style="color:var(--good)">HUMAN ✔</span>';
+    P.style.color='var(--cyan)';
+    S.textContent='称号：'+titleFor(a.human,LEVELS[level].band)+' — 認証されました';
+  } else if(outcome==='AI'){
+    streak=0; sfxFail(); vib([60,40,60,40,120]); glitch=1; burst(cx,cy,'mag',90,7);
+    V.innerHTML='<span class="big" style="color:var(--mag)">AI DETECTED 🤖</span>';
+    P.style.color='var(--mag)';
+    S.textContent='正確すぎる。…あなた、本当に人間？';
+  } else {
+    streak=0; sfxFail(); vib([120]); burst(cx,cy,'mag',70,6);
+    V.innerHTML='<span class="big" style="color:var(--amber)">TOO MESSY</span>';
+    P.style.color='var(--amber)';
+    S.textContent='荒すぎて判定不能。やる気を見せて。';
+  }
+  P.textContent='人間度 '+Math.round(a.human)+'%';
+  const setAx=(id,vid,val,col)=>{const el=$(id);el.style.width=Math.round(val)+'%';el.style.background=col;$(vid).textContent=Math.round(val);};
+  setTimeout(()=>{ setAx('#axJ','#axJv',a.jitter,'var(--cyan)'); setAx('#axT','#axTv',a.tempo,'var(--amber)'); setAx('#axH','#axHv',a.hes,'var(--good)'); },60);
+  // next level only on pass
+  $('#nextBtn').textContent = outcome==='PASS' ? 'つぎのレベルへ' : 'もう一度';
+  stopDrone();
+  show('result');
+}
+
+// ---------- Render loop ----------
+let scanning=false, scanT=0, t0=performance.now();
+function render(now){
+  const dt=Math.min(40,now-t0); t0=now;
+  ctx.clearRect(0,0,W,H);
+  // bg subtle grid glow
+  const grd=ctx.createRadialGradient(W/2,H*0.5,0,W/2,H*0.5,Math.max(W,H)*0.7);
+  grd.addColorStop(0,'rgba(12,18,34,0.9)'); grd.addColorStop(1,'rgba(5,6,10,0)');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,W,H);
+  // guide
+  if(!screens.play.classList.contains('hidden')){
+    ctx.save(); ctx.setLineDash([7,9]); ctx.lineWidth=2.5; ctx.strokeStyle='rgba(0,229,255,0.32)';
+    ctx.lineCap='round'; ctx.beginPath();
+    for(let i=0;i<guide.length;i++){const p=guide[i];i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);} ctx.stroke();
+    ctx.setLineDash([]);
+    // start dot pulse
+    if(guide.length){const g0=guide[0];const pulse=0.5+0.5*Math.sin(now/300);ctx.fillStyle='rgba(255,206,77,'+(0.5+0.5*pulse)+')';ctx.beginPath();ctx.arc(g0.x,g0.y,5+pulse*3,0,7);ctx.fill();}
+    ctx.restore();
+    // user trace
+    if(pts.length>1){ ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.shadowBlur=14; ctx.shadowColor=glitch?'#ff2d87':'#00e5ff'; ctx.strokeStyle=glitch?'#ff2d87':'#00e5ff';
+      ctx.beginPath(); for(let i=0;i<pts.length;i++){const p=pts[i];i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);} ctx.stroke(); ctx.shadowBlur=0; }
+    // scan line during analyzing
+    if(scanning){ scanT+=dt/1050; const yy=lerp(H*0.2,H*0.8,clamp01(scanT));
+      ctx.strokeStyle='rgba(0,229,255,0.8)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(W*0.1,yy); ctx.lineTo(W*0.9,yy); ctx.stroke();
+      ctx.fillStyle='rgba(0,229,255,0.06)'; ctx.fillRect(W*0.1,yy-30,W*0.8,60); }
+  }
+  // particles (drawn on whichever screen)
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.x+=p.vx*dt*0.06; p.y+=p.vy*dt*0.06; p.vy+=0.012*dt; p.life-=0.012*dt;
+    if(p.life<=0){parts.splice(i,1);continue;}
+    ctx.globalAlpha=clamp01(p.life); ctx.fillStyle=p.col==='gold'?'#ffce4d':p.col==='mag'?'#ff2d87':'#00e5ff';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+// result screen needs the stage canvas visible for particles -> keep stage always rendering; but it's inside playScreen.
+// Move particles burst to a shared overlay: simplest -> on result we also briefly show stage. Instead, draw result particles on stage by keeping stage on top is complex.
+// Pragmatic: result burst uses same parts[] but stage is hidden under result. So also spawn a CSS flash. (kept subtle)
+
+// ---------- Share card ----------
+function buildCard(){
+  const c=$('#cardCanvas'),x=c.getContext('2d'),W2=1080,H2=1920;
+  const r=lastResult; if(!r)return c;
+  const a=r.a, out=r.outcome;
+  const acc = out==='PASS'?'#00e5ff':out==='AI'?'#ff2d87':'#ffce4d';
+  // bg
+  const g=x.createLinearGradient(0,0,0,H2); g.addColorStop(0,'#080b14'); g.addColorStop(1,'#03040a');
+  x.fillStyle=g; x.fillRect(0,0,W2,H2);
+  const rg=x.createRadialGradient(540,820,0,540,820,1100); rg.addColorStop(0,(out==='PASS'?'rgba(0,229,255,0.16)':'rgba(255,45,135,0.14)')); rg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=rg; x.fillRect(0,0,W2,H2);
+  x.textAlign='center';
+  x.fillStyle='#7d8aa6'; x.font='600 40px -apple-system,sans-serif'; x.fillText('人 間 証 明  ·  NINGEN SHOUMEI',540,200);
+  // verdict
+  x.fillStyle=acc; x.font='900 96px -apple-system,sans-serif';
+  x.fillText(out==='PASS'?'HUMAN ✔':out==='AI'?'AI DETECTED 🤖':'TOO MESSY',540,560);
+  // big pct
+  x.fillStyle='#eaf6ff'; x.font='900 260px -apple-system,sans-serif'; x.fillText(Math.round(a.human)+'%',540,840);
+  x.fillStyle='#7d8aa6'; x.font='600 46px -apple-system,sans-serif'; x.fillText('人間度  HUMANITY',540,930);
+  // title line
+  x.fillStyle=acc; x.font='800 52px -apple-system,sans-serif';
+  const titl = out==='PASS'? '称号：'+titleFor(a.human,LEVELS[r.level-1].band) : out==='AI'?'正確すぎる人物':'やる気不足';
+  x.fillText(titl,540,1040);
+  // 3 axes
+  const axes=[['ブレ Jitter',a.jitter,'#00e5ff'],['緩急 Tempo',a.tempo,'#ffce4d'],['ためらい Hesitation',a.hes,'#36e7a0']];
+  let y=1240;
+  axes.forEach(([nm,val,col])=>{ x.textAlign='left'; x.fillStyle='#9fb0cc'; x.font='600 38px -apple-system,sans-serif'; x.fillText(nm,150,y-26);
+    x.fillStyle='rgba(255,255,255,0.08)'; rr(x,150,y,780,26,13); x.fill();
+    x.fillStyle=col; rr(x,150,y,780*clamp01(val/100),26,13); x.fill();
+    x.textAlign='right'; x.fillStyle='#eaf6ff'; x.font='800 38px -apple-system,sans-serif'; x.fillText(Math.round(val),930,y-26);
+    y+=140; });
+  x.textAlign='center'; x.fillStyle='#7d8aa6'; x.font='700 44px -apple-system,sans-serif'; x.fillText('LEVEL '+r.level+'  ·  #人間証明',540,1700);
+  x.fillStyle='#566479'; x.font='500 34px -apple-system,sans-serif'; x.fillText('t-aka-h.github.io/idea-radar',540,1770);
+  return c;
+}
+function rr(x,X,Y,w,h,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
+async function share(){
+  const c=buildCard();
+  c.toBlob(async(blob)=>{
+    const file=new File([blob],'ningen-shoumei.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'人間証明',text:'人間度 '+Math.round(lastResult.a.human)+'% — #人間証明'});return;}catch(e){}
+    }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='ningen-shoumei.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+  },'image/png');
+}
+
+// ---------- Buttons ----------
+$('#startBtn').addEventListener('click',()=>{ ac(); setupMaster(); level=0; streak=0; startPlay(); });
+$('#howBtn').addEventListener('click',()=>{ alert('お題の図形を指でなぞるだけ。\n\nでも定規みたいに正確だと「AI判定」で失格。\n手の自然なブレ・速度のムラ・少しのためらいが“人間らしさ”。\n\nレベルが上がるほど、ちょうどいい人間らしさの幅が狭くなる。'); });
+$('#nextBtn').addEventListener('click',()=>{ if(lastResult&&lastResult.outcome==='PASS'){ level=Math.min(level+1,LEVELS.length-1); } startPlay(); });
+$('#shareBtn').addEventListener('click',share);
+
+// ---------- init ----------
+resize();
+show('title');
+
+// ---------- test hook (for automated verification only) ----------
+window.__nstest=function(kind){
+  level=1; startPlay();
+  const g=guide, p=[]; let t=1000;
+  for(let i=0;i<g.length;i++){
+    let x=g[i].x,y=g[i].y;
+    if(kind==='ai'){ /* perfect: exact guide, constant dt */ t+=30; }
+    else if(kind==='messy'){ x+=(Math.random()-.5)*70; y+=(Math.random()-.5)*70; t+=Math.random()*60; }
+    else { x+=(Math.random()-.5)*9; y+=(Math.random()-.5)*9; t+=18+Math.random()*42+(i%7===0?80:0); } // human
+    p.push({x,y,t});
+  }
+  const a=analyze(p,guideLen);
+  if(a.short)return {short:true};
+  runVerdict(a);
+  return a;
+};
+})();
+</script>
+</body>
+</html>
