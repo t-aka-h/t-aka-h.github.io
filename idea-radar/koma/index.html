@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070711">
+<title>Koma 独楽 — 回転体感</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#070711; font-family:-apple-system,"Helvetica Neue","Hiragino Sans",sans-serif; }
+  #wrap { position:fixed; inset:0; }
+  canvas { display:block; position:absolute; inset:0; width:100%; height:100%; }
+  .hud { position:absolute; inset:0; pointer-events:none; color:#eaf6ff; }
+  #rpm { position:absolute; top:7%; left:0; right:0; text-align:center; }
+  #rpmVal { font-size:18vw; font-weight:800; letter-spacing:-2px; line-height:1;
+    background:linear-gradient(90deg,#19E6FF,#FF2D9B); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 24px rgba(25,230,255,.25); display:inline-block; transition:transform .08s; }
+  #rpmLbl { font-size:3.6vw; letter-spacing:6px; color:#5e6a86; margin-top:1vw; font-weight:700; }
+  #combo { position:absolute; top:30%; left:0; right:0; text-align:center; font-size:6vw; font-weight:800;
+    color:#FFC23D; text-shadow:0 0 18px rgba(255,194,61,.5); opacity:0; transition:opacity .15s; }
+  #best { position:absolute; bottom:4%; left:0; right:0; text-align:center; font-size:3.4vw; color:#5e6a86; letter-spacing:1px; }
+  #best b { color:#19E6FF; font-weight:800; }
+  #banner { position:absolute; top:44%; left:0; right:0; text-align:center; font-size:7vw; font-weight:900;
+    color:#FF2D9B; text-shadow:0 0 26px rgba(255,45,155,.6); opacity:0; letter-spacing:2px; }
+
+  /* overlays */
+  .ov { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:8vw; pointer-events:auto; }
+  #start { background:radial-gradient(ellipse at 50% 42%, rgba(25,230,255,.07), rgba(7,7,17,.0) 60%); }
+  .title { font-size:13vw; font-weight:900; letter-spacing:1px; line-height:1;
+    background:linear-gradient(90deg,#19E6FF,#FF2D9B); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub { font-size:4.2vw; color:#a9b7d6; margin-top:3vw; letter-spacing:1px; }
+  .kana { font-size:5vw; color:#5e6a86; letter-spacing:14px; margin-top:1.5vw; font-weight:700; }
+  .how { font-size:3.6vw; color:#7e8cab; margin-top:8vw; line-height:1.9; }
+  .how b { color:#19E6FF; }
+  .pulse { margin-top:9vw; font-size:4.6vw; font-weight:800; color:#070711; background:linear-gradient(90deg,#19E6FF,#7ef);
+    padding:3.6vw 9vw; border-radius:999px; box-shadow:0 0 30px rgba(25,230,255,.45); animation:bob 1.4s ease-in-out infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  #over { background:rgba(5,5,12,.78); backdrop-filter:blur(3px); opacity:0; transition:opacity .35s; }
+  #over.show { opacity:1; }
+  .goTitle { font-size:9vw; font-weight:900; color:#FF2D9B; text-shadow:0 0 24px rgba(255,45,155,.5); }
+  .stat { font-size:4.4vw; color:#a9b7d6; margin-top:5vw; }
+  .stat .num { font-size:11vw; font-weight:900; color:#19E6FF; display:block; line-height:1.1; text-shadow:0 0 20px rgba(25,230,255,.4); }
+  .newmax { font-size:4vw; font-weight:800; color:#FFC23D; margin-top:2vw; letter-spacing:3px; }
+  .btns { display:flex; gap:4vw; margin-top:9vw; }
+  .btn { font-size:4.4vw; font-weight:800; padding:3.4vw 7vw; border-radius:999px; border:none; }
+  .btnP { color:#070711; background:linear-gradient(90deg,#19E6FF,#7ef); box-shadow:0 0 24px rgba(25,230,255,.4); }
+  .btnS { color:#eaf6ff; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); }
+  .hide { display:none !important; }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="flash"></div>
+
+  <div class="hud">
+    <div id="rpm" class="hide"><div id="rpmVal">0</div><div id="rpmLbl">RPM</div></div>
+    <div id="combo"></div>
+    <div id="banner"></div>
+    <div id="best" class="hide">最高 <b id="bestVal">0</b> RPM</div>
+  </div>
+
+  <div id="start" class="ov">
+    <div class="title">Koma</div>
+    <div class="kana">独 楽</div>
+    <div class="sub">回転の唸りを、指で繋ぎ止めろ。</div>
+    <div class="how">独楽を<b>はじいて</b>回す<br>光点が下の的を通る瞬間に<b>タップ</b><br>ジャストで再加速 → 回り続けろ</div>
+    <div class="pulse" id="startBtn">画面をはじいて回す</div>
+  </div>
+
+  <div id="over" class="ov hide">
+    <div class="goTitle">独楽、倒れる</div>
+    <div class="stat">最高回転数<span class="num" id="ovRpm">0</span></div>
+    <div class="newmax hide" id="ovNew">★ NEW MAX ★</div>
+    <div class="stat" style="font-size:3.8vw;margin-top:4vw;">連続ジャスト <b id="ovCombo" style="color:#FFC23D">0</b></div>
+    <div class="btns">
+      <button class="btn btnP" id="again">もう一度</button>
+      <button class="btn btnS" id="share">称号をシェア</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1, cx=0, cy=0, R=120;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx = W*0.5; cy = H*0.52; R = Math.min(W,H)*0.20;
+  ctx.fillStyle='#070711'; ctx.fillRect(0,0,W,H);
+}
+window.addEventListener('resize',resize);
+resize();
+
+// ---------- audio ----------
+let AC=null, droneA=null, droneB=null, droneGain=null, sub=null, subGain=null, h2=null,h3=null,h2g=null,h3g=null;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    droneGain = AC.createGain(); droneGain.gain.value=0; droneGain.connect(AC.destination);
+    droneA = AC.createOscillator(); droneA.type='sine'; droneA.frequency.value=46;
+    droneB = AC.createOscillator(); droneB.type='sine'; droneB.frequency.value=46; droneB.detune.value=7;
+    droneA.connect(droneGain); droneB.connect(droneGain);
+    // missing-fundamental harmonics so small speakers feel low
+    h2g=AC.createGain(); h2g.gain.value=0; h2g.connect(AC.destination);
+    h2=AC.createOscillator(); h2.type='sine'; h2.frequency.value=92; h2.connect(h2g);
+    h3g=AC.createGain(); h3g.gain.value=0; h3g.connect(AC.destination);
+    h3=AC.createOscillator(); h3.type='triangle'; h3.frequency.value=138; h3.connect(h3g);
+    subGain=AC.createGain(); subGain.gain.value=0; subGain.connect(AC.destination);
+    sub=AC.createOscillator(); sub.type='sine'; sub.frequency.value=34; sub.connect(subGain);
+    [droneA,droneB,h2,h3,sub].forEach(o=>o.start());
+  }catch(e){ AC=null; }
+}
+function blip(freq,dur,type,vol){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'triangle'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0,AC.currentTime);
+  g.gain.linearRampToValueAtTime(vol||0.25,AC.currentTime+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+(dur||0.18));
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+(dur||0.18)+0.02);
+}
+function failSweep(){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(420,AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(70,AC.currentTime+0.32);
+  g.gain.setValueAtTime(0.22,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+0.34);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+0.36);
+}
+function buzz(ms){ if(navigator.vibrate) try{navigator.vibrate(ms);}catch(e){} }
+
+// ---------- game state ----------
+let state='idle'; // idle | spinning | over
+let omega=0;            // rad/s angular velocity of body
+let rot=0;              // body rotation render angle
+let phi=0;             // precession orbit phase
+let combo=0, maxCombo=0;
+let maxRpm=0, bestEver=+(localStorage.getItem('koma_best')||0);
+let limitGlow=0;        // limit-zone bloom 0..1
+let lastT=performance.now();
+
+const FRICTION=0.996;       // per-frame at 60fps
+const DEAD=4.0;             // omega below -> falls
+const WIN_GOOD=0.55, WIN_PERFECT=0.24;
+const TARGET=Math.PI/2;     // bottom of elliptical orbit (sin max)
+
+const rpmBox=document.getElementById('rpm'), rpmVal=document.getElementById('rpmVal');
+const comboEl=document.getElementById('combo'), bannerEl=document.getElementById('banner');
+const bestBox=document.getElementById('best'), bestVal=document.getElementById('bestVal');
+const startOv=document.getElementById('start'), overOv=document.getElementById('over');
+const flash=document.getElementById('flash');
+
+bestVal.textContent=bestEver;
+
+function normOmega(){ return Math.min(omega/80,1); }
+function curRpm(){ return Math.round(omega*60/(2*Math.PI)); }
+
+function startSpin(v){
+  initAudio(); if(AC&&AC.state==='suspended')AC.resume();
+  omega = Math.max(18, Math.min(72, v));
+  rot=0; phi=0; combo=0; maxRpm=0; limitGlow=0;
+  state='spinning';
+  startOv.classList.add('hide'); overOv.classList.add('hide'); overOv.classList.remove('show');
+  rpmBox.classList.remove('hide'); bestBox.classList.remove('hide');
+}
+
+let bannerTO=null;
+function showBanner(t,col){
+  bannerEl.textContent=t; bannerEl.style.color=col||'#FF2D9B';
+  bannerEl.style.opacity='1'; bannerEl.style.transition='none';
+  requestAnimationFrame(()=>{ bannerEl.style.transition='opacity .5s ease .25s'; bannerEl.style.opacity='0'; });
+}
+function doFlash(a){ flash.style.transition='none'; flash.style.opacity=a; requestAnimationFrame(()=>{ flash.style.transition='opacity .25s'; flash.style.opacity='0'; }); }
+
+function tap(){
+  if(state!=='spinning') return;
+  // angular distance of orbit phase to bottom target
+  let d=Math.abs(((phi-TARGET+Math.PI)%(2*Math.PI))-Math.PI);
+  if(d<WIN_PERFECT){
+    omega += omega*0.16 + 6.5; combo++; comboBump();
+    blip(660,0.10,'triangle',0.22); blip(990,0.08,'sine',0.12);
+    doFlash(0.18); buzz(14);
+  } else if(d<WIN_GOOD){
+    omega += omega*0.07 + 2.5; combo++; comboBump();
+    blip(440,0.10,'triangle',0.18); buzz(9);
+  } else {
+    combo=0; comboEl.style.opacity='0'; omega -= 2.0;
+    blip(150,0.14,'sawtooth',0.16); buzz([6,30,6]);
+  }
+  if(combo>maxCombo) maxCombo=combo;
+}
+function comboBump(){
+  if(combo>=2){ comboEl.textContent='× '+combo; comboEl.style.opacity='1'; }
+  rpmVal.style.transform='scale(1.16)';
+  setTimeout(()=>rpmVal.style.transform='scale(1)',90);
+}
+
+function gameOver(){
+  state='over';
+  rpmBox.classList.add('hide');
+  comboEl.style.opacity='0';
+  failSweep(); buzz([20,40,20]);
+  const newMax = maxRpm>bestEver;
+  if(newMax){ bestEver=maxRpm; localStorage.setItem('koma_best',bestEver); bestVal.textContent=bestEver; }
+  document.getElementById('ovRpm').textContent=maxRpm;
+  document.getElementById('ovCombo').textContent=maxCombo;
+  document.getElementById('ovNew').classList.toggle('hide',!newMax);
+  overOv.classList.remove('hide');
+  requestAnimationFrame(()=>overOv.classList.add('show'));
+}
+
+// ---------- render ----------
+function frame(now){
+  const dt=Math.min((now-lastT)/1000,0.05); lastT=now;
+
+  // motion-blur backdrop
+  ctx.fillStyle='rgba(7,7,17,0.22)'; ctx.fillRect(0,0,W,H);
+  // center radial glow
+  const gg=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*0.6);
+  gg.addColorStop(0,'rgba(25,230,255,'+(0.05+limitGlow*0.10)+')');
+  gg.addColorStop(1,'rgba(7,7,17,0)');
+  ctx.fillStyle=gg; ctx.fillRect(0,0,W,H);
+
+  if(state==='spinning'){
+    omega *= Math.pow(FRICTION, dt*60);
+    rot += omega*dt;
+    const precSpeed = 2.2 + normOmega()*7.2;
+    phi += precSpeed*dt;
+    const r=curRpm(); if(r>maxRpm)maxRpm=r;
+    rpmVal.textContent=r;
+    // limit zone bloom
+    const tgt = normOmega()>0.72 ? 1 : 0;
+    limitGlow += (tgt-limitGlow)*Math.min(dt*5,1);
+    // drone audio mapping
+    if(AC){
+      const f=40+normOmega()*32;
+      droneA.frequency.value=f; droneB.frequency.value=f;
+      h2.frequency.value=f*2; h3.frequency.value=f*3;
+      const vol=0.05+normOmega()*0.11;
+      droneGain.gain.setTargetAtTime(vol,AC.currentTime,0.05);
+      h2g.gain.setTargetAtTime(vol*0.5,AC.currentTime,0.05);
+      h3g.gain.setTargetAtTime(vol*0.28,AC.currentTime,0.05);
+      subGain.gain.setTargetAtTime(limitGlow*0.16,AC.currentTime,0.08);
+    }
+    if(omega<DEAD){ if(AC){droneGain.gain.setTargetAtTime(0,AC.currentTime,0.1);h2g.gain.setTargetAtTime(0,AC.currentTime,0.1);h3g.gain.setTargetAtTime(0,AC.currentTime,0.1);subGain.gain.setTargetAtTime(0,AC.currentTime,0.1);} gameOver(); }
+  }
+
+  // precession wobble offset for the body
+  const wob = R*0.42*(1-Math.min(omega/60,1)*0); // visual wobble amplitude
+  const ampX = R*0.30, ampY=R*0.12;
+  const ox = ampX*Math.cos(phi), oy = ampY*Math.sin(phi);
+  const tipX=cx, tipY=cy+R*1.15;       // pivot stays put
+  const bodyX=tipX - ox, bodyY=(cy)- oy*0.0; // body sways
+
+  drawTop(bodyX, cy - Math.abs(ampY)*0.0, rot, ox, oy, tipX, tipY);
+  drawOrbit(tipX, tipY);
+
+  requestAnimationFrame(frame);
+}
+
+function drawTop(bx,by,ang,ox,oy,tipX,tipY){
+  // spindle / axis from body to tip (with sway)
+  ctx.save();
+  ctx.strokeStyle='rgba(200,235,255,'+(0.4+limitGlow*0.4)+')';
+  ctx.lineWidth=Math.max(2,R*0.045); ctx.lineCap='round';
+  ctx.shadowColor='#19E6FF'; ctx.shadowBlur=12+limitGlow*22;
+  ctx.beginPath(); ctx.moveTo(bx-ox*0.15, by-R*0.95-oy*0.3); ctx.lineTo(tipX, tipY); ctx.stroke();
+  ctx.restore();
+
+  // body: oblique ellipse with rotating neon sectors
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.scale(1, 0.55);                  // perspective squash
+  const N=14;
+  const lim = limitGlow;
+  ctx.shadowBlur=16+lim*30;
+  for(let i=0;i<N;i++){
+    const a0=ang + i/N*Math.PI*2, a1=ang+(i+1)/N*Math.PI*2;
+    const hue=(i/N*360 + ang*40)%360;
+    const col = lim>0.4 && i%2===0 ? '#FF2D9B' : 'hsl('+hue+',90%,'+(58+lim*8)+'%)';
+    ctx.fillStyle=col; ctx.shadowColor=col;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.arc(0,0,R,a0,a1); ctx.closePath(); ctx.fill();
+  }
+  // inner dark cap
+  ctx.shadowBlur=0; ctx.fillStyle='#0b0b1a';
+  ctx.beginPath(); ctx.arc(0,0,R*0.34,0,Math.PI*2); ctx.fill();
+  // glossy rim
+  ctx.strokeStyle='rgba(255,255,255,'+(0.5+lim*0.4)+')'; ctx.lineWidth=R*0.05;
+  ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // top knob glint
+  ctx.save();
+  ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=18;
+  ctx.beginPath(); ctx.arc(bx-ox*0.15, by-R*0.95-oy*0.3, R*0.07, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // contact shadow at pivot
+  ctx.save();
+  const sg=ctx.createRadialGradient(tipX,tipY,0,tipX,tipY,R*0.7);
+  sg.addColorStop(0,'rgba(0,0,0,0.55)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(tipX,tipY,R*0.7,R*0.2,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawOrbit(tipX,tipY){
+  if(state!=='spinning' && state!=='over') return;
+  const orx=R*1.55, ory=R*0.62;
+  const oy0 = tipY - R*1.0;            // orbit center sits around the body mid
+  // faint orbit guide
+  ctx.save();
+  ctx.strokeStyle='rgba(120,140,180,0.18)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.ellipse(cx,oy0,orx,ory,0,0,Math.PI*2); ctx.stroke();
+  // target zone at bottom
+  const txx=cx+orx*Math.cos(TARGET), tyy=oy0+ory*Math.sin(TARGET);
+  // proximity
+  let d=Math.abs(((phi-TARGET+Math.PI)%(2*Math.PI))-Math.PI);
+  const close = d<WIN_GOOD;
+  ctx.fillStyle = close? 'rgba(255,45,155,0.9)':'rgba(255,194,61,0.85)';
+  ctx.shadowColor = close? '#FF2D9B':'#FFC23D'; ctx.shadowBlur= close? 26:14;
+  ctx.beginPath(); ctx.arc(txx,tyy, close? R*0.20:R*0.15, 0, Math.PI*2); ctx.fill();
+  // target ring
+  ctx.shadowBlur=0; ctx.strokeStyle=close?'rgba(255,45,155,0.7)':'rgba(255,194,61,0.5)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(txx,tyy,R*0.26,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // orbiting light point
+  const px=cx+orx*Math.cos(phi), py=oy0+ory*Math.sin(phi);
+  ctx.save();
+  ctx.fillStyle='#19E6FF'; ctx.shadowColor='#19E6FF'; ctx.shadowBlur=24;
+  ctx.beginPath(); ctx.arc(px,py,R*0.13,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.arc(px,py,R*0.06,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+requestAnimationFrame(frame);
+
+// ---------- input ----------
+let pdown=false, p0=null, samples=[];
+function getXY(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY,t:performance.now()}; }
+function onDown(e){
+  e.preventDefault();
+  if(state==='over') return;          // buttons handle restart
+  if(state==='idle'){ pdown=true; p0=getXY(e); samples=[p0]; }
+  else if(state==='spinning'){ tap(); }
+}
+function onMove(e){ if(!pdown||state!=='idle')return; e.preventDefault(); const s=getXY(e); samples.push(s); if(samples.length>6)samples.shift(); }
+function onUp(e){
+  if(!pdown||state!=='idle')return; e.preventDefault(); pdown=false;
+  // flick speed from last samples
+  let v=0;
+  if(samples.length>=2){
+    const a=samples[0], b=samples[samples.length-1];
+    const dist=Math.hypot(b.x-a.x,b.y-a.y); const dtm=Math.max((b.t-a.t)/1000,0.001);
+    v=dist/dtm; // px/s
+  }
+  // map px/s -> omega; min default so a tap also starts it
+  const om = v>40 ? 24 + Math.min(v/55,48) : 30;
+  startSpin(om);
+}
+const wrap=document.getElementById('wrap');
+wrap.addEventListener('touchstart',onDown,{passive:false});
+wrap.addEventListener('touchmove',onMove,{passive:false});
+wrap.addEventListener('touchend',onUp,{passive:false});
+wrap.addEventListener('mousedown',onDown);
+wrap.addEventListener('mousemove',onMove);
+wrap.addEventListener('mouseup',onUp);
+
+document.getElementById('again').addEventListener('click',(e)=>{e.stopPropagation(); startSpin(34);});
+document.getElementById('share').addEventListener('click',(e)=>{e.stopPropagation(); shareCard();});
+
+// ---------- share card 9:16 ----------
+function shareCard(){
+  const w=1080,h=1920, o=document.createElement('canvas'); o.width=w;o.height=h;
+  const g=o.getContext('2d');
+  g.fillStyle='#070711'; g.fillRect(0,0,w,h);
+  const rg=g.createRadialGradient(w/2,h*0.42,0,w/2,h*0.42,h*0.6);
+  rg.addColorStop(0,'rgba(25,230,255,0.12)'); rg.addColorStop(1,'rgba(7,7,17,0)');
+  g.fillStyle=rg; g.fillRect(0,0,w,h);
+  // stylized top
+  g.save(); g.translate(w/2,h*0.40); g.scale(1,0.55);
+  const N=14;
+  for(let i=0;i<N;i++){ const a0=i/N*Math.PI*2,a1=(i+1)/N*Math.PI*2; const hue=(i/N*360)%360;
+    g.fillStyle='hsl('+hue+',90%,60%)'; g.shadowColor=g.fillStyle; g.shadowBlur=40;
+    g.beginPath(); g.moveTo(0,0); g.arc(0,0,300,a0,a1); g.closePath(); g.fill(); }
+  g.shadowBlur=0; g.fillStyle='#0b0b1a'; g.beginPath(); g.arc(0,0,100,0,Math.PI*2); g.fill();
+  g.strokeStyle='rgba(255,255,255,0.7)'; g.lineWidth=16; g.beginPath(); g.arc(0,0,300,0,Math.PI*2); g.stroke();
+  g.restore();
+  // spindle
+  g.strokeStyle='rgba(200,235,255,0.8)'; g.lineWidth=14; g.lineCap='round';
+  g.beginPath(); g.moveTo(w/2,h*0.40-290); g.lineTo(w/2,h*0.40+360); g.stroke();
+  // text
+  g.textAlign='center';
+  g.fillStyle='#5e6a86'; g.font='700 40px -apple-system,sans-serif';
+  g.fillText('M A X   S P I N',w/2,h*0.60);
+  const grad=g.createLinearGradient(w*0.2,0,w*0.8,0); grad.addColorStop(0,'#19E6FF'); grad.addColorStop(1,'#FF2D9B');
+  g.fillStyle=grad; g.font='900 260px -apple-system,sans-serif';
+  g.fillText(maxRpm,w/2,h*0.72);
+  g.fillStyle='#FFC23D'; g.font='800 52px -apple-system,sans-serif';
+  g.fillText('連続ジャスト '+maxCombo,w/2,h*0.78);
+  g.fillStyle='#eaf6ff'; g.font='900 90px -apple-system,sans-serif';
+  g.fillText('Koma 独楽',w/2,h*0.90);
+  g.fillStyle='#46506b'; g.font='600 36px -apple-system,sans-serif';
+  g.fillText('t-aka-h.github.io/idea-radar/koma',w/2,h*0.94);
+
+  o.toBlob(async (blob)=>{
+    const file=new File([blob],'koma.png',{type:'image/png'});
+    const txt='独楽を最高 '+maxRpm+' RPM まで回した🌀 #Koma独楽';
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:txt}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='koma.png'; a.click();
+  },'image/png');
+}
+})();
+</script>
+</body>
+</html>
