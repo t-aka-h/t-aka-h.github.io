@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05030d">
+<title>UCHIWA（団扇）— 推しと目を合わせろ</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;background:#05030d;overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;}
+  #stage{position:fixed;inset:0;display:block;}
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;z-index:10;}
+  .hidden{display:none!important;}
+  .neon-title{font-weight:900;letter-spacing:.18em;font-size:clamp(38px,13vw,72px);
+    color:#fff;text-shadow:0 0 14px #ff2d87,0 0 34px #ff2d87,0 0 60px #ff2d87aa;}
+  .kanji{font-size:clamp(15px,5vw,22px);letter-spacing:.5em;color:#00e5ff;
+    text-shadow:0 0 10px #00e5ff;margin-top:6px;}
+  .tag{font-size:13px;color:#b9c0d8;line-height:1.85;margin:20px 0 6px;max-width:340px;}
+  .hi{color:#ffd24a;font-weight:700;}
+  .btn{margin-top:26px;background:linear-gradient(180deg,#ff4d97,#d61f6f);
+    color:#fff;font-weight:900;font-size:20px;letter-spacing:.12em;border:none;border-radius:40px;
+    padding:17px 46px;box-shadow:0 0 24px #ff2d8788,0 6px 18px #0008;cursor:pointer;}
+  .btn:active{transform:scale(.96);}
+  .small{font-size:11px;color:#6b7187;margin-top:18px;line-height:1.7;max-width:330px;}
+  /* HUD */
+  #hud{position:fixed;top:0;left:0;right:0;z-index:6;padding:12px 16px 0;pointer-events:none;}
+  #gaugeWrap{height:9px;background:#ffffff14;border-radius:6px;overflow:hidden;
+    box-shadow:inset 0 0 0 1px #ffffff1a;}
+  #gauge{height:100%;width:0%;background:linear-gradient(90deg,#00e5ff,#ff2d87);
+    box-shadow:0 0 12px #ff2d87;transition:width .12s linear;}
+  #hudRow{display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px;}
+  #timeTxt{font-size:13px;font-weight:700;color:#9aa6c8;letter-spacing:.05em;}
+  #recoTxt{font-size:12px;font-weight:800;color:#ffd24a;letter-spacing:.1em;text-shadow:0 0 8px #ffd24a66;}
+  /* uchiwa button */
+  #uchiwa{position:fixed;left:50%;bottom:max(26px,env(safe-area-inset-bottom));transform:translateX(-50%);
+    z-index:7;width:128px;height:150px;cursor:pointer;}
+  #uchiwa.lift{animation:lift .18s ease;}
+  @keyframes lift{0%{transform:translateX(-50%) translateY(0)}40%{transform:translateX(-50%) translateY(-22px) scale(1.05)}100%{transform:translateX(-50%) translateY(0)}}
+  #judge{position:fixed;left:0;right:0;top:46%;text-align:center;z-index:8;pointer-events:none;
+    font-weight:900;font-size:clamp(34px,11vw,60px);opacity:0;letter-spacing:.06em;}
+  #combo{position:fixed;left:0;right:0;top:34%;text-align:center;z-index:8;pointer-events:none;
+    font-weight:900;font-size:22px;opacity:0;color:#ffd24a;text-shadow:0 0 12px #ffd24a99;letter-spacing:.08em;}
+  /* result card */
+  #cardWrap{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;background:#05030dee;padding:18px;}
+  #card{width:min(86vw,360px);aspect-ratio:9/16;border-radius:18px;display:block;
+    box-shadow:0 0 40px #ff2d8744,0 10px 40px #000a;}
+  .cardBtns{display:flex;gap:12px;margin-top:18px;}
+  .btn2{background:#1a2036;color:#fff;border:1px solid #36406040;font-weight:800;font-size:15px;
+    border-radius:30px;padding:13px 24px;cursor:pointer;}
+  .btn2.primary{background:linear-gradient(180deg,#ff4d97,#d61f6f);border:none;box-shadow:0 0 18px #ff2d8788;}
+  .btn2:active{transform:scale(.96);}
+  .credit{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9px;color:#3a3f55;z-index:5;}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="gaugeWrap"><div id="gauge"></div></div>
+  <div id="hudRow"><div id="timeTxt">00.0</div><div id="recoTxt"></div></div>
+</div>
+<div id="combo"></div>
+<div id="judge"></div>
+
+<!-- uchiwa button -->
+<canvas id="uchiwa" class="hidden" width="256" height="300"></canvas>
+
+<!-- title -->
+<div id="titleScreen" class="overlay">
+  <div class="neon-title">UCHIWA</div>
+  <div class="kanji">団 扇</div>
+  <div class="tag">客席から、推しに「気づいてほしい」。<br>推しがこっちを向く<span class="hi">一瞬</span>に、うちわを<span class="hi">ジャスト</span>で掲げて<span class="hi">目を合わせろ。</span></div>
+  <button class="btn" id="startBtn">▶ ライブ開始</button>
+  <div class="small">推しが正対する瞬間、収束するリングがうちわに重なる。そこでタップ。<br>早すぎ・遅すぎは隣のオタクに目線を奪われる。</div>
+</div>
+
+<!-- result -->
+<div id="cardWrap" class="hidden">
+  <canvas id="card" width="1080" height="1920"></canvas>
+  <div class="cardBtns">
+    <button class="btn2 primary" id="shareBtn">シェア / 保存</button>
+    <button class="btn2" id="retryBtn">もう一度</button>
+  </div>
+</div>
+
+<div class="credit">Idea Radar 優勝作 · 完全オンデバイス · t-aka-h.github.io/idea-radar</div>
+
+<script>
+(()=>{
+"use strict";
+const DPR = Math.min(window.devicePixelRatio||1, 2.5);
+const stage = document.getElementById('stage');
+const ctx = stage.getContext('2d');
+let W=0,H=0;
+function resize(){
+  W = window.innerWidth; H = window.innerHeight;
+  stage.width = W*DPR; stage.height = H*DPR;
+  stage.style.width=W+'px'; stage.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+// ---------- WebAudio (all synthesized, no files) ----------
+let AC=null, master=null;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  }catch(e){ AC=null; }
+}
+function now(){ return AC?AC.currentTime:0; }
+// "ドン" missing-fundamental hit
+function don(strength){
+  if(!AC) return;
+  const t=now(); const g=AC.createGain();
+  g.connect(master);
+  const base = strength>=2 ? 48 : 55;
+  const partials = strength>=2 ? [base,base*2,base*3,base*4,base*5] : [base,base*2,base*3,base*4];
+  partials.forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const og=AC.createGain(); const amp=(i===0?0.0:0.5/(i+1));
+    og.gain.value=amp; o.connect(og); og.connect(g); o.start(t); o.stop(t+0.5);
+  });
+  // attack noise burst
+  const nb=AC.createBufferSource(); const buf=AC.createBuffer(1,AC.sampleRate*0.02,AC.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  nb.buffer=buf; const ng=AC.createGain(); ng.gain.value=0.25; nb.connect(ng); ng.connect(g); nb.start(t);
+  const peak = strength>=2?1.1:0.85;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+(strength>=2?0.55:0.4));
+}
+// whiff / gaze stolen
+function whiff(){
+  if(!AC) return;
+  const t=now(); const o=AC.createOscillator(); o.type='sawtooth';
+  const g=AC.createGain(); g.connect(master); o.connect(g);
+  o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(95,t+0.22);
+  g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
+  o.start(t); o.stop(t+0.28);
+}
+// soft "facing" telegraph tick
+function tick(){
+  if(!AC) return;
+  const t=now(); const o=AC.createOscillator(); o.type='triangle';
+  const g=AC.createGain(); g.connect(master); o.connect(g);
+  o.frequency.setValueAtTime(880,t); g.gain.setValueAtTime(0.06,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.08); o.start(t); o.stop(t+0.09);
+}
+// BGM kick scheduler
+let bgmTimer=null, beat=0;
+function startBGM(){
+  if(!AC) return; stopBGM(); beat=0;
+  const step=()=>{
+    const tier = comboTier();
+    const div = tier>=3?2 : tier>=1?3 : 4; // 16th vs 8th vs quarter density
+    if(beat % div === 0){
+      const t=now(); const o=AC.createOscillator(); const g=AC.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(48,t+0.09);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.18); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.2);
+    }
+    beat++;
+    bgmTimer=setTimeout(step,150); // ~100bpm 16th-ish
+  };
+  step();
+}
+function stopBGM(){ if(bgmTimer){clearTimeout(bgmTimer); bgmTimer=null;} }
+function vib(p){ try{ if(navigator.vibrate) navigator.vibrate(p);}catch(e){} }
+
+// ---------- Game state ----------
+const G = { state:'title', t:0, last:0, sessionLen:75, timeLeft:75,
+  hits:0, perfects:0, goods:0, misses:0, combo:0, maxCombo:0, score:0,
+  reco:0, // 認知ゲージ 0..1
+  lockon:0, // remaining lockon seconds
+  idol:{x:0.5, dir:1, color:0}, // color toggles cyan/magenta
+  ev:null, // current facing event
+  nextEvAt:0, particles:[], fans:[], waves:[], shakes:0 };
+
+function comboTier(){ return G.combo>=12?3 : G.combo>=6?2 : G.combo>=3?1 : 0; }
+
+function reset(){
+  Object.assign(G,{ state:'play', t:0, sessionLen:75, timeLeft:75,
+    hits:0,perfects:0,goods:0,misses:0,combo:0,maxCombo:0,score:0,reco:0,lockon:0,
+    ev:null, nextEvAt:0.8, particles:[], fans:[], waves:[], shakes:0 });
+  G.idol={x:0.5,dir:1,color:0};
+  // build crowd of fans (in front, lower portion)
+  G.fans=[];
+  for(let i=0;i<26;i++){
+    G.fans.push({ x:Math.random(), y:0.74+Math.random()*0.2, hue:Math.random()<0.5?'#00e5ff':'#ff2d87',
+      raise:0, // 0..1 uchiwa raise
+      tw:Math.random()*6.28 });
+  }
+}
+
+// schedule a facing event
+function scheduleEvent(){
+  const tier=comboTier();
+  // gap shrinks slightly over time & with combo, faster during lockon
+  let gap = 1.55 - Math.min(G.t/G.sessionLen,1)*0.4 - tier*0.05;
+  if(G.lockon>0) gap = 0.85;
+  gap += (Math.random()*0.3-0.1);
+  gap = Math.max(0.6, gap);
+  // window timing
+  const telegraph = 0.95; // ring shrink duration
+  G.nextEvAt = G.t + gap;
+  G._pending = { telegraph };
+}
+
+function spawnEvent(){
+  const tel = G._pending? G._pending.telegraph : 0.95;
+  // idol position: during lockon faces center(player). else random horiz but turns to you
+  G.idol.color ^= 1;
+  G.ev = { start:G.t, peak:G.t+tel, telegraph:tel, done:false, judged:false,
+    ringR:1, faceX:G.idol.x };
+  tick();
+}
+
+// judge a tap relative to current event
+function tap(){
+  if(G.state!=='play') return;
+  if(!G.ev || G.ev.judged){ return; }
+  const dt = (G.t - G.ev.peak)*1000; // ms; negative=early
+  const ad = Math.abs(dt);
+  G.ev.judged=true;
+  liftUchiwa();
+  if(ad<=55){ // PERFECT
+    G.perfects++; G.hits++; G.combo++; G.maxCombo=Math.max(G.maxCombo,G.combo);
+    const tier=comboTier();
+    G.score += 100*(1+tier) ;
+    G.reco = Math.min(1, G.reco + 0.16);
+    showJudge('PERFECT', G.idol.color?'#ff2d87':'#00e5ff');
+    don(tier>=2?2:1); vib(tier>=2?[0,18,28,22]:[0,22]);
+    eyeContactBurst(2);
+    if(G.reco>=1 && G.lockon<=0){ triggerLockon(); }
+  } else if(ad<=130){ // GOOD
+    G.goods++; G.hits++; G.combo++; G.maxCombo=Math.max(G.maxCombo,G.combo);
+    G.score += 50; G.reco=Math.min(1,G.reco+0.08);
+    showJudge('GOOD','#ffd24a'); don(1); vib([0,16]); eyeContactBurst(1);
+  } else { // tapped but off (rare since window short) -> treat as miss
+    failEvent(true);
+  }
+  if(G.combo>=2) showCombo(G.combo);
+}
+
+function failEvent(stolen){
+  G.misses++; G.combo=0; G.reco=Math.max(0,G.reco-0.12);
+  showJudge('…逸らされた','#7a86b8'); whiff(); vib([0,40]);
+  if(stolen) stealGaze();
+}
+
+function triggerLockon(){
+  G.lockon = 6.0; G.reco=1;
+  showCombo('🔥 ロックオン！'); don(2); vib([0,30,40,40]);
+}
+
+// visual helpers
+const judgeEl=document.getElementById('judge');
+const comboEl=document.getElementById('combo');
+let judgeTimer=null, comboTimer=null;
+function showJudge(txt,color){
+  judgeEl.textContent=txt; judgeEl.style.color=color;
+  judgeEl.style.textShadow='0 0 16px '+color+',0 0 34px '+color+'88';
+  judgeEl.style.transition='none'; judgeEl.style.opacity='1'; judgeEl.style.transform='scale(1.18)';
+  requestAnimationFrame(()=>{ judgeEl.style.transition='all .5s ease'; judgeEl.style.opacity='0'; judgeEl.style.transform='scale(1)'; });
+}
+function showCombo(v){
+  comboEl.textContent = (typeof v==='number')? (v+' COMBO') : v;
+  comboEl.style.transition='none'; comboEl.style.opacity='1'; comboEl.style.transform='translateY(0) scale(1.1)';
+  requestAnimationFrame(()=>{ comboEl.style.transition='all .55s ease'; comboEl.style.opacity='0'; comboEl.style.transform='translateY(-14px) scale(1)'; });
+}
+const uchiwaEl=document.getElementById('uchiwa');
+function liftUchiwa(){ uchiwaEl.classList.remove('lift'); void uchiwaEl.offsetWidth; uchiwaEl.classList.add('lift'); }
+
+function eyeContactBurst(power){
+  // radiating neon wave from idol toward crowd
+  const ix=G.idol.x*W, iy=H*0.34;
+  G.waves.push({x:ix,y:iy,r:10,max:Math.max(W,H)*1.1,life:1,power});
+  const col = G.idol.color?'#ff2d87':'#00e5ff';
+  const n = power>=2?120:70;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, sp=(2+Math.random()*5)*(power>=2?1.5:1);
+    G.particles.push({x:ix,y:iy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp+1,life:1,col,size:1.5+Math.random()*2.5});
+  }
+  G.shakes=Math.min(1,(power>=2?0.9:0.5));
+}
+function stealGaze(){
+  // nearby fans raise their white uchiwa to steal the gaze
+  let raised=0;
+  for(const f of G.fans){ if(raised>=6) break; if(Math.random()<0.5){ f.raise=1; f.steal=1; raised++; } }
+}
+
+// ---------- main loop ----------
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(!G.last) G.last=ts;
+  let dt=(ts-G.last)/1000; G.last=ts; if(dt>0.05)dt=0.05;
+  if(G.state==='play') tickGame(dt);
+  updateParticles(dt);
+  draw();
+  drawHUD();
+}
+
+function tickGame(dt){
+  {
+    G.t+=dt; G.timeLeft=Math.max(0,G.sessionLen-G.t);
+    if(G.lockon>0) G.lockon=Math.max(0,G.lockon-dt);
+    // idol wander
+    if(G.lockon>0){ G.idol.x += (0.5-G.idol.x)*Math.min(1,dt*3); }
+    else { G.idol.x += G.idol.dir*dt*0.12; if(G.idol.x>0.82){G.idol.x=0.82;G.idol.dir=-1;} if(G.idol.x<0.18){G.idol.x=0.18;G.idol.dir=1;} }
+    // event lifecycle
+    if(!G.ev && G.t>=G.nextEvAt) spawnEvent();
+    if(G.ev){
+      const e=G.ev;
+      e.ringR = Math.max(0, 1-(G.t-e.start)/e.telegraph);
+      if(!e.judged && G.t > e.peak+0.13){ // window passed without tap
+        e.judged=true; failEvent(true);
+      }
+      if(G.t > e.peak+0.45){ G.ev=null; scheduleEvent(); }
+    }
+    // reco gauge slow decay
+    if(G.lockon<=0) G.reco=Math.max(0,G.reco-dt*0.03);
+    // fans relax
+    for(const f of G.fans){ if(f.raise>0){ f.raise=Math.max(0,f.raise-dt*2); if(f.raise<=0)f.steal=0; } }
+    if(G.timeLeft<=0){ endGame(); }
+  }
+}
+
+function updateParticles(dt){
+  for(const w of G.waves){ w.r += (w.max-w.r)*Math.min(1,dt*2.2); w.life-=dt*1.4; }
+  G.waves=G.waves.filter(w=>w.life>0);
+  for(const p of G.particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.vx*=0.98; p.life-=dt*1.3; }
+  G.particles=G.particles.filter(p=>p.life>0);
+  if(G.shakes>0) G.shakes=Math.max(0,G.shakes-dt*3);
+}
+
+function draw(){
+  ctx.save();
+  if(G.shakes>0){ const s=G.shakes*9; ctx.translate((Math.random()*2-1)*s,(Math.random()*2-1)*s); }
+  // bg radial
+  const bg=ctx.createRadialGradient(W*0.5,H*0.32,40,W*0.5,H*0.5,H*0.9);
+  bg.addColorStop(0,'#150a24'); bg.addColorStop(.5,'#0a0618'); bg.addColorStop(1,'#05030d');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // stage floor glow line
+  const fy=H*0.62;
+  const fl=ctx.createLinearGradient(0,fy-40,0,fy+10);
+  fl.addColorStop(0,'#00000000'); fl.addColorStop(1, G.idol.color?'#ff2d8733':'#00e5ff33');
+  ctx.fillStyle=fl; ctx.fillRect(0,fy-40,W,50);
+
+  if(G.state!=='title') drawStageBeams();
+  drawWaves();
+  if(G.state!=='title') drawIdol();
+  drawParticles();
+  drawCrowd();
+  ctx.restore();
+}
+
+function drawStageBeams(){
+  // two moving spotlight beams
+  const col = G.idol.color?'#ff2d87':'#00e5ff';
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<2;i++){
+    const sx = W*(0.3+0.4*i) + Math.sin(G.t*0.6+i*2)*W*0.12;
+    const g=ctx.createLinearGradient(sx,0,G.idol.x*W,H*0.34);
+    g.addColorStop(0, (i? '#00e5ff22':'#ff2d8722'));
+    g.addColorStop(1,'#00000000');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.moveTo(sx-14,0); ctx.lineTo(sx+14,0);
+    ctx.lineTo(G.idol.x*W+50,H*0.4); ctx.lineTo(G.idol.x*W-50,H*0.4); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+function drawWaves(){
+  ctx.globalCompositeOperation='lighter';
+  for(const w of G.waves){
+    const col = w.power>=2 ? '#ff7ab8' : '#7af0ff';
+    ctx.strokeStyle=col; ctx.globalAlpha=Math.max(0,w.life)*0.5; ctx.lineWidth=w.power>=2?5:3;
+    ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+}
+
+function drawIdol(){
+  const ix=G.idol.x*W, iy=H*0.34;
+  const facing = G.ev ? (1-G.ev.ringR) : 0; // 0 away..1 facing you at peak
+  const col = G.idol.color?'#ff2d87':'#00e5ff';
+  // aura
+  ctx.globalCompositeOperation='lighter';
+  const auraR = 70 + facing*40 + (G.lockon>0?20:0);
+  const ag=ctx.createRadialGradient(ix,iy,8,ix,iy,auraR);
+  ag.addColorStop(0, col); ag.addColorStop(.4, col+'66'); ag.addColorStop(1,'#00000000');
+  ctx.globalAlpha=0.55+facing*0.35; ctx.fillStyle=ag;
+  ctx.beginPath(); ctx.arc(ix,iy,auraR,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  // body silhouette
+  ctx.fillStyle='#0c0820';
+  ctx.beginPath();
+  // torso
+  ctx.ellipse(ix,iy+44,26,40,0,0,Math.PI*2); ctx.fill();
+  // head
+  ctx.beginPath(); ctx.arc(ix,iy-8,20,0,Math.PI*2); ctx.fill();
+  // body neon rim
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.globalAlpha=0.7+facing*0.3;
+  ctx.beginPath(); ctx.ellipse(ix,iy+44,26,40,0,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(ix,iy-8,20,0,Math.PI*2); ctx.stroke();
+  ctx.globalAlpha=1;
+  // eyes appear as it faces you
+  if(facing>0.45){
+    const e=(facing-0.45)/0.55;
+    ctx.fillStyle='#ffffff'; ctx.globalAlpha=Math.min(1,e*1.3);
+    ctx.beginPath(); ctx.arc(ix-7,iy-9,2.6,0,6.28); ctx.arc(ix+7,iy-9,2.6,0,6.28); ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  // shrinking timing ring (telegraph) — converges on idol at peak
+  if(G.ev && !G.ev.judged){
+    const r = 16 + G.ev.ringR*120;
+    ctx.strokeStyle = col; ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=0.85; ctx.lineWidth=3.5;
+    ctx.beginPath(); ctx.arc(ix,iy,r,0,Math.PI*2); ctx.stroke();
+    // perfect-core ring
+    ctx.globalAlpha=0.5; ctx.lineWidth=2; ctx.strokeStyle='#ffffff';
+    ctx.beginPath(); ctx.arc(ix,iy,16,0,Math.PI*2); ctx.stroke();
+    ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  }
+  // lockon label
+  if(G.lockon>0){
+    ctx.fillStyle='#ffd24a'; ctx.font='800 13px sans-serif'; ctx.textAlign='center';
+    ctx.globalAlpha=0.5+0.5*Math.abs(Math.sin(G.t*8));
+    ctx.fillText('🔒 LOCK ON', ix, iy-44); ctx.globalAlpha=1;
+  }
+}
+
+function drawParticles(){
+  ctx.globalCompositeOperation='lighter';
+  for(const p of G.particles){
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size*(0.5+p.life),0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+}
+
+function drawCrowd(){
+  // silhouette heads row + their uchiwa
+  const baseY=H*0.80;
+  ctx.save();
+  for(const f of G.fans){
+    const x=f.x*W; const y=baseY + (f.y-0.78)*H*0.5;
+    // head
+    ctx.fillStyle='#070512';
+    ctx.beginPath(); ctx.arc(x,y,9+ (1-f.y)*4,0,Math.PI*2); ctx.fill();
+    // uchiwa (raised)
+    if(f.raise>0.02){
+      const ry=y-18 - f.raise*26;
+      ctx.globalAlpha=f.raise;
+      ctx.fillStyle = f.steal? '#ffffff' : f.hue;
+      ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.ellipse(x,ry,7,9,0,0,Math.PI*2); ctx.fill();
+      ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
+    }
+  }
+  // front gradient to fade crowd into dark
+  const fg=ctx.createLinearGradient(0,H*0.72,0,H);
+  fg.addColorStop(0,'#05030d00'); fg.addColorStop(1,'#05030dcc');
+  ctx.fillStyle=fg; ctx.fillRect(0,H*0.72,W,H*0.28);
+  ctx.restore();
+}
+
+// ---------- HUD ----------
+const hud=document.getElementById('hud'), gauge=document.getElementById('gauge'),
+  timeTxt=document.getElementById('timeTxt'), recoTxt=document.getElementById('recoTxt');
+function drawHUD(){
+  if(G.state!=='play') return;
+  gauge.style.width=(G.reco*100)+'%';
+  timeTxt.textContent=G.timeLeft.toFixed(1);
+  const rk=rankFor(G.score,G.hits);
+  recoTxt.textContent = (G.combo>=3? (G.combo+' COMBO · ') : '') + rk;
+}
+
+// ---------- rank ----------
+function rankFor(score,hits){
+  if(score>=2600 && hits>=24) return '運命共同体';
+  if(score>=1500 && hits>=16) return 'ガチ恋枠';
+  if(score>=700 && hits>=8) return '常連';
+  if(score>=200) return '認知された';
+  return 'モブ';
+}
+
+// ---------- draw uchiwa button ----------
+function drawUchiwa(){
+  const u=uchiwaEl, c=u.getContext('2d'); c.clearRect(0,0,256,300);
+  // handle
+  c.fillStyle='#2a1c10'; c.fillRect(118,150,20,140);
+  // fan body
+  c.save(); c.translate(128,120);
+  const grd=c.createRadialGradient(0,0,8,0,0,110);
+  grd.addColorStop(0,'#ff7ab8'); grd.addColorStop(.6,'#ff2d87'); grd.addColorStop(1,'#c2186a');
+  c.fillStyle=grd;
+  c.beginPath(); c.arc(0,0,108,0,Math.PI*2); c.fill();
+  c.lineWidth=8; c.strokeStyle='#ffd24a'; c.stroke();
+  // heart
+  c.fillStyle='#fff'; c.font='900 92px sans-serif'; c.textAlign='center'; c.textBaseline='middle';
+  c.fillText('♥',0,6);
+  c.restore();
+}
+
+// ---------- result card ----------
+function drawCard(){
+  const cv=document.getElementById('card'), c=cv.getContext('2d');
+  const w=1080,h=1920;
+  const bg=c.createRadialGradient(w/2,h*0.34,60,w/2,h*0.5,h*0.95);
+  bg.addColorStop(0,'#1a0c2e'); bg.addColorStop(.5,'#0a0618'); bg.addColorStop(1,'#05030d');
+  c.fillStyle=bg; c.fillRect(0,0,w,h);
+  // neon frame
+  c.strokeStyle='#ff2d87'; c.lineWidth=10; c.shadowColor='#ff2d87'; c.shadowBlur=40;
+  c.strokeRect(40,40,w-80,h-80); c.shadowBlur=0;
+  c.textAlign='center';
+  // title
+  c.fillStyle='#00e5ff'; c.font='900 60px sans-serif'; c.shadowColor='#00e5ff'; c.shadowBlur=24;
+  c.fillText('UCHIWA  団扇', w/2, 200); c.shadowBlur=0;
+  // idol silhouette + aura
+  c.save(); c.translate(w/2,560);
+  const ag=c.createRadialGradient(0,0,20,0,0,260);
+  ag.addColorStop(0,'#ff2d87'); ag.addColorStop(.4,'#ff2d8755'); ag.addColorStop(1,'#00000000');
+  c.fillStyle=ag; c.beginPath(); c.arc(0,0,260,0,Math.PI*2); c.fill();
+  c.fillStyle='#0c0820';
+  c.beginPath(); c.ellipse(0,90,80,120,0,0,Math.PI*2); c.fill();
+  c.beginPath(); c.arc(0,-20,60,0,Math.PI*2); c.fill();
+  c.strokeStyle='#ff2d87'; c.lineWidth=4;
+  c.beginPath(); c.ellipse(0,90,80,120,0,0,Math.PI*2); c.stroke();
+  c.beginPath(); c.arc(0,-20,60,0,Math.PI*2); c.stroke();
+  c.fillStyle='#fff'; c.beginPath(); c.arc(-20,-22,7,0,6.28); c.arc(20,-22,7,0,6.28); c.fill();
+  c.restore();
+  // rank
+  const rk=rankFor(G.score,G.hits);
+  c.fillStyle='#ffd24a'; c.font='700 40px sans-serif'; c.fillText('認知度ランク', w/2, 980);
+  c.fillStyle='#fff'; c.font='900 130px sans-serif'; c.shadowColor='#ffd24a'; c.shadowBlur=30;
+  c.fillText(rk, w/2, 1120); c.shadowBlur=0;
+  // stats
+  c.fillStyle='#fff'; c.font='900 90px sans-serif';
+  c.fillText('目が合った '+G.hits+' 回', w/2, 1320);
+  c.fillStyle='#9aa6c8'; c.font='700 44px sans-serif';
+  c.fillText('PERFECT '+G.perfects+'  /  GOOD '+G.goods+'  /  最大 '+G.maxCombo+' コンボ', w/2, 1410);
+  c.fillStyle='#7aa2ff'; c.font='700 40px sans-serif';
+  c.fillText('SCORE  '+G.score, w/2, 1500);
+  // footer
+  c.fillStyle='#6b7187'; c.font='600 34px sans-serif';
+  c.fillText('UCHIWA — 推しと目を合わせろ', w/2, h-180);
+  c.fillStyle='#4f5468'; c.font='600 30px sans-serif';
+  c.fillText('t-aka-h.github.io/idea-radar', w/2, h-120);
+}
+
+function endGame(){
+  G.state='result'; stopBGM();
+  hud.classList.add('hidden'); uchiwaEl.classList.add('hidden');
+  drawCard();
+  document.getElementById('cardWrap').classList.remove('hidden');
+}
+
+// ---------- input ----------
+function onTap(e){
+  if(G.state==='play'){ e.preventDefault(); tap(); }
+}
+stage.addEventListener('pointerdown', onTap);
+uchiwaEl.addEventListener('pointerdown',(e)=>{ e.preventDefault(); if(G.state==='play') tap(); });
+
+// ---------- buttons ----------
+document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('retryBtn').addEventListener('click', ()=>{
+  document.getElementById('cardWrap').classList.add('hidden'); start();
+});
+document.getElementById('shareBtn').addEventListener('click', shareCard);
+
+function start(){
+  initAudio(); if(AC && AC.state==='suspended') AC.resume();
+  drawUchiwa();
+  document.getElementById('titleScreen').classList.add('hidden');
+  hud.classList.remove('hidden'); uchiwaEl.classList.remove('hidden');
+  reset(); scheduleEvent(); startBGM();
+}
+
+function shareCard(){
+  const cv=document.getElementById('card');
+  cv.toBlob(async(blob)=>{
+    const file=new File([blob],'uchiwa.png',{type:'image/png'});
+    const rk=rankFor(G.score,G.hits);
+    const text='推しと'+G.hits+'回目が合った！ 認知度ランク【'+rk+'】 #UCHIWA';
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text}); return; }catch(e){}
+    }
+    // fallback download
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='uchiwa.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },'image/png');
+}
+
+// optional deterministic test hook (no effect on normal play)
+if(location.search.indexOf('test=1')>=0){
+  window.__U = {
+    start, tap, endGame,
+    tick:(dt)=>tickGame(dt),
+    state:()=>({state:G.state,t:+G.t.toFixed(3),evPeak:G.ev?+G.ev.peak.toFixed(3):null,
+      hits:G.hits,perfects:G.perfects,goods:G.goods,misses:G.misses,combo:G.combo,
+      maxCombo:G.maxCombo,score:G.score,reco:+G.reco.toFixed(3),lockon:+G.lockon.toFixed(2)}),
+    cardVisible:()=>!document.getElementById('cardWrap').classList.contains('hidden')
+  };
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
