@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>兆 — Chō</title>
+<style>
+  :root{
+    --navy0:#05060d; --navy1:#0a0e1a; --gold:#f5c542;
+    --cyan:#22d3ee; --mag:#ff2d87; --ink:#e8edff; --sub:#8b93b5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:var(--navy0);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:var(--ink);}
+  #app{position:fixed;inset:0;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* HUD */
+  #hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;}
+  #top{margin-top:env(safe-area-inset-top);padding-top:18px;width:100%;text-align:center;}
+  #unitLabel{font-size:13px;letter-spacing:3px;color:var(--sub);font-weight:700;}
+  #value{font-size:13vw;font-weight:900;line-height:1.0;margin-top:2px;
+    text-shadow:0 0 18px rgba(245,197,66,.55),0 0 4px rgba(245,197,66,.9);
+    font-variant-numeric:tabular-nums;letter-spacing:-1px;}
+  #valSub{font-size:3.6vw;font-weight:800;color:var(--gold);margin-top:1px;opacity:.92;}
+  #sceneName{margin-top:8px;font-size:12px;letter-spacing:4px;color:var(--cyan);font-weight:800;
+    text-shadow:0 0 10px rgba(34,211,238,.6);}
+  #comboWrap{margin-top:12px;width:64%;max-width:320px;}
+  #comboTxt{font-size:12px;font-weight:800;letter-spacing:1px;color:var(--mag);text-align:center;
+    text-shadow:0 0 8px rgba(255,45,135,.6);min-height:15px;}
+  #comboBar{margin-top:5px;height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;}
+  #comboFill{height:100%;width:0%;border-radius:6px;
+    background:linear-gradient(90deg,#ff8a00,#ff2d87,#22d3ee);box-shadow:0 0 10px rgba(255,45,135,.7);transition:width .08s linear;}
+  #milestone{position:absolute;top:32%;width:100%;text-align:center;font-size:5vw;font-weight:900;
+    color:#fff;opacity:0;pointer-events:none;text-shadow:0 0 22px var(--cyan),0 0 8px var(--mag);}
+  #ticker{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 70px);width:100%;text-align:center;
+    font-size:11px;letter-spacing:1px;color:var(--sub);font-weight:600;padding:0 16px;}
+  #tapHint{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 96px);width:100%;text-align:center;
+    font-size:12px;letter-spacing:6px;color:rgba(255,255,255,.5);font-weight:800;animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}
+  /* bottom buttons */
+  #bottom{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);width:100%;
+    display:flex;justify-content:center;gap:10px;pointer-events:auto;}
+  .btn{pointer-events:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    color:var(--ink);font-size:13px;font-weight:800;letter-spacing:1px;padding:11px 20px;border-radius:30px;
+    backdrop-filter:blur(8px);}
+  .btn:active{transform:scale(.94);}
+  .btn.primary{background:linear-gradient(180deg,rgba(245,197,66,.22),rgba(245,197,66,.08));border-color:rgba(245,197,66,.5);color:var(--gold);}
+  /* start overlay */
+  #start{position:absolute;inset:0;background:radial-gradient(circle at 50% 42%,#0c1226,#05060d 70%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;text-align:center;pointer-events:auto;}
+  #start h1{font-size:24vw;font-weight:900;color:var(--gold);line-height:1;
+    text-shadow:0 0 40px rgba(245,197,66,.6),0 0 10px rgba(245,197,66,.9);}
+  #start .rd{font-size:13px;letter-spacing:10px;color:var(--cyan);margin-top:6px;font-weight:800;}
+  #start p{margin-top:22px;font-size:14px;color:var(--sub);line-height:1.7;max-width:280px;}
+  #start .go{margin-top:30px;font-size:15px;letter-spacing:8px;color:#fff;font-weight:900;
+    animation:pulse 1.3s ease-in-out infinite;}
+  /* share card */
+  #shareWrap{position:absolute;inset:0;background:rgba(0,0,0,.86);z-index:30;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;pointer-events:auto;}
+  #shareWrap img{max-width:78%;max-height:66%;border-radius:14px;box-shadow:0 10px 50px rgba(34,211,238,.3);}
+  #shareWrap .row{display:flex;gap:10px;}
+  #shareClose{position:absolute;top:calc(env(safe-area-inset-top) + 14px);right:18px;font-size:26px;color:#fff;opacity:.7;pointer-events:auto;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div id="top">
+      <div id="unitLabel">時価総額</div>
+      <div id="value">0</div>
+      <div id="valSub">円</div>
+      <div id="sceneName">COIN</div>
+      <div id="comboWrap">
+        <div id="comboTxt"></div>
+        <div id="comboBar"><div id="comboFill"></div></div>
+      </div>
+    </div>
+    <div id="milestone"></div>
+    <div id="tapHint">T A P</div>
+    <div id="ticker"></div>
+  </div>
+  <div id="bottom">
+    <div class="btn primary" id="shareBtn">結果カード</div>
+    <div class="btn" id="resetBtn">リセット</div>
+  </div>
+  <div id="start">
+    <h1>兆</h1>
+    <div class="rd">C H Ō</div>
+    <p>連打で時価総額を積み上げろ。<br>桁が繰り上がるたび、<br>世界がズームアウトしていく。</p>
+    <div class="go">T A P T O S T A R T</div>
+  </div>
+  <div id="shareWrap">
+    <div id="shareClose">×</div>
+    <img id="shareImg" alt="result card">
+    <div class="row">
+      <div class="btn primary" id="doShare">シェア</div>
+      <div class="btn" id="doSave">画像を保存</div>
+    </div>
+  </div>
+</div>
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+// ---------- AUDIO (synth, no files) ----------
+let AC=null, master=null;
+function initAudio(){
+  if(AC) return;
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+}
+function tapSound(combo){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='square'; o.frequency.value=220+combo*70+Math.random()*30;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.12,t+0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.07);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.08);
+}
+// missing-fundamental bass "ドゥン"
+function carryBass(tier, big){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const base=Math.max(26, 55 - tier*4);     // lower as we ascend
+  const dur=big?1.1:0.5;
+  const harm=[1,2,3,4,5];
+  const bus=AC.createGain();
+  bus.gain.setValueAtTime(0.0001,t);
+  bus.gain.exponentialRampToValueAtTime(big?0.5:0.32,t+0.02);
+  bus.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  bus.connect(master);
+  harm.forEach((h,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=base*h;
+    g.gain.value=(1/(i+1))*0.9;
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t+dur);
+  });
+  // click transient
+  const nb=AC.createBuffer(1, AC.sampleRate*0.05, AC.sampleRate);
+  const d=nb.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const ns=AC.createBufferSource(); ns.buffer=nb;
+  const ng=AC.createGain(); ng.gain.value=big?0.25:0.15;
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+  ns.connect(lp); lp.connect(ng); ng.connect(master); ns.start(t);
+}
+function failSweep(){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(280,t);
+  o.frequency.exponentialRampToValueAtTime(70,t+0.4);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.07,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1200;
+  o.connect(lp); lp.connect(g); g.connect(master); o.start(t); o.stop(t+0.45);
+}
+function vib(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+// ---------- FORMAT ----------
+const UNITS=[['無量大数',1e68],['不可思議',1e64],['那由他',1e60],['阿僧祇',1e56],['恒河沙',1e52],
+  ['極',1e48],['載',1e44],['正',1e40],['澗',1e36],['溝',1e32],['穣',1e28],['秭',1e24],
+  ['垓',1e20],['京',1e16],['兆',1e12],['億',1e8],['万',1e4]];
+function fmtVal(v){
+  v=Math.floor(v);
+  for(const [n,u] of UNITS){ if(v>=u){ const x=v/u; return [(x>=100?Math.floor(x).toLocaleString('en-US'):x.toFixed(2)), n+'円']; } }
+  return [v.toLocaleString('en-US'),'円'];
+}
+
+// ---------- SCENES ----------
+// boundaries on log10; 8 scenes
+const SBOUND=[1,3,5,7,9,11,13];
+const SCENES=[
+  {name:'COIN',     jp:'コイン',   c:'#f5c542'},
+  {name:'CASH',     jp:'札束',     c:'#7CFC9B'},
+  {name:'TOWER',    jp:'摩天楼',   c:'#9ad8ff'},
+  {name:'CITY',     jp:'都市',     c:'#ffd27c'},
+  {name:'METRO',    jp:'大都市圏', c:'#ff9ad2'},
+  {name:'EARTH',    jp:'地球',     c:'#6cc6ff'},
+  {name:'ORBIT',    jp:'軌道',     c:'#c4a3ff'},
+  {name:'STAR',     jp:'恒星',     c:'#ffe08a'},
+];
+function sceneFromLog(l){ let s=0; for(const b of SBOUND){ if(l>=b)s++; } return Math.min(s,SCENES.length-1); }
+
+function glow(x,y,r,col,a){
+  const g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.globalAlpha=a; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); ctx.globalAlpha=1;
+}
+function hashf(i,s){ return (Math.sin(i*12.9898+s*78.233)*43758.5453)%1; }
+
+// each draw(cx,cy,sc,alpha,time)
+function drawCoin(cx,cy,sc,al,tm){
+  const n=7;
+  for(let i=0;i<n;i++){
+    const ang=i/n*6.283+tm*0.5; const rr=40*sc;
+    const x=cx+Math.cos(ang)*rr*(0.2+i*0.07), y=cy+Math.sin(ang)*rr*(0.2+i*0.07)+Math.sin(tm*2+i)*4;
+    const r=26*sc;
+    glow(x,y,r*1.6,'rgba(245,197,66,0.5)',al*0.9);
+    ctx.globalAlpha=al; ctx.fillStyle='#f5c542'; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,240,180,0.9)'; ctx.lineWidth=2*sc; ctx.stroke();
+    ctx.fillStyle='rgba(120,80,10,0.9)'; ctx.font=`900 ${20*sc}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('¥',x,y); ctx.globalAlpha=1;
+  }
+}
+function drawCash(cx,cy,sc,al,tm){
+  for(let i=0;i<10;i++){
+    const x=cx+(hashf(i,1)-0.5)*180*sc, y=cy+(hashf(i,2)-0.5)*160*sc+Math.sin(tm+i)*3;
+    const w=70*sc,h=30*sc, rot=(hashf(i,3)-0.5)*0.6;
+    ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.globalAlpha=al;
+    glow(0,0,w,'rgba(124,252,155,0.35)',al*0.7);
+    ctx.fillStyle='#1f8f4d'; ctx.fillRect(-w/2,-h/2,w,h);
+    ctx.strokeStyle='#7CFC9B'; ctx.lineWidth=2*sc; ctx.strokeRect(-w/2,-h/2,w,h);
+    ctx.fillStyle='rgba(200,255,210,0.85)'; ctx.beginPath(); ctx.arc(0,0,8*sc,0,7); ctx.fill();
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+}
+function tower(cx,cy,sc,al,tm,count,spread,col){
+  for(let i=0;i<count;i++){
+    const x=cx+(hashf(i,4)-0.5)*spread*sc;
+    const w=(8+hashf(i,5)*16)*sc, h=(60+hashf(i,6)*150)*sc;
+    const y=cy+70*sc-h;
+    ctx.globalAlpha=al;
+    ctx.fillStyle='rgba(10,16,34,0.95)'; ctx.fillRect(x-w/2,y,w,h);
+    ctx.strokeStyle=col; ctx.lineWidth=1; ctx.globalAlpha=al*0.5; ctx.strokeRect(x-w/2,y,w,h);
+    // windows
+    ctx.globalAlpha=al;
+    for(let wy=y+6*sc; wy<y+h-4; wy+=10*sc){
+      for(let wx=x-w/2+3*sc; wx<x+w/2-2; wx+=7*sc){
+        if(hashf(wx*0.3+wy*0.7,i)>0.45){ ctx.fillStyle=col; ctx.globalAlpha=al*(0.4+0.6*((Math.sin(tm*3+wx+wy)+1)/2)); ctx.fillRect(wx,wy,3*sc,3*sc);}
+      }
+    }
+    ctx.globalAlpha=1;
+  }
+}
+function drawTower(cx,cy,sc,al,tm){ glow(cx,cy,160*sc,'rgba(154,216,255,0.25)',al*0.6); tower(cx,cy,sc,al,tm,5,120,'#9ad8ff'); }
+function drawCity(cx,cy,sc,al,tm){ glow(cx,cy+40*sc,220*sc,'rgba(255,210,124,0.22)',al*0.6); tower(cx,cy,sc,al,tm,16,300,'#ffd27c'); }
+function drawMetro(cx,cy,sc,al,tm){
+  glow(cx,cy+60*sc,300*sc,'rgba(255,154,210,0.22)',al*0.6);
+  // curved horizon hint
+  ctx.globalAlpha=al*0.5; ctx.strokeStyle='rgba(255,154,210,0.5)'; ctx.lineWidth=2*sc;
+  ctx.beginPath(); ctx.arc(cx,cy+460*sc,520*sc,Math.PI*1.15,Math.PI*1.85); ctx.stroke(); ctx.globalAlpha=1;
+  tower(cx,cy,sc*0.8,al,tm,40,520,'#ff9ad2');
+}
+function drawEarth(cx,cy,sc,al,tm){
+  const r=120*sc;
+  glow(cx,cy,r*1.9,'rgba(108,198,255,0.4)',al*0.9);
+  const g=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.2,cx,cy,r);
+  g.addColorStop(0,'#2e6fd0'); g.addColorStop(0.7,'#103a78'); g.addColorStop(1,'#06203f');
+  ctx.globalAlpha=al; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  // continents (procedural blobs)
+  ctx.fillStyle='rgba(60,180,120,0.55)';
+  for(let i=0;i<7;i++){ const a=hashf(i,9)*6.28+tm*0.05; const rr=r*(0.3+hashf(i,10)*0.6);
+    const x=cx+Math.cos(a)*rr*0.7, y=cy+Math.sin(a)*rr*0.7;
+    if((x-cx)**2+(y-cy)**2<r*r*0.82){ ctx.beginPath(); ctx.arc(x,y,(8+hashf(i,11)*18)*sc,0,7); ctx.fill(); } }
+  // atmosphere rim
+  ctx.globalAlpha=al*0.8; ctx.strokeStyle='rgba(150,220,255,0.8)'; ctx.lineWidth=3*sc;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
+  // city lights on night side
+  ctx.fillStyle='#ffd27c';
+  for(let i=0;i<30;i++){ const a=hashf(i,12)*6.28; const rr=r*(0.5+hashf(i,13)*0.45);
+    const x=cx+Math.cos(a)*rr, y=cy+Math.sin(a)*rr;
+    if((x-cx)<0){ ctx.globalAlpha=al*(0.3+0.7*((Math.sin(tm*4+i)+1)/2)); ctx.fillRect(x,y,2*sc,2*sc);} }
+  ctx.globalAlpha=1;
+}
+function drawOrbit(cx,cy,sc,al,tm){
+  const r=66*sc;
+  glow(cx,cy,r*1.6,'rgba(108,198,255,0.35)',al*0.7);
+  const g=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.2,cx,cy,r);
+  g.addColorStop(0,'#2e6fd0'); g.addColorStop(1,'#06203f');
+  ctx.globalAlpha=al; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  // orbit ring
+  ctx.strokeStyle='rgba(196,163,255,0.6)'; ctx.lineWidth=2*sc;
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.4); ctx.beginPath(); ctx.arc(0,0,150*sc,0,7); ctx.stroke(); ctx.restore();
+  // rocket on ring
+  const a=tm*1.2; const rx=cx+Math.cos(a)*150*sc, ry=cy+Math.sin(a)*150*sc*0.4;
+  glow(rx,ry,30*sc,'rgba(255,170,60,0.7)',al);
+  ctx.globalAlpha=al; ctx.fillStyle='#fff'; ctx.save(); ctx.translate(rx,ry); ctx.rotate(a+1.57);
+  ctx.beginPath(); ctx.moveTo(0,-12*sc); ctx.lineTo(6*sc,8*sc); ctx.lineTo(-6*sc,8*sc); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ff8a00'; ctx.beginPath(); ctx.moveTo(0,18*sc); ctx.lineTo(4*sc,8*sc); ctx.lineTo(-4*sc,8*sc); ctx.closePath(); ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawStar(cx,cy,sc,al,tm){
+  const r=90*sc;
+  // corona
+  for(let i=0;i<3;i++){ glow(cx,cy,r*(1.6+i*0.8)+Math.sin(tm*2+i)*10*sc,'rgba(255,200,80,'+(0.3-i*0.08)+')',al); }
+  const g=ctx.createRadialGradient(cx,cy,r*0.2,cx,cy,r);
+  g.addColorStop(0,'#fff6d8'); g.addColorStop(0.5,'#ffd24a'); g.addColorStop(1,'#ff7a18');
+  ctx.globalAlpha=al; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  // planets
+  for(let i=0;i<4;i++){ const a=tm*(0.3+i*0.15)+i*1.6; const rr=(160+i*60)*sc;
+    const x=cx+Math.cos(a)*rr, y=cy+Math.sin(a)*rr*0.5;
+    ctx.globalAlpha=al*0.4; ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+    ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.5); ctx.beginPath(); ctx.arc(0,0,rr,0,7); ctx.stroke(); ctx.restore();
+    glow(x,y,16*sc,'rgba(180,210,255,0.6)',al);
+    ctx.globalAlpha=al; ctx.fillStyle='#bcd2ff'; ctx.beginPath(); ctx.arc(x,y,7*sc,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+}
+const DRAW=[drawCoin,drawCash,drawTower,drawCity,drawMetro,drawEarth,drawOrbit,drawStar];
+
+// starfield
+const STARS=[]; for(let i=0;i<140;i++) STARS.push({x:Math.random(),y:Math.random(),r:Math.random()*1.4+0.2,p:Math.random()*6.28});
+
+// particles
+const PT=[];
+function burst(x,y,col,n,spd){
+  for(let i=0;i<n;i++){ const a=Math.random()*6.28, s=Math.random()*spd+spd*0.3;
+    PT.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,col,sz:Math.random()*3+1}); }
+}
+
+// ---------- STATE ----------
+let value=0, heat=0, combo=1, sceneIdx=0, lastMag=-1;
+let transFrom=0, transT=1; // 1 = no transition
+let shakeT=0, flash=0, flashCol='#22d3ee';
+let running=false, lastTapTime=0, prevCombo=1;
+const COMBO_CAP=6, HEAT_MAX=100;
+
+// milestones (yen). Labels framed as 級/≒/相当 — playful references.
+const MILES=[
+  [160,'自販機のジュース'],
+  [5000,'ランチ1食'],
+  [120000,'最新スマホ'],
+  [3000000,'高級腕時計'],
+  [40000000,'都心の一戸建て'],
+  [1000000000,'プロ選手の年俸級'],
+  [100000000000,'上場ベンチャー級'],
+  [11700000000000,'★ SpaceX IPO目標 $75B'],
+  [280000000000000,'サウジアラムコ級 (≒$1.8兆)'],
+  [550000000000000,'Apple級 (≒$3兆超)'],
+  [3000000000000000,'世界トップ企業を凌駕'],
+  [12000000000000000,'世界のGDPに迫る'],
+];
+let mileIdx=0;
+let tickerIdx=0, tickerTimer=0;
+
+const $=id=>document.getElementById(id);
+function setTicker(){
+  const next=MILES.find(m=>m[0]>value);
+  if(next){ const [vs,u]=fmtVal(next[0]); $('ticker').textContent='次のマイルストーン  ▸  '+next[1].replace('★ ','')+'  ('+vs+u+')'; }
+  else $('ticker').textContent='全マイルストーン制覇 — 規格外の領域';
+}
+
+function carry(big){
+  flash=1; flashCol=(sceneIdx%2===0)?'#22d3ee':'#ff2d87';
+  carryBass(sceneIdx, big);
+  const sc=SCENES[sceneIdx];
+  burst(W/2,H*0.5,sc.c, big?34:16, big?7:4);
+  if(big){ shakeT=1; vib([0,30,40,60]); } else vib(18);
+}
+
+function tap(){
+  if(!running) return;
+  const now=performance.now();
+  lastTapTime=now;
+  heat=Math.min(HEAT_MAX,heat+7);
+  combo=1+(heat/HEAT_MAX)*(COMBO_CAP-1);
+  const gain=Math.max(2,value*0.02)*combo;
+  value+=gain;
+  tapSound(Math.floor(combo));
+  burst(W/2,H*0.5,'#f5c542',3,3);
+  // carry detection
+  const l=Math.log10(value+1);
+  const mag=Math.floor(l);
+  if(mag>lastMag){
+    const ns=sceneFromLog(l);
+    if(ns!==sceneIdx){ transFrom=sceneIdx; sceneIdx=ns; transT=0; carry(true); }
+    else if(lastMag>=0){ carry(false); }
+    lastMag=mag;
+  }
+  // milestone
+  let passed=false;
+  while(mileIdx<MILES.length && value>=MILES[mileIdx][0]){
+    showMile(MILES[mileIdx][1]); mileIdx++; passed=true;
+  }
+  if(passed || transT===0) setTicker();
+}
+function showMile(txt){
+  const m=$('milestone'); m.textContent=txt.replace('★ ','');
+  m.style.transition='none'; m.style.opacity='1'; m.style.transform='scale(1.15)';
+  // pulse
+  requestAnimationFrame(()=>{ m.style.transition='all 1.6s ease'; m.style.opacity='0'; m.style.transform='scale(1)'; });
+  flash=1; flashCol='#fff'; vib([0,20,30,20]);
+}
+
+// ---------- LOOP ----------
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  const tm=now/1000;
+  // physics
+  if(running){
+    heat=Math.max(0,heat-dt*42);
+    combo=1+(heat/HEAT_MAX)*(COMBO_CAP-1);
+    if(prevCombo-combo>1.2 && combo<1.6 && value>50){ failSweep(); }
+    prevCombo=combo;
+  }
+  if(transT<1) transT=Math.min(1,transT+dt/0.7);
+  if(flash>0) flash=Math.max(0,flash-dt*2.2);
+  if(shakeT>0) shakeT=Math.max(0,shakeT-dt*2.5);
+
+  // ---- render
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0a0e1a'); g.addColorStop(1,'#05060d');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // starfield (stronger at high tiers)
+  const starA=Math.min(1,0.15+sceneIdx*0.13);
+  ctx.fillStyle='#fff';
+  for(const s of STARS){ const tw=0.4+0.6*((Math.sin(tm*1.5+s.p)+1)/2); ctx.globalAlpha=starA*tw; ctx.beginPath(); ctx.arc(s.x*W,s.y*H,s.r,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+
+  // shake
+  let ox=0,oy=0; if(shakeT>0){ ox=(Math.random()-0.5)*16*shakeT; oy=(Math.random()-0.5)*16*shakeT; }
+  ctx.save(); ctx.translate(ox,oy);
+  ctx.globalCompositeOperation='lighter';
+  const cx=W/2, cy=H*0.5;
+  if(transT<1){
+    const e=transT;
+    // previous scene shrinks & fades
+    DRAW[transFrom](cx,cy,1.0*(1-0.8*e),1-e,tm);
+    // new scene grows in
+    DRAW[sceneIdx](cx,cy,0.5+0.5*e,e,tm);
+  } else {
+    DRAW[sceneIdx](cx,cy,1.0,1,tm);
+  }
+  // particles
+  for(let i=PT.length-1;i>=0;i--){ const p=PT[i]; p.x+=p.vx; p.y+=p.vy; p.vx*=0.94; p.vy*=0.94; p.life-=dt*1.6;
+    if(p.life<=0){ PT.splice(i,1); continue; }
+    ctx.globalAlpha=p.life; ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,p.sz*p.life+0.5,0,7); ctx.fill(); }
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  ctx.restore();
+
+  // flash overlay
+  if(flash>0){ ctx.globalAlpha=flash*0.45; ctx.fillStyle=flashCol; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+
+  // HUD update
+  if(running){
+    const [vs,u]=fmtVal(value);
+    $('value').textContent=vs; $('valSub').textContent=u;
+    const sc=SCENES[sceneIdx]; $('sceneName').textContent=sc.name; $('sceneName').style.color=sc.c;
+    $('comboFill').style.width=(heat)+'%';
+    $('comboTxt').textContent = combo>1.15 ? ('×'+combo.toFixed(1)+' COMBO') : '';
+    tickerTimer+=dt; if(tickerTimer>1.2){ tickerTimer=0; setTicker(); }
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- INPUT ----------
+function onTap(e){
+  if(e.cancelable) e.preventDefault();
+  if(!running) return;
+  tap();
+}
+$('app').addEventListener('pointerdown',onTap,{passive:false});
+
+$('start').addEventListener('pointerdown',(e)=>{
+  e.preventDefault(); initAudio(); if(AC.state==='suspended')AC.resume();
+  running=true; $('start').style.display='none'; $('tapHint').style.display='none';
+  setTicker(); tap();
+},{passive:false});
+
+$('resetBtn').addEventListener('click',(e)=>{
+  value=0;heat=0;combo=1;sceneIdx=0;lastMag=-1;transT=1;mileIdx=0;PT.length=0;flash=0;shakeT=0;
+  $('value').textContent='0';$('valSub').textContent='円';$('sceneName').textContent='COIN';$('comboFill').style.width='0%';$('comboTxt').textContent='';
+  setTicker();
+});
+
+// ---------- SHARE CARD ----------
+let cardBlob=null;
+function makeCard(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920; const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,1920); g.addColorStop(0,'#0a0e1a'); g.addColorStop(1,'#05060d');
+  x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // stars
+  x.fillStyle='#fff'; for(let i=0;i<160;i++){ x.globalAlpha=Math.random()*0.6+0.1; x.beginPath(); x.arc(Math.random()*1080,Math.random()*1920,Math.random()*2+0.4,0,7); x.fill(); }
+  x.globalAlpha=1;
+  // scene emblem (reuse DRAW into this ctx via temporary swap)
+  const savedW=W,savedH=H; const sctx=ctx;
+  // draw emblem manually using a mini routine: just glow + label, plus call DRAW with this ctx
+  // temporarily point global ctx funcs to x by drawing directly:
+  drawEmblemTo(x, sceneIdx, 540, 760, 2.4);
+  // title
+  x.textAlign='center'; x.fillStyle='#f5c542'; x.font='900 130px sans-serif';
+  x.shadowColor='rgba(245,197,66,.6)'; x.shadowBlur=40; x.fillText('兆',540,250); x.shadowBlur=0;
+  x.fillStyle='#22d3ee'; x.font='800 34px sans-serif'; x.fillText('C H Ō',540,310);
+  // value
+  const [vs,u]=fmtVal(value);
+  x.fillStyle='#e8edff'; x.font='900 40px sans-serif'; x.fillText('到達した時価総額',540,1180);
+  x.fillStyle='#fff'; x.shadowColor='rgba(245,197,66,.7)'; x.shadowBlur=30;
+  // fit value font
+  let fs=150; x.font='900 '+fs+'px sans-serif'; const full=vs+u;
+  while(x.measureText(full).width>960 && fs>50){ fs-=6; x.font='900 '+fs+'px sans-serif'; }
+  x.fillStyle='#f5c542'; x.fillText(full,540,1300); x.shadowBlur=0;
+  // rank / title
+  let reached='コインの域';
+  for(const m of MILES){ if(value>=m[0]) reached=m[1].replace('★ ',''); }
+  const tier=SCENES[sceneIdx];
+  x.fillStyle='#ff2d87'; x.font='800 46px sans-serif'; x.fillText('〈 '+tier.jp+' 〉到達',540,1420);
+  x.fillStyle='#9fb0d8'; x.font='700 38px sans-serif';
+  wrapText(x,'≒ '+reached,540,1500,920,52);
+  // footer
+  x.fillStyle='#5b6373'; x.font='700 30px sans-serif';
+  x.fillText('兆 — Chō  ·  連打で世界をズームアウト',540,1820);
+  x.fillStyle='#22d3ee'; x.font='800 30px sans-serif';
+  x.fillText('t-aka-h.github.io/idea-radar/cho/',540,1870);
+  return c;
+}
+function wrapText(x,t,cx,cy,maxw,lh){
+  const words=t.split(''); let line='',yy=cy;
+  for(const ch of words){ if(x.measureText(line+ch).width>maxw){ x.fillText(line,cx,yy); line=ch; yy+=lh; } else line+=ch; }
+  x.fillText(line,cx,yy);
+}
+function drawEmblemTo(x, idx, cx, cy, sc){
+  // self-contained emblem variants for the card (additive)
+  x.save(); x.globalCompositeOperation='lighter';
+  const rg=(r,col,a)=>{ const gg=x.createRadialGradient(cx,cy,0,cx,cy,r); gg.addColorStop(0,col); gg.addColorStop(1,'rgba(0,0,0,0)'); x.globalAlpha=a; x.fillStyle=gg; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill(); x.globalAlpha=1; };
+  const col=SCENES[idx].c;
+  rg(360,col.replace(')',',0.4)').replace('#','rgba(').length?hexA(col,0.4):col,0.9);
+  // simple: glow + ring + dots
+  rg(300, hexA(col,0.4), 0.9);
+  x.globalAlpha=1; x.fillStyle=col; x.beginPath(); x.arc(cx,cy,90,0,7); x.fill();
+  x.strokeStyle='#fff'; x.lineWidth=4; x.globalAlpha=0.7; x.beginPath(); x.arc(cx,cy,150,0,7); x.stroke();
+  for(let i=0;i<10;i++){ const a=i/10*6.28; x.globalAlpha=0.8; x.fillStyle='#fff'; x.beginPath(); x.arc(cx+Math.cos(a)*210,cy+Math.sin(a)*210,6,0,7); x.fill(); }
+  x.restore(); x.globalAlpha=1;
+}
+function hexA(hex,a){ const h=hex.replace('#',''); const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16); return `rgba(${r},${g},${b},${a})`; }
+
+function openShare(){
+  const c=makeCard();
+  c.toBlob(b=>{ cardBlob=b; $('shareImg').src=URL.createObjectURL(b); $('shareWrap').style.display='flex'; },'image/png');
+}
+$('shareBtn').addEventListener('click',openShare);
+$('shareClose').addEventListener('click',()=>{ $('shareWrap').style.display='none'; });
+$('doSave').addEventListener('click',()=>{ if(!cardBlob)return; const a=document.createElement('a'); a.href=URL.createObjectURL(cardBlob); a.download='cho-result.png'; a.click(); });
+$('doShare').addEventListener('click',async()=>{
+  if(!cardBlob)return;
+  const file=new File([cardBlob],'cho-result.png',{type:'image/png'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:'兆 — Chō',text:'連打で時価総額を積み上げる体感アプリ「兆」で到達した！'}); }catch(e){}
+  } else { const a=document.createElement('a'); a.href=URL.createObjectURL(cardBlob); a.download='cho-result.png'; a.click(); }
+});
+})();
+</script>
+</body>
+</html>
