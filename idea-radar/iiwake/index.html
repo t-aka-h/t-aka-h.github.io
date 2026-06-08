@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0410">
+<title>言い訳 — Iiwake ｜ プチ贅沢の免罪符ガチャ</title>
+<meta property="og:title" content="言い訳 — Iiwake">
+<meta property="og:description" content="プチ贅沢の罪悪感を消す“言い訳ガチャ”。レバーを引いて、あなただけの免罪符を発行しよう。">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #2a0840 0%, rgba(42,8,64,0) 55%),
+      linear-gradient(180deg,#120421 0%,#0a0410 60%,#06020c 100%);
+    color:#f3eefb;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+    overflow:hidden;
+    user-select:none;-webkit-user-select:none;
+    touch-action:manipulation;
+  }
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    max-width:520px;margin:0 auto;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 8px);}
+
+  /* ---- header ---- */
+  .head{margin-top:14px;text-align:center;}
+  .logo{font-size:13px;letter-spacing:6px;color:#9a7bd6;font-weight:700;}
+  .title{font-size:46px;font-weight:900;letter-spacing:2px;margin:2px 0 0;
+    background:linear-gradient(180deg,#fff,#ffd9ef 60%,#ff8fc8);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 22px rgba(255,45,135,.35);}
+  .tag{font-size:11.5px;color:#b9a8e0;margin-top:4px;letter-spacing:1px;}
+
+  /* ---- indulgence picker ---- */
+  .picklabel{font-size:12px;color:#caa9ff;margin:16px 0 8px;letter-spacing:2px;font-weight:700;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:460px;}
+  .chip{font-size:13px;font-weight:700;padding:9px 13px;border-radius:13px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(180,140,255,.28);color:#e9dcff;
+    transition:transform .08s, border-color .15s, background .15s;}
+  .chip.on{background:linear-gradient(180deg,rgba(255,45,135,.30),rgba(255,45,135,.12));
+    border-color:#ff2d87;color:#fff;box-shadow:0 0 16px rgba(255,45,135,.35);}
+  .chip:active{transform:scale(.94);}
+  .free{display:flex;gap:8px;margin-top:10px;width:100%;max-width:460px;}
+  .free input{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(180,140,255,.28);
+    border-radius:12px;color:#fff;font-size:14px;padding:10px 13px;outline:none;}
+  .free input::placeholder{color:#7d6ba6;}
+
+  /* ---- reels ---- */
+  .machine{margin-top:18px;width:100%;max-width:460px;position:relative;}
+  .reels{display:flex;gap:8px;padding:14px 12px;border-radius:18px;
+    background:linear-gradient(180deg,#1b0a2e,#120420);
+    border:1px solid rgba(180,130,255,.22);
+    box-shadow:0 10px 40px rgba(0,0,0,.55), inset 0 0 30px rgba(120,40,200,.12);}
+  .reel{flex:1;height:128px;border-radius:12px;position:relative;overflow:hidden;
+    background:radial-gradient(120% 100% at 50% 0%,#241038,#0d0418);
+    border:1px solid rgba(150,110,230,.25);
+    box-shadow:inset 0 0 22px rgba(0,0,0,.6);}
+  .reel .win{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+    padding:0 8px;text-align:center;font-weight:800;line-height:1.28;
+    font-size:14px;color:#fff;text-shadow:0 0 12px rgba(0,229,255,.55);}
+  .reel.spin .win{filter:blur(.6px);opacity:.92;}
+  .reel.gold{border-color:#ffd400;box-shadow:inset 0 0 26px rgba(255,212,0,.35),0 0 18px rgba(255,212,0,.4);}
+  .reel.gold .win{color:#ffe98a;text-shadow:0 0 14px rgba(255,212,0,.7);}
+  .reel .glare{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,0) 22%,rgba(255,255,255,0) 78%,rgba(255,255,255,.06));}
+  .reel .line{position:absolute;left:6px;right:6px;top:50%;height:42px;transform:translateY(-50%);
+    border-top:1px solid rgba(0,229,255,.18);border-bottom:1px solid rgba(0,229,255,.18);pointer-events:none;}
+
+  /* ---- lever button ---- */
+  .lever{margin-top:18px;width:100%;max-width:460px;height:64px;border:none;border-radius:18px;
+    font-size:21px;font-weight:900;letter-spacing:6px;color:#1a0014;
+    background:linear-gradient(180deg,#ffe27a,#ffd400 40%,#f5a800);
+    box-shadow:0 8px 22px rgba(255,180,0,.4), inset 0 2px 0 rgba(255,255,255,.6);
+    transition:transform .07s, filter .15s;}
+  .lever:active{transform:translateY(3px) scale(.99);filter:brightness(1.05);}
+  .lever[disabled]{filter:saturate(.4) brightness(.7);box-shadow:none;}
+  .hint{font-size:11px;color:#8b7bb0;margin-top:10px;letter-spacing:1px;text-align:center;line-height:1.6;}
+
+  /* ---- result overlay ---- */
+  .overlay{position:fixed;inset:0;background:rgba(4,1,10,.82);backdrop-filter:blur(4px);
+    display:none;align-items:center;justify-content:center;padding:18px;z-index:30;}
+  .overlay.show{display:flex;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .card{width:100%;max-width:360px;border-radius:22px;padding:22px 20px 18px;text-align:center;
+    background:linear-gradient(180deg,#1d0a33,#100420);
+    border:1px solid rgba(255,45,135,.5);
+    box-shadow:0 0 50px rgba(255,45,135,.35), inset 0 0 30px rgba(120,40,200,.18);}
+  .card.gold{border-color:#ffd400;box-shadow:0 0 60px rgba(255,212,0,.5), inset 0 0 34px rgba(255,180,0,.2);}
+  .stamp{display:inline-block;font-size:12px;font-weight:900;letter-spacing:3px;padding:6px 14px;border-radius:999px;
+    border:2px solid #ff2d87;color:#ff7ab3;transform:rotate(-7deg);margin-bottom:10px;
+    box-shadow:0 0 14px rgba(255,45,135,.4);}
+  .card.gold .stamp{border-color:#ffd400;color:#ffe27a;box-shadow:0 0 16px rgba(255,212,0,.6);}
+  .object{font-size:15px;color:#caa9ff;font-weight:800;margin:2px 0 12px;}
+  .verdict{font-size:19px;font-weight:800;line-height:1.55;color:#fff;
+    text-shadow:0 0 16px rgba(0,229,255,.3);}
+  .card.gold .verdict{color:#fff6d6;text-shadow:0 0 18px rgba(255,212,0,.45);}
+  .menpa{font-size:12.5px;color:#9fd9ff;margin-top:14px;letter-spacing:1px;}
+  .card.gold .menpa{color:#ffe27a;}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btn{flex:1;border:none;border-radius:14px;padding:13px 0;font-size:14px;font-weight:800;letter-spacing:1px;}
+  .btn.share{background:linear-gradient(180deg,#ff5ba0,#ff2d87);color:#fff;box-shadow:0 6px 18px rgba(255,45,135,.4);}
+  .btn.again{background:rgba(255,255,255,.08);color:#e9dcff;border:1px solid rgba(180,140,255,.3);}
+  .btn:active{transform:scale(.96);}
+  .mini{font-size:10px;color:#6b5e8c;margin-top:12px;letter-spacing:1px;}
+
+  canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;}
+  .credit{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#5a4f7a;letter-spacing:1px;z-index:5;}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div id="app">
+  <div class="head">
+    <div class="logo">I I W A K E</div>
+    <div class="title">言い訳</div>
+    <div class="tag">プチ贅沢の罪悪感を、免罪符に変える。</div>
+  </div>
+
+  <div class="picklabel">今日のプチ贅沢は？</div>
+  <div class="chips" id="chips"></div>
+  <div class="free">
+    <input id="freein" type="text" maxlength="18" placeholder="自由に入力（例：深夜のラーメン）">
+  </div>
+
+  <div class="machine">
+    <div class="reels" id="reels">
+      <div class="reel"><div class="glare"></div><div class="line"></div><div class="win" id="r0">—</div></div>
+      <div class="reel"><div class="glare"></div><div class="line"></div><div class="win" id="r1">—</div></div>
+      <div class="reel"><div class="glare"></div><div class="line"></div><div class="win" id="r2">—</div></div>
+    </div>
+  </div>
+
+  <button class="lever" id="lever">引 く</button>
+  <div class="hint">レバーを引いて、あなただけの“大義名分”を発行。<br>ごく稀に <b style="color:#ffd400">金 7 7 7</b> ＝ 完全無罪の免罪符。</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="card" id="card">
+    <div class="stamp" id="stamp">免罪符 発行</div>
+    <div class="object" id="cobj">○○</div>
+    <div class="verdict" id="cverdict">—</div>
+    <div class="menpa" id="cmenpa">免罪度 —</div>
+    <div class="btns">
+      <button class="btn share" id="shareBtn">カードを保存 / シェア</button>
+      <button class="btn again" id="againBtn">もう一度</button>
+    </div>
+    <div class="mini">完全オンデバイス・AI生成なし ・ Idea Radar 優勝作</div>
+  </div>
+</div>
+<div class="credit">Idea Radar 🏆 2026-06-08 ・ レンズ L03 消費・生活者(日本)／メリハリ消費</div>
+
+<script>
+/* ============ DATA ============ */
+const PRESETS = ["コンビニの新作スイーツ","2,000円のランチ","タクシー帰宅","推しのグッズ","ちょっと良いコーヒー","衝動買いした服","ソシャゲ課金","デパ地下のお惣菜"];
+
+const PREFIX = ["長い目で見れば、","冷静に考えて、","むしろ、","結論から言うと、","人生のスパンで捉えれば、","経済合理性の観点では、","実のところ、","俯瞰すれば、","未来から振り返れば、","健全な精神のために、","客観的に見て、","損得を超えて、"];
+const CORE = ["未来の自分への投資","頑張った私への正当な配当","明日の生産性を買う行為","心の健康への必要経費","自分という資産のメンテナンス","ご褒美という名の燃料補給","日本経済を回す善行","ストレス税の前払い","幸福の現在価値の最大化","メンタルパフォーマンスの最適化","我慢という負債の返済","可処分満足の確保"];
+const CLOSE = ["だから、支出ではなく投資。","よって、罪状なし。無罪。","ゆえに、財布は痛むが心は潤う。","つまり、買わない方が損だった。","したがって、これは正しい判断。","以上より、後悔の余地なし。","ということで、ノーカウント。","だから、今日の私を褒めたい。","結果、世界は少し良くなった。","すなわち、これでよかったのだ。","だって、頑張ったから。","ね、しょうがないよね。"];
+
+const GOLD = [
+  "これは消費ではない。経済を回す、尊い祈りである。",
+  "未来の歴史家はこう記すだろう——『あの一つが、彼女を救った』と。",
+  "全宇宙が、この買い物を祝福している。無罪どころか、表彰。",
+  "これは贅沢ではない。文明への、ささやかな貢献だ。",
+  "神も言った。『よろしい、買いなさい』と。"
+];
+const GOLD_REELS = ["完 全","無 罪","7 7 7"];
+
+/* ============ STATE ============ */
+let selected = PRESETS[0];
+let spinning = false;
+let last = null; // {object, verdict, gold, menpa}
+
+/* ============ AUDIO ============ */
+let AC=null;
+function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+function tone(freq,t0,dur,type,gain,toFreq){
+  const c=ac(); if(!c)return;
+  const o=c.createOscillator(), g=c.createGain();
+  o.type=type||"sine"; o.frequency.setValueAtTime(freq,t0);
+  if(toFreq)o.frequency.exponentialRampToValueAtTime(toFreq,t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(gain,t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0+dur+0.02);
+}
+function noise(t0,dur,gain){
+  const c=ac(); if(!c)return;
+  const n=Math.floor(c.sampleRate*dur), b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  const s=c.createBufferSource(); s.buffer=b;
+  const f=c.createBiquadFilter(); f.type="bandpass"; f.frequency.value=2400;
+  const g=c.createGain(); g.gain.value=gain;
+  s.connect(f).connect(g).connect(c.destination); s.start(t0);
+}
+function sTick(){ const c=ac(); if(!c)return; noise(c.currentTime,0.03,0.06); }
+function sStop(){ const c=ac(); if(!c)return; const t=c.currentTime;
+  tone(110,t,0.18,"sine",0.5,55);            // sub kick body (80-120 area + low)
+  tone(220,t,0.10,"triangle",0.22);          // click layer audible on phone speakers
+  noise(t,0.04,0.09); buzz([14]); }
+function sLever(){ const c=ac(); if(!c)return; const t=c.currentTime; tone(160,t,0.14,"sawtooth",0.18,70); noise(t,0.05,0.07); buzz([10]); }
+function sWin(){ const c=ac(); if(!c)return; let t=c.currentTime;
+  [392,523,659].forEach((f,i)=>tone(f,t+i*0.07,0.22,"triangle",0.18)); }
+function sFanfare(){ const c=ac(); if(!c)return; let t=c.currentTime;
+  [262,330,392,523,659,784].forEach((f,i)=>tone(f,t+i*0.075,0.5,"sawtooth",0.16));
+  // missing-fundamental thick chord, harmonics so phone speakers feel the low end
+  [110,165,220,275,330].forEach(f=>tone(f,t+0.45,0.9,"triangle",0.12));
+  buzz([0,40,30,40,30,90]); }
+function buzz(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+/* ============ UI BUILD ============ */
+const chipsEl=document.getElementById("chips");
+PRESETS.forEach((p,i)=>{
+  const b=document.createElement("button");
+  b.className="chip"+(i===0?" on":""); b.textContent=p;
+  b.onclick=()=>{ document.querySelectorAll(".chip").forEach(c=>c.classList.remove("on"));
+    b.classList.add("on"); selected=p; document.getElementById("freein").value=""; };
+  chipsEl.appendChild(b);
+});
+const freein=document.getElementById("freein");
+freein.addEventListener("input",()=>{ const v=freein.value.trim();
+  if(v){ document.querySelectorAll(".chip").forEach(c=>c.classList.remove("on")); selected=v; } });
+
+/* ============ SPIN ============ */
+const reelEls=[document.getElementById("r0"),document.getElementById("r1"),document.getElementById("r2")];
+const reelBoxes=document.querySelectorAll(".reel");
+const lever=document.getElementById("lever");
+
+lever.addEventListener("click",spin);
+
+function spin(){
+  if(spinning)return;
+  const v=freein.value.trim(); if(v)selected=v;
+  if(!selected)selected=PRESETS[0];
+  spinning=true; lever.disabled=true; ac(); sLever();
+
+  const gold = Math.random()<0.03;
+  const targets = gold ? [...GOLD_REELS] : [pick(PREFIX),pick(CORE),pick(CLOSE)];
+  const pools = gold ? [GOLD_REELS,GOLD_REELS,GOLD_REELS] : [PREFIX,CORE,CLOSE];
+
+  reelBoxes.forEach(b=>{b.classList.add("spin");b.classList.remove("gold");});
+
+  // each reel: rapid random swap, decelerating, lands on target
+  const stopAt=[700,1050,1450];
+  let done=0;
+  reelEls.forEach((el,idx)=>{
+    let elapsed=0, interval=55;
+    const tick=()=>{
+      el.textContent=pick(pools[idx]); sTick();
+      elapsed+=interval; interval=Math.min(180, interval*1.06);
+      if(elapsed<stopAt[idx]){ setTimeout(tick,interval); }
+      else{ // land
+        el.textContent=targets[idx];
+        reelBoxes[idx].classList.remove("spin");
+        if(gold)reelBoxes[idx].classList.add("gold");
+        sStop();
+        done++;
+        if(done===3) setTimeout(()=>finish(gold,targets),420);
+      }
+    };
+    setTimeout(tick, 80*idx);
+  });
+}
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+function finish(gold,targets){
+  let verdict, menpa;
+  if(gold){
+    verdict = pick(GOLD);
+    menpa = "免罪度 100% ・ 完全無罪";
+    sFanfare(); confetti(true);
+  }else{
+    verdict = `${targets[0]}${targets[1]}。${targets[2]}`;
+    menpa = "免罪度 "+(62+Math.floor(Math.random()*36))+"%";
+    sWin(); confetti(false);
+  }
+  last={object:selected, verdict, gold, menpa};
+  showCard(last);
+  spinning=false; lever.disabled=false;
+}
+
+/* ============ RESULT CARD ============ */
+const overlay=document.getElementById("overlay"), card=document.getElementById("card");
+function showCard(r){
+  document.getElementById("cobj").textContent = "「"+r.object+"」を買った私へ";
+  document.getElementById("cverdict").textContent = r.verdict;
+  document.getElementById("cmenpa").textContent = r.menpa;
+  document.getElementById("stamp").textContent = r.gold ? "金 7 7 7 ・ 完全無罪" : "免罪符 発行";
+  card.classList.toggle("gold", r.gold);
+  overlay.classList.add("show");
+}
+document.getElementById("againBtn").onclick=()=>{ overlay.classList.remove("show"); };
+document.getElementById("shareBtn").onclick=()=> shareCard();
+
+/* ============ CONFETTI / FX ============ */
+const fx=document.getElementById("fx"), fc=fx.getContext("2d");
+let parts=[];
+function resizeFx(){ fx.width=innerWidth*devicePixelRatio; fx.height=innerHeight*devicePixelRatio;
+  fc.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+resizeFx(); addEventListener("resize",resizeFx);
+function confetti(gold){
+  const cols = gold ? ["#ffd400","#ff2d87","#fff2a0","#ffffff","#ffb347"] : ["#ff2d87","#00e5ff","#b56cff","#ffffff"];
+  const n = gold?140:70;
+  for(let i=0;i<n;i++) parts.push({
+    x:innerWidth/2+(Math.random()-0.5)*120, y:innerHeight*0.42,
+    vx:(Math.random()-0.5)*9, vy:-(6+Math.random()*9),
+    g:0.28+Math.random()*0.12, s:4+Math.random()*5, life:1,
+    col:cols[Math.floor(Math.random()*cols.length)], rot:Math.random()*6, vr:(Math.random()-0.5)*0.4 });
+}
+function loopFx(){
+  fc.clearRect(0,0,fx.width,fx.height);
+  parts.forEach(p=>{ p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; p.life-=0.008;
+    fc.save(); fc.globalAlpha=Math.max(0,p.life); fc.translate(p.x,p.y); fc.rotate(p.rot);
+    fc.fillStyle=p.col; fc.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); fc.restore(); });
+  parts=parts.filter(p=>p.life>0 && p.y<innerHeight+40);
+  requestAnimationFrame(loopFx);
+}
+loopFx();
+
+/* ============ SHARE CARD (offscreen 1080x1920) ============ */
+function wrap(ctx,text,maxW){
+  const out=[]; let line="";
+  for(const ch of text){
+    if(ch==="\n"){ out.push(line); line=""; continue; }
+    if(ctx.measureText(line+ch).width>maxW && line){ out.push(line); line=ch; }
+    else line+=ch;
+  }
+  if(line)out.push(line); return out;
+}
+function buildShareCanvas(r){
+  const W=1080,H=1920, cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+  const x=cv.getContext("2d");
+  // bg
+  let g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#1a0730"); g.addColorStop(.6,"#0c0418"); g.addColorStop(1,"#05010c");
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  let rg=x.createRadialGradient(W/2,260,40,W/2,260,820);
+  rg.addColorStop(0, r.gold?"rgba(255,200,0,.25)":"rgba(255,45,135,.22)"); rg.addColorStop(1,"rgba(0,0,0,0)");
+  x.fillStyle=rg; x.fillRect(0,0,W,H);
+  // frame
+  const ac2 = r.gold?"#ffd400":"#ff2d87";
+  x.strokeStyle=ac2; x.lineWidth=6; x.shadowColor=ac2; x.shadowBlur=40;
+  roundRect(x,60,120,W-120,H-300,40); x.stroke(); x.shadowBlur=0;
+  // header
+  x.textAlign="center";
+  x.fillStyle="#caa9ff"; x.font="700 40px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText("I I W A K E ・ 免 罪 符", W/2, 250);
+  // stamp
+  x.save(); x.translate(W/2,360); x.rotate(-0.12);
+  x.strokeStyle=ac2; x.lineWidth=6; x.beginPath();
+  roundRect(x,-260,-46,520,92,46); x.stroke();
+  x.fillStyle=ac2; x.font="900 46px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText(r.gold?"完 全 無 罪":"発 行 済 ・ 無 罪",0,16); x.restore();
+  // object
+  x.fillStyle="#e9dcff"; x.font="800 42px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText("「"+r.object+"」を買った私へ", W/2, 540);
+  // verdict (wrapped)
+  x.fillStyle="#ffffff"; x.font="800 58px -apple-system,'Hiragino Sans',sans-serif";
+  x.shadowColor=r.gold?"rgba(255,212,0,.5)":"rgba(0,229,255,.4)"; x.shadowBlur=22;
+  const lines=wrap(x,r.verdict, W-220); let ly=720;
+  lines.forEach(l=>{ x.fillText(l,W/2,ly); ly+=86; });
+  x.shadowBlur=0;
+  // menpa
+  x.fillStyle=r.gold?"#ffe27a":"#9fd9ff"; x.font="700 44px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText(r.menpa, W/2, Math.max(ly+60,1500));
+  // footer
+  x.fillStyle="#7d6ba6"; x.font="600 30px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText("言い訳 — Iiwake ｜ Idea Radar 優勝作", W/2, H-150);
+  x.fillStyle="#5a4f7a"; x.font="500 26px -apple-system,'Hiragino Sans',sans-serif";
+  x.fillText("t-aka-h.github.io/idea-radar/iiwake", W/2, H-104);
+  return cv;
+}
+function roundRect(c,x,y,w,h,r){ c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+async function shareCard(){
+  if(!last)return;
+  const cv=buildShareCanvas(last);
+  cv.toBlob(async(blob)=>{
+    if(!blob)return;
+    const file=new File([blob],"iiwake.png",{type:"image/png"});
+    const text=`「${last.object}」は ${last.menpa}。— 言い訳 Iiwake`;
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text}); return; }catch(e){ if(e.name==="AbortError")return; }
+    }
+    // fallback: download
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="iiwake.png"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  },"image/png");
+}
+</script>
+</body>
+</html>
