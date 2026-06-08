@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#06030D">
+<title>下剋上 — Gekokujō</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#06030D;
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;}
+  /* HUD overlay (minimal DOM) */
+  #sound{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:20;
+    width:42px;height:42px;border-radius:50%;border:1px solid #2a2342;
+    background:rgba(20,12,34,.6);color:#cdd3e6;font-size:18px;line-height:42px;text-align:center;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;}
+  #share{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:max(26px,calc(env(safe-area-inset-bottom) + 22px));z-index:20;
+    padding:15px 30px;border-radius:999px;border:none;display:none;cursor:pointer;
+    background:linear-gradient(180deg,#ffe26b,#caa12a);color:#1a1206;font-weight:900;
+    font-size:16px;letter-spacing:1px;box-shadow:0 8px 26px rgba(255,212,64,.35);}
+  #share:active{transform:translateX(-50%) scale(.96);}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+<button id="sound" aria-label="sound">🔊</button>
+<button id="share">結果をシェア</button>
+<script>
+(function(){
+"use strict";
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const soundBtn = document.getElementById('sound');
+const shareBtn = document.getElementById('share');
+
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = Math.floor(window.innerWidth);
+  H = Math.floor(window.innerHeight);
+  cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- palette ---------- */
+const COL = {
+  bg:'#06030D', grid:'rgba(90,120,200,0.08)',
+  cyan:'#00E5FF', cyanDim:'#0a6c80',
+  mag:'#FF2D87', magDim:'#7a1746',
+  gold:'#FFD400', ink:'#e8eaf6', sub:'#9aa0c4'
+};
+
+/* ---------- audio (WebAudio, lazy) ---------- */
+let AC=null, master=null, audioReady=false, soundOn=true, bgmTimer=null, bgmStep=0;
+function initAudio(){
+  if(audioReady) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    audioReady=true;
+    startBGM();
+  }catch(e){ audioReady=false; }
+}
+function resumeAudio(){ if(AC && AC.state==='suspended') AC.resume(); }
+function env(g,t0,a,d,peak){ g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(peak,t0+a); g.gain.exponentialRampToValueAtTime(0.0001,t0+a+d); }
+function tone(freq,t0,a,d,peak,type){ if(!audioReady||!soundOn)return; const o=AC.createOscillator(),g=AC.createGain(); o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0); env(g,t0,a,d,peak); o.connect(g); g.connect(master); o.start(t0); o.stop(t0+a+d+0.05); }
+function sweep(f0,f1,t0,dur,peak,type){ if(!audioReady||!soundOn)return; const o=AC.createOscillator(),g=AC.createGain(); o.type=type||'sawtooth'; o.frequency.setValueAtTime(f0,t0); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t0+dur); env(g,t0,0.01,dur,peak); o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.05); }
+function noiseHit(t0,dur,peak,lp){ if(!audioReady||!soundOn)return; const n=Math.floor(AC.sampleRate*dur),buf=AC.createBuffer(1,n,AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.6); const s=AC.createBufferSource(); s.buffer=buf; const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1400; const g=AC.createGain(); g.gain.setValueAtTime(peak,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur); s.connect(f); f.connect(g); g.connect(master); s.start(t0); }
+// missing-fundamental bass (55Hz felt via 2..6F)
+function bass(rootHz,t0,dur,peak){ if(!audioReady||!soundOn)return; [2,3,4,5,6].forEach((h,i)=>{ tone(rootHz*h,t0,0.02,dur,peak*(1-i*0.13),'sine'); }); }
+function playReversal(quality){
+  if(!audioReady||!soundOn)return; const t=AC.currentTime;
+  noiseHit(t,0.10,0.5,2200);
+  bass(55,t,quality==='PERFECT'?1.0:0.6, quality==='PERFECT'?0.5:0.4);
+  sweep(220,880,t+0.02,0.45,0.28,'sawtooth'); // 成り上がり上昇
+  if(quality==='PERFECT'){
+    [392,494,587,784,988,1175].forEach((f,i)=>tone(f,t+0.10+i*0.045,0.01,0.5,0.18,'triangle'));
+    tone(1760,t+0.42,0.01,0.7,0.10,'sine'); // bell tail
+    bass(40,t+0.35,1.2,0.32);
+  } else if(quality==='GREAT'){
+    [392,587,784].forEach((f,i)=>tone(f,t+0.10+i*0.05,0.01,0.35,0.14,'triangle'));
+  } else {
+    tone(523,t+0.10,0.01,0.25,0.12,'triangle');
+  }
+}
+function playMiss(){ if(!audioReady||!soundOn)return; const t=AC.currentTime; sweep(880,110,t,0.5,0.22,'square'); noiseHit(t,0.08,0.18,500); }
+function startBGM(){
+  if(!audioReady) return; if(bgmTimer) clearInterval(bgmTimer);
+  const beat=60/84/2; // 8th notes at 84bpm
+  bgmTimer=setInterval(()=>{
+    if(!soundOn||!audioReady||AC.state!=='running')return;
+    const t=AC.currentTime+0.02; const s=bgmStep%8;
+    if(s%2===0){ bass(48,t,0.18,0.12); } // gentle kick
+    // hat
+    if(s%2===1){ noiseHit(t,0.03,0.04,7000); }
+    bgmStep++;
+  }, beat*1000);
+}
+soundBtn.addEventListener('click',(e)=>{ e.stopPropagation(); soundOn=!soundOn; soundBtn.textContent=soundOn?'🔊':'🔇'; if(soundOn){initAudio();resumeAudio();} });
+
+function vibe(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+/* ---------- game state ---------- */
+const ST={TITLE:0,PLAY:1,FLIP:2,OVER:3};
+let state=ST.TITLE;
+const PAIRS=[
+  ['キオクシア','トヨタ'],
+  ['新興AIユニコーン','メガバンク'],
+  ['個人開発アプリ','大手SIer'],
+  ['インディースタジオ','老舗ゲーム大手'],
+  ['スタートアップ連合','旧財閥'],
+  ['あなたのアプリ','GAFA'],
+];
+let game;
+function newGame(){
+  game={
+    lives:3, combo:0, maxCombo:0, wins:0, score:0,
+    successCount:0, totalCap:0, displayCap:0,
+    g:1, c:0.5, growth:0, ratioPos:0.62, // xGiant fraction across track
+    pairIdx:0, giantYen:4.8e13, locked:false, lastQ:'',
+    flipT:0, shakeT:0, shakeMag:0, hintPulse:0,
+    overReason:'', tierLabel:'兆級', maxTier:'兆級'
+  };
+  setupRound(true);
+}
+function tierLabelOf(v){ if(v>=1e20)return'世界経済級'; if(v>=1e18)return'国家予算級'; if(v>=1e16)return'京級'; if(v>=1e12)return'兆級'; return'億級'; }
+function setupRound(first){
+  const g=game;
+  g.pairIdx=(g.pairIdx+(first?0:1))%PAIRS.length;
+  g.g=1; g.c=0.5;
+  g.growth=0.50 + Math.min(g.successCount,40)*0.030; // /sec, scales difficulty
+  g.giantYen = 4.8e13 * Math.pow(1.62, g.successCount);
+  g.tierLabel = tierLabelOf(g.giantYen);
+  g.locked=false; g.lastQ='';
+}
+
+/* ---------- particles ---------- */
+let parts=[], rays=[];
+function burst(x,y,n,colors,spd,grav){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=spd*(0.4+Math.random()*0.9);
+    parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s - (grav?spd*0.3:0),
+      life:1, decay:0.012+Math.random()*0.02, size:2+Math.random()*4,
+      color:colors[(Math.random()*colors.length)|0], grav:grav?0.18:0.04, kind:Math.random()<0.5?'coin':'spark'});
+  }
+}
+function rayBurst(x,y,n,color){ for(let i=0;i<n;i++){ rays.push({x,y,ang:i/n*Math.PI*2,len:0,max:Math.min(W,H)*0.7,life:1,color}); } }
+function updateParts(dt){
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.vx*=0.985; p.vy+=p.grav; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay; if(p.life<=0)parts.splice(i,1); }
+  for(let i=rays.length-1;i>=0;i--){ const r=rays[i]; r.len+=(r.max-r.len)*0.22; r.life-=0.045; if(r.life<=0)rays.splice(i,1); }
+}
+
+/* ---------- formatting ---------- */
+function yen(n){
+  if(n>=1e20) return '¥'+(n/1e20).toFixed(1)+'垓';
+  if(n>=1e16) return '¥'+(n/1e16).toFixed(1)+'京';
+  if(n>=1e12) return '¥'+(n/1e12).toFixed(1)+'兆';
+  if(n>=1e8)  return '¥'+(n/1e8).toFixed(0)+'億';
+  return '¥'+Math.round(n).toLocaleString();
+}
+
+/* ---------- input ---------- */
+function press(){
+  initAudio(); resumeAudio();
+  if(state===ST.TITLE){ newGame(); state=ST.PLAY; return; }
+  if(state===ST.OVER){ newGame(); state=ST.PLAY; shareBtn.style.display='none'; return; }
+  if(state!==ST.PLAY || game.locked) return;
+  const g=game; const ratio=g.c/g.g; const err=Math.abs(ratio-1);
+  let q;
+  if(ratio<0.88){ q='MISS'; g.overReason='早すぎ — まだ格下'; }
+  else if(ratio>1.12){ q='MISS'; g.overReason='行き過ぎ — 勢い空回り'; }
+  else if(err<=0.025) q='PERFECT';
+  else if(err<=0.06) q='GREAT';
+  else q='GOOD';
+  resolve(q);
+}
+function resolve(q){
+  const g=game; g.lastQ=q;
+  if(q==='MISS'){
+    g.lives--; g.combo=0; g.shakeT=0.4; g.shakeMag=16;
+    playMiss(); vibe(120);
+    if(g.lives<=0){ gameOver(); }
+    else { setupRound(false); }
+    return;
+  }
+  // success
+  const mult = q==='PERFECT'?3:(q==='GREAT'?2:1);
+  g.combo++; if(g.combo>g.maxCombo)g.maxCombo=g.combo;
+  g.wins++; g.successCount++;
+  g.score += Math.round(mult*100*(1+g.combo*0.12)*(1+g.successCount*0.05));
+  g.totalCap += g.giantYen;
+  if(tierLabelOf(g.giantYen)) g.maxTier=g.tierLabel;
+  // fx
+  const x=trackX(g.ratioPos), y=H*0.30;
+  const cols = q==='PERFECT'?[COL.gold,'#fff',COL.cyan]:[COL.cyan,COL.gold];
+  burst(x,y, q==='PERFECT'?70:(q==='GREAT'?44:26), cols, q==='PERFECT'?9:6, true);
+  rayBurst(x,y, q==='PERFECT'?24:(q==='GREAT'?16:10), q==='PERFECT'?COL.gold:COL.cyan);
+  if(q==='PERFECT'){ flash(COL.gold,0.42); vibe([30,40,30,40,60]); }
+  else if(q==='GREAT'){ flash(COL.cyan,0.22); vibe(40); }
+  else { vibe(28); }
+  playReversal(q);
+  // flip flourish + next round
+  g.locked=true; g.flipT=0; state=ST.FLIP;
+}
+let flashT=0, flashC='#fff', flashMax=0;
+function flash(c,a){ flashC=c; flashMax=a; flashT=a; }
+
+window.addEventListener('pointerdown',(e)=>{ if(e.target===soundBtn||e.target===shareBtn)return; e.preventDefault(); press(); },{passive:false});
+window.addEventListener('keydown',(e)=>{ if(e.code==='Space'||e.code==='Enter'){ e.preventDefault(); press(); } });
+
+/* ---------- layout helpers ---------- */
+const TL=()=>0.10*W, TR=()=>0.90*W, TW=()=>0.80*W;
+function trackX(frac){ return TL()+frac*TW(); }
+
+/* ---------- update ---------- */
+let last=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  game && (game.hintPulse=(game.hintPulse||0)+dt*5);
+  if(state===ST.PLAY && game){
+    const g=game;
+    g.c += g.g*g.growth*dt;
+    if(g.c/g.g>1.30){ // auto-miss (hesitated)
+      g.overReason='見送り — 逆転の好機を逃した';
+      g.lives--; g.combo=0; g.shakeT=0.4; g.shakeMag=16; playMiss(); vibe(120);
+      if(g.lives<=0) gameOver(); else setupRound(false);
+    }
+  } else if(state===ST.FLIP && game){
+    const g=game; g.flipT+=dt;
+    if(g.flipT>=0.42){ // flip done
+      setupRound(false);
+      g.locked=false;
+      // brief cooldown to avoid double-fire
+      g.cool=0.10; state=ST.PLAY;
+    }
+  }
+  if(game){
+    if(game.shakeT>0) game.shakeT-=dt;
+    // smooth headline count-up
+    game.displayCap += (game.totalCap-game.displayCap)*Math.min(1,dt*6);
+    if(game.cool>0){ game.cool-=dt; }
+  }
+  if(flashT>0) flashT-=dt*1.6;
+  updateParts(dt);
+  draw();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- draw ---------- */
+function drawBG(){
+  ctx.fillStyle=COL.bg; ctx.fillRect(0,0,W,H);
+  // neon grid
+  ctx.strokeStyle=COL.grid; ctx.lineWidth=1;
+  const gs=Math.max(34,W/11);
+  ctx.beginPath();
+  for(let x=0;x<=W;x+=gs){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let y=0;y<=H;y+=gs){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke();
+  // vignette
+  const rg=ctx.createRadialGradient(W/2,H*0.42,H*0.1,W/2,H*0.5,H*0.78);
+  rg.addColorStop(0,'rgba(255,255,255,0)'); rg.addColorStop(1,'rgba(0,0,0,0.66)');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+}
+function neonText(t,x,y,size,color,weight,align,glow){
+  ctx.save();
+  ctx.font=(weight||'900')+' '+size+'px -apple-system,"Hiragino Sans",sans-serif';
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  if(glow!==0){ ctx.shadowColor=color; ctx.shadowBlur=glow||16; }
+  ctx.fillStyle=color; ctx.fillText(t,x,y);
+  ctx.restore();
+}
+function bar(x,y,w,h,frac,col,colDim){
+  const r=h/2;
+  // track
+  ctx.fillStyle='rgba(255,255,255,0.05)';
+  rr(x,y,w,h,r); ctx.fill();
+  // fill
+  const fw=Math.max(h,w*Math.max(0,Math.min(1,frac)));
+  const grad=ctx.createLinearGradient(x,0,x+fw,0);
+  grad.addColorStop(0,colDim); grad.addColorStop(1,col);
+  ctx.save(); ctx.shadowColor=col; ctx.shadowBlur=18;
+  ctx.fillStyle=grad; rr(x,y,fw,h,r); ctx.fill(); ctx.restore();
+  return x+fw;
+}
+function rr(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function draw(){
+  // shake
+  let sx=0,sy=0;
+  if(game && game.shakeT>0){ const m=game.shakeMag*(game.shakeT/0.4); sx=(Math.random()*2-1)*m; sy=(Math.random()*2-1)*m; }
+  ctx.save(); ctx.translate(sx,sy);
+
+  // flip flourish: rotate whole scene around center
+  if(state===ST.FLIP && game){
+    const p=game.flipT/0.42; const ang=p*Math.PI*2; // full board flip
+    ctx.translate(W/2,H/2); ctx.rotate(ang); ctx.translate(-W/2,-H/2);
+  }
+
+  drawBG();
+
+  if(state===ST.TITLE){ drawTitle(); }
+  else { drawPlay(); }
+
+  // particles
+  for(const p of parts){
+    ctx.globalAlpha=Math.max(0,p.life);
+    if(p.kind==='coin'){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,7); ctx.fill(); }
+    else { ctx.fillStyle=p.color; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
+  }
+  ctx.globalAlpha=1;
+  for(const r of rays){ ctx.save(); ctx.globalAlpha=Math.max(0,r.life)*0.8; ctx.strokeStyle=r.color; ctx.lineWidth=3; ctx.shadowColor=r.color; ctx.shadowBlur=12; ctx.beginPath(); ctx.moveTo(r.x,r.y); ctx.lineTo(r.x+Math.cos(r.ang)*r.len,r.y+Math.sin(r.ang)*r.len); ctx.stroke(); ctx.restore(); }
+  ctx.globalAlpha=1;
+
+  ctx.restore();
+
+  // flash (screen-space, above flip)
+  if(flashT>0){ ctx.save(); ctx.globalAlpha=Math.max(0,Math.min(1,flashT))*0.6; ctx.fillStyle=flashC; ctx.fillRect(0,0,W,H); ctx.restore(); }
+
+  if(state===ST.OVER) drawOver();
+}
+
+function drawTitle(){
+  neonText('下剋上',W/2,H*0.34,Math.min(82,W*0.21),COL.gold,'900','center',26);
+  neonText('GEKOKUJŌ',W/2,H*0.42,Math.min(22,W*0.06),COL.cyan,'700','center',10);
+  // mini demo bars
+  const y1=H*0.52,y2=H*0.585,bw=TW(),bx=TL(),bh=Math.min(22,H*0.026);
+  bar(bx,y1,bw,bh,0.62,COL.mag,COL.magDim);
+  bar(bx,y2,bw,bh,0.5,COL.cyan,COL.cyanDim);
+  const lx=trackX(0.62); ctx.save(); ctx.setLineDash([6,6]); ctx.strokeStyle=COL.mag; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(lx,y1-10); ctx.lineTo(lx,y2+bh+10); ctx.stroke(); ctx.restore();
+  neonText('挑戦者のバーが巨人を',W/2,H*0.68,Math.min(18,W*0.05),COL.ink,'700','center',0);
+  neonText('抜き去る瞬間にタップ',W/2,H*0.72,Math.min(18,W*0.05),COL.ink,'700','center',0);
+  const blink=0.5+0.5*Math.sin(performance.now()/300);
+  ctx.globalAlpha=blink; neonText('TAP TO START',W/2,H*0.82,Math.min(20,W*0.055),COL.cyan,'900','center',14); ctx.globalAlpha=1;
+  neonText('時価総額の番狂わせに、指1本でベットせよ',W/2,H*0.9,Math.min(12,W*0.034),COL.sub,'600','center',0);
+}
+
+function drawPlay(){
+  const g=game; if(!g)return;
+  // header
+  const hy=Math.max(30, H*0.06);
+  // lives
+  let hearts=''; for(let i=0;i<3;i++) hearts+= i<g.lives?'♥':'♡';
+  neonText(hearts,TL(),hy,Math.min(20,W*0.055),COL.mag,'900','left',8);
+  // tier
+  neonText(g.tierLabel+'マッチ',W/2,hy,Math.min(15,W*0.04),COL.sub,'700','center',0);
+  // score
+  neonText(g.score.toLocaleString(),TR(),hy,Math.min(20,W*0.052),COL.gold,'900','right',8);
+
+  // combo
+  if(g.combo>1){
+    const cs=Math.min(46,W*0.12)*(1+Math.min(0.3,(g.combo)*0.01));
+    neonText(g.combo+' 連勝',W/2,H*0.135,cs,COL.gold,'900','center',20);
+  }
+
+  // matchup labels
+  const pr=PAIRS[g.pairIdx];
+  // GIANT (top, magenta) — incumbent
+  neonText('巨人',TL(),H*0.205,Math.min(13,W*0.035),COL.magDim,'800','left',0);
+  neonText(pr[1],TL()+Math.min(46,W*0.12),H*0.205,Math.min(18,W*0.05),COL.mag,'900','left',6);
+  neonText(yen(g.giantYen),TR(),H*0.205,Math.min(16,W*0.044),COL.mag,'800','right',4);
+  const by=H*0.24, bh=Math.min(26,H*0.032), bw=TW(), bx=TL();
+  bar(bx,by,bw,bh,0.62,COL.mag,COL.magDim);
+
+  // CHALLENGER (bottom, cyan)
+  const ratio=g.c/g.g; const frac=Math.min(0.95,(ratio)*0.62);
+  const cy=H*0.345;
+  bar(bx,cy,bw,bh,frac,COL.cyan,COL.cyanDim);
+  neonText('挑戦者',TL(),H*0.40,Math.min(13,W*0.035),COL.cyanDim,'800','left',0);
+  neonText(pr[0],TL()+Math.min(60,W*0.16),H*0.40,Math.min(18,W*0.05),COL.cyan,'900','left',6);
+  neonText(yen(g.giantYen*ratio),TR(),H*0.40,Math.min(16,W*0.044),COL.cyan,'800','right',4);
+
+  // marker line at giant tip (抜き去れ)
+  const lx=trackX(0.62);
+  ctx.save(); ctx.setLineDash([7,7]); ctx.strokeStyle=COL.mag; ctx.lineWidth=2.5; ctx.shadowColor=COL.mag; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.moveTo(lx,by-14); ctx.lineTo(lx,cy+bh+14); ctx.stroke(); ctx.restore();
+  // pulsing hint near line
+  const pulse=0.55+0.45*Math.sin(g.hintPulse);
+  ctx.globalAlpha=pulse;
+  neonText('抜き去れ！',lx,by-30,Math.min(15,W*0.04),COL.gold,'900','center',12);
+  ctx.globalAlpha=1;
+
+  // challenger tip glow marker
+  const tipx=trackX(frac);
+  ctx.save(); ctx.fillStyle=COL.cyan; ctx.shadowColor=COL.cyan; ctx.shadowBlur=16; ctx.beginPath(); ctx.arc(tipx,cy+bh/2,bh*0.55,0,7); ctx.fill(); ctx.restore();
+
+  // headline cumulative cap
+  neonText('累計 時価総額',W/2,H*0.56,Math.min(13,W*0.036),COL.sub,'700','center',0);
+  neonText(yen(g.displayCap),W/2,H*0.62,Math.min(50,W*0.135),COL.ink,'900','center',18);
+
+  // last judgement
+  if(g.lastQ && state===ST.FLIP){
+    const c = g.lastQ==='PERFECT'?COL.gold:(g.lastQ==='GREAT'?COL.cyan:'#9ad0ff');
+    const label = g.lastQ==='PERFECT'?'完全下剋上！':(g.lastQ==='GREAT'?'下剋上！':'番狂わせ');
+    neonText(label,W/2,H*0.72,Math.min(40,W*0.1),c,'900','center',22);
+  }
+
+  // foot hint
+  neonText('巨人を抜く瞬間にタップ ／ 早撃ち・行き過ぎ・見送りは失格',W/2,H*0.965,Math.min(11.5,W*0.032),COL.sub,'600','center',0);
+}
+
+function drawOver(){
+  ctx.save(); ctx.fillStyle='rgba(4,2,10,0.82)'; ctx.fillRect(0,0,W,H); ctx.restore();
+  const g=game;
+  neonText('GAME OVER',W/2,H*0.2,Math.min(30,W*0.082),COL.mag,'900','center',18);
+  neonText('下剋上 '+g.wins+' 連勝',W/2,H*0.33,Math.min(54,W*0.145),COL.gold,'900','center',24);
+  neonText('到達 '+g.maxTier,W/2,H*0.41,Math.min(20,W*0.054),COL.cyan,'800','center',8);
+  neonText(yen(g.totalCap),W/2,H*0.475,Math.min(34,W*0.092),COL.ink,'900','center',12);
+  neonText('最大コンボ '+g.maxCombo+' ／ SCORE '+g.score.toLocaleString(),W/2,H*0.55,Math.min(16,W*0.044),COL.sub,'700','center',0);
+  if(g.overReason) neonText('「'+g.overReason+'」',W/2,H*0.61,Math.min(14,W*0.038),COL.magDim,'700','center',0);
+  const blink=0.5+0.5*Math.sin(performance.now()/300);
+  ctx.globalAlpha=blink; neonText('TAP TO RETRY',W/2,H*0.7,Math.min(18,W*0.05),COL.cyan,'900','center',12); ctx.globalAlpha=1;
+}
+
+function gameOver(){
+  state=ST.OVER; game.locked=true;
+  shareBtn.style.display='block';
+  vibe([120,60,120]);
+}
+
+/* ---------- share card 1080x1920 ---------- */
+function buildCard(){
+  const cw=1080,ch=1920; const oc=document.createElement('canvas'); oc.width=cw; oc.height=ch; const o=oc.getContext('2d');
+  o.fillStyle='#06030D'; o.fillRect(0,0,cw,ch);
+  // grid
+  o.strokeStyle='rgba(90,120,200,0.10)'; o.lineWidth=2;
+  for(let x=0;x<=cw;x+=90){o.beginPath();o.moveTo(x,0);o.lineTo(x,ch);o.stroke();}
+  for(let y=0;y<=ch;y+=90){o.beginPath();o.moveTo(0,y);o.lineTo(cw,y);o.stroke();}
+  const rg=o.createRadialGradient(cw/2,ch*0.42,120,cw/2,ch/2,ch*0.7);
+  rg.addColorStop(0,'rgba(255,255,255,0)'); rg.addColorStop(1,'rgba(0,0,0,0.7)'); o.fillStyle=rg; o.fillRect(0,0,cw,ch);
+  function T(t,x,y,s,c,w,a,glow){ o.save(); o.font=(w||'900')+' '+s+'px -apple-system,"Hiragino Sans",sans-serif'; o.textAlign=a||'center'; o.textBaseline='middle'; if(glow!==0){o.shadowColor=c;o.shadowBlur=glow||24;} o.fillStyle=c; o.fillText(t,x,y); o.restore(); }
+  const g=game;
+  T('下剋上',cw/2,300,150,COL.gold,'900','center',40);
+  T('GEKOKUJŌ',cw/2,420,46,COL.cyan,'700','center',16);
+  T(g.wins+' 連勝',cw/2,760,260,COL.gold,'900','center',48);
+  T('到達 '+g.maxTier,cw/2,980,72,COL.cyan,'800','center',20);
+  T(yen(g.totalCap),cw/2,1110,96,'#ffffff','900','center',20);
+  // stat chips
+  o.fillStyle='rgba(255,255,255,0.06)';
+  function chip(x,t1,t2){ const w=420,h=180,xx=x,yy=1330; o.save(); o.fillStyle='rgba(255,255,255,0.05)'; rrO(o,xx,yy,w,h,28); o.fill(); o.restore(); T(t1,xx+w/2,yy+58,40,COL.sub,'700','center',0); T(t2,xx+w/2,yy+120,72,'#ffffff','900','center',8); }
+  chip(110,'最大コンボ',g.maxCombo+''); chip(550,'SCORE',g.score.toLocaleString());
+  T('巨人は、抜かれる。',cw/2,1640,52,COL.mag,'800','center',12);
+  T('Idea Radar — 下剋上  t-aka-h.github.io/idea-radar/gekokujo/',cw/2,1820,30,COL.sub,'600','center',0);
+  return oc;
+}
+function rrO(o,x,y,w,h,r){ o.beginPath(); o.moveTo(x+r,y); o.arcTo(x+w,y,x+w,y+h,r); o.arcTo(x+w,y+h,x,y+h,r); o.arcTo(x,y+h,x,y,r); o.arcTo(x,y,x+w,y,r); o.closePath(); }
+shareBtn.addEventListener('click',async(e)=>{
+  e.stopPropagation();
+  const oc=buildCard();
+  oc.toBlob(async(blob)=>{
+    if(!blob)return;
+    const file=new File([blob],'gekokujo.png',{type:'image/png'});
+    const cap='下剋上 '+game.wins+'連勝、到達'+game.maxTier+'。 #下剋上 #GEKOKUJO';
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:cap}); return; }catch(err){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='gekokujo.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },'image/png');
+});
+
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
