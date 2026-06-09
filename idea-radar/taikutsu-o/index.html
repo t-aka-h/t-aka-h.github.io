@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05050a">
+<title>退屈王 — Taikutsu-Ō</title>
+<style>
+  :root{ --cyan:#00e5ff; --mag:#ff2d95; --yel:#ffe600; --bg:#05050a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:var(--bg); overflow:hidden; touch-action:none;
+    font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif; color:#eaf2ff; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .layer{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:24px; pointer-events:none; }
+  .layer.on{ pointer-events:auto; }
+  .hidden{ opacity:0; visibility:hidden; transition:opacity .35s; }
+  .show{ opacity:1; visibility:visible; transition:opacity .45s; }
+
+  .logo{ font-size:62px; font-weight:900; letter-spacing:6px; line-height:1;
+    color:#fff; text-shadow:0 0 18px rgba(0,229,255,.65),0 0 42px rgba(0,229,255,.35); }
+  .romaji{ font-size:13px; letter-spacing:7px; color:var(--cyan); margin-top:10px; opacity:.85; }
+  .tag{ font-size:15px; color:#c7d2e6; margin:22px 0 4px; line-height:1.9; }
+  .tag b{ color:var(--mag); font-weight:800; }
+  .src{ font-size:11px; color:#5a6178; margin-top:14px; line-height:1.7; max-width:330px; }
+
+  .btn{ pointer-events:auto; margin-top:30px; font-size:19px; font-weight:900; letter-spacing:3px;
+    color:#03101a; background:linear-gradient(180deg,#7df4ff,#00cdf0); border:none; border-radius:999px;
+    padding:17px 52px; box-shadow:0 0 26px rgba(0,229,255,.55); cursor:pointer; }
+  .btn:active{ transform:scale(.96); }
+  .btn.ghost{ background:transparent; color:var(--cyan); border:1.5px solid rgba(0,229,255,.5);
+    box-shadow:none; font-size:16px; padding:14px 34px; }
+
+  #result .big{ font-size:96px; font-weight:900; line-height:.95; letter-spacing:1px;
+    font-variant-numeric:tabular-nums; }
+  #result .unit{ font-size:24px; font-weight:700; color:#9aa6c0; margin-left:6px; }
+  #result .rank{ font-size:30px; font-weight:900; letter-spacing:4px; margin:10px 0 2px; }
+  #result .verdict{ font-size:15px; color:#aeb8d0; margin-top:8px; line-height:1.8; }
+  #result .best{ font-size:12px; color:#6b7390; margin-top:10px; letter-spacing:1px; }
+  .row{ display:flex; gap:12px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
+
+  .hint{ position:absolute; bottom:max(20px,env(safe-area-inset-bottom)); left:0; right:0; text-align:center;
+    font-size:12px; color:#717a96; letter-spacing:1px; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+
+  <!-- TITLE -->
+  <div id="title" class="layer on show">
+    <div class="logo">退屈王</div>
+    <div class="romaji">T A I K U T S U - Ō</div>
+    <div class="tag">画面に触れたら、負け。<br><b>何もせず、ただ耐えろ。</b></div>
+    <button class="btn" id="startBtn">は じ め る</button>
+    <div class="src">2026年Z世代の「rawdogging boredom（退屈を生で味わう）」を体感ゲー化。<br>湧き出す誘惑に1秒でも触れたら脳が砕ける。</div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result" class="layer hidden">
+    <div class="rank" id="rRank">—</div>
+    <div><span class="big" id="rSec">0.0</span><span class="unit">秒</span></div>
+    <div class="verdict" id="rVerdict"></div>
+    <div class="best" id="rBest"></div>
+    <div class="row">
+      <button class="btn" id="retryBtn">もう一度</button>
+      <button class="btn ghost" id="shareBtn">結果をシェア</button>
+    </div>
+  </div>
+
+  <div class="hint" id="hint"></div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---------- helpers ----------
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mix(c1,c2,t){ // hex mix
+  const a=hx(c1),b=hx(c2);
+  return `rgb(${Math.round(lerp(a[0],b[0],t))},${Math.round(lerp(a[1],b[1],t))},${Math.round(lerp(a[2],b[2],t))})`;
+}
+function hx(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+function vibe(p){ try{ if(navigator.vibrate) navigator.vibrate(p);}catch(e){} }
+
+const CYAN='#00e5ff', MAG='#ff2d95', YEL='#ffe600', WHITE='#ffffff', GRAY='#3a4258';
+const CAP = 60; // seconds to full 退屈王
+
+// ---------- audio (WebAudio, missing-fundamental drone) ----------
+let AC=null, master=null, droneNodes=[], droneGain=null, started=false;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.0; master.connect(AC.destination);
+  }catch(e){ AC=null; }
+}
+function startDrone(){
+  if(!AC) return;
+  stopDrone();
+  droneGain = AC.createGain(); droneGain.gain.value=0.0; droneGain.connect(master);
+  // imply 55Hz fundamental via 2f,3f,4f,5f
+  const harm=[110,165,220,275]; const amps=[0.5,0.34,0.24,0.14];
+  harm.forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=AC.createGain(); g.gain.value=amps[i];
+    o.connect(g); g.connect(droneGain); o.start();
+    droneNodes.push({o,g,base:f});
+  });
+  master.gain.cancelScheduledValues(AC.currentTime);
+  master.gain.linearRampToValueAtTime(0.9, AC.currentTime+0.6);
+  droneGain.gain.linearRampToValueAtTime(0.16, AC.currentTime+0.8);
+}
+function stopDrone(){
+  droneNodes.forEach(n=>{ try{n.o.stop();}catch(e){} }); droneNodes=[];
+}
+// tension: as bait grows add dissonance + slight detune, raise drone a touch
+function setTension(t){ // 0..1
+  if(!AC||!droneNodes.length) return;
+  const dt = t*9; // cents-ish detune in Hz
+  droneNodes.forEach((n,i)=>{ n.o.frequency.setTargetAtTime(n.base + (i%2?dt:-dt*0.6), AC.currentTime, 0.3); });
+}
+// purify on milestone
+function purify(){
+  if(!AC||!droneNodes.length) return;
+  droneNodes.forEach(n=>{ n.o.frequency.setTargetAtTime(n.base, AC.currentTime, 0.25); });
+  blip(1320,0.18,0.12,'sine'); blip(1760,0.22,0.10,'sine');
+}
+function blip(freq,dur,vol,type){ // tempting high ping
+  if(!AC) return;
+  const o=AC.createOscillator(); o.type=type||'square'; o.frequency.value=freq;
+  const g=AC.createGain(); g.gain.value=0; o.connect(g); g.connect(master);
+  const t=AC.currentTime;
+  g.gain.linearRampToValueAtTime(vol||0.06, t+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.12));
+  o.start(t); o.stop(t+(dur||0.12)+0.02);
+}
+function lossSound(){
+  if(!AC) return;
+  // dissonant drop + noise burst then silence
+  const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.value=320;
+  const g=AC.createGain(); g.gain.value=0.0; o.connect(g); g.connect(master);
+  const t=AC.currentTime;
+  o.frequency.setValueAtTime(320,t); o.frequency.exponentialRampToValueAtTime(40,t+0.5);
+  g.gain.linearRampToValueAtTime(0.5,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+  o.start(t); o.stop(t+0.65);
+  // noise
+  const len=AC.sampleRate*0.25; const buf=AC.createBuffer(1,len,AC.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const ns=AC.createBufferSource(); ns.buffer=buf; const ng=AC.createGain(); ng.gain.value=0.4;
+  ns.connect(ng); ng.connect(master); ns.start();
+  if(droneGain) droneGain.gain.linearRampToValueAtTime(0.0001, t+0.45);
+  if(master) master.gain.setTargetAtTime(0.0, t+0.5, 0.25);
+}
+function winSound(){
+  if(!AC) return;
+  const t=AC.currentTime; [220,330,440,660,880].forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=AC.createGain(); g.gain.value=0; o.connect(g); g.connect(master);
+    const s=t+i*0.12; g.gain.linearRampToValueAtTime(0.18,s+0.02); g.gain.exponentialRampToValueAtTime(0.0001,s+0.6);
+    o.start(s); o.stop(s+0.62);
+  });
+}
+
+// ---------- brain ----------
+let brain=null;
+function buildBrain(){
+  // a cluster of nodes with branch targets that "grow"
+  const cx=W/2, cy=H*0.46, R=Math.min(W,H)*0.20;
+  const nodes=[]; const N=10;
+  for(let i=0;i<N;i++){
+    const a=(i/N)*Math.PI*2 + rand(-0.2,0.2);
+    const r=R*rand(0.45,1.0);
+    nodes.push({x:cx+Math.cos(a)*r*rand(0.8,1.1), y:cy+Math.sin(a)*r*0.78});
+  }
+  // synapse branches between nearby nodes
+  const links=[];
+  for(let i=0;i<nodes.length;i++){
+    for(let j=i+1;j<nodes.length;j++){
+      const d=Math.hypot(nodes[i].x-nodes[j].x, nodes[i].y-nodes[j].y);
+      if(d < R*1.15) links.push({a:i,b:j, born:rand(0,1)}); // born = growth threshold 0..1
+    }
+  }
+  links.sort((p,q)=>p.born-q.born);
+  brain={cx,cy,R,nodes,links};
+}
+
+// ---------- bait ----------
+let bait=[]; // visual decoys
+function spawnBait(elapsed){
+  const t = clamp(elapsed/CAP,0,1);
+  const types=['like','notif','cta','badge','spark'];
+  // weighted: early likes, later cta/badge
+  let type;
+  const roll=Math.random();
+  if(elapsed<6) type = roll<0.7?'like':'spark';
+  else if(roll<0.33) type='like';
+  else if(roll<0.55) type='notif';
+  else if(roll<0.78) type='cta';
+  else if(roll<0.92) type='badge';
+  else type='spark';
+
+  const o={type, life:0, max:rand(2.2,3.6), seed:rand(0,99)};
+  if(type==='like'){ o.x=rand(W*0.12,W*0.88); o.y=H*0.92; o.vy=rand(-70,-120); o.txt='♥ +'+(1+(Math.random()*9|0)); o.col=MAG; o.sz=rand(16,24); }
+  else if(type==='spark'){ o.x=rand(0,W); o.y=rand(H*0.1,H*0.9); o.vy=rand(-30,30); o.vx=rand(-30,30); o.col=Math.random()<.5?MAG:YEL; o.sz=rand(3,7); }
+  else if(type==='notif'){ o.x=rand(W*0.06,W*0.5); o.y=-60; o.vy=rand(60,110); o.w=rand(W*0.45,W*0.62); o.txt=['新着メッセージ','フォローされました','配信スタート','タイムセール開始','＠あなた宛'][Math.random()*5|0]; o.col=CYAN; o.max=rand(3,4.5); }
+  else if(type==='cta'){ o.x=rand(W*0.2,W*0.8); o.y=rand(H*0.2,H*0.82); o.txt=['タップ！','受け取る','今すぐ','OPEN','見る'][Math.random()*5|0]; o.col=YEL; o.r=rand(38,58); o.max=rand(2.4,3.4); o.ph=rand(0,6.28); }
+  else if(type==='badge'){ o.x=rand(W*0.15,W*0.85); o.y=rand(H*0.15,H*0.85); o.txt=['99+','NEW','!','LIVE'][Math.random()*4|0]; o.col=MAG; o.r=rand(20,40); o.max=rand(1.8,2.8); o.ph=rand(0,6.28); }
+  bait.push(o);
+  // tempting ping
+  blip(rand(760,1020), 0.10, 0.045 + t*0.05, 'square');
+}
+
+// ---------- particles (collapse) ----------
+let parts=[];
+function explodeBrain(){
+  if(!brain) return;
+  brain.nodes.forEach(n=>{
+    for(let i=0;i<7;i++){ const a=rand(0,6.28), sp=rand(80,360);
+      parts.push({x:n.x,y:n.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0,max:rand(0.6,1.2),col:Math.random()<.5?CYAN:WHITE,sz:rand(2,5)});
+    }
+  });
+}
+
+// ---------- game state ----------
+let state='title'; // title | enduring | lost | won
+let startT=0, elapsed=0, lastT=0, armed=false;
+let nextSpawn=0, milestone=0, flash=0, best=parseFloat(localStorage.getItem('taikutsu_best')||'0');
+let bgMag=0; // residual magenta noise that recedes as you endure
+
+function rankFor(sec){
+  if(sec>=CAP) return '退 屈 王';
+  if(sec>=30) return '無 の 境 地';
+  if(sec>=10) return '修 行 僧';
+  return '凡 人';
+}
+function verdictFor(sec,won){
+  if(won) return '誘惑のすべてに勝った。<br>あなたは、何もしないことを極めた。';
+  if(sec>=30) return 'あと一歩で無を超えるところだった。';
+  if(sec>=10) return '修行が足りぬ。だが、芽は伸びた。';
+  if(sec>=4)  return '指が、勝手に動いてしまったね。';
+  return 'まさかの即・陥落。脳が泣いている。';
+}
+
+function startGame(){
+  initAudio(); if(AC && AC.state==='suspended') AC.resume();
+  buildBrain(); bait=[]; parts=[]; elapsed=0; flash=0; bgMag=0; milestone=0;
+  nextSpawn=0.4; armed=false; state='enduring';
+  startT=performance.now()/1000; lastT=startT;
+  startDrone();
+  document.getElementById('title').className='layer hidden';
+  document.getElementById('result').className='layer hidden';
+  setHint('触れるな。');
+  // arm loss detection after grace so the start-tap release doesn't count
+  setTimeout(()=>{ armed=true; }, 380);
+  // tempting vibration pulses
+  scheduleTemptVibe();
+}
+let temptTimer=null;
+function scheduleTemptVibe(){
+  clearTimeout(temptTimer);
+  if(state!=='enduring') return;
+  const t=clamp(elapsed/CAP,0,1);
+  vibe([18+Math.round(t*30)]);
+  temptTimer=setTimeout(scheduleTemptVibe, lerp(2600,750,t));
+}
+
+function loseGame(){
+  if(state!=='enduring') return;
+  state='lost'; clearTimeout(temptTimer);
+  flash=1; explodeBrain(); vibe([200,80,200]); lossSound();
+  finishTo(false);
+}
+function winGame(){
+  if(state!=='enduring') return;
+  state='won'; clearTimeout(temptTimer);
+  flash=0.6; vibe([40,40,40,40,120]); winSound();
+  finishTo(true);
+}
+function finishTo(won){
+  const sec = won?CAP:elapsed;
+  lastSec=sec; lastWon=won;
+  if(sec>best){ best=sec; localStorage.setItem('taikutsu_best', String(best)); }
+  // show result after a short beat for the collapse/flash
+  setTimeout(()=>{
+    document.getElementById('rRank').textContent = rankFor(sec);
+    document.getElementById('rRank').style.color = won?WHITE:(sec>=30?CYAN:sec>=10?CYAN:MAG);
+    document.getElementById('rSec').textContent = sec.toFixed(1);
+    document.getElementById('rVerdict').innerHTML = verdictFor(sec,won);
+    document.getElementById('rBest').textContent = 'ベスト ' + best.toFixed(1) + '秒';
+    document.getElementById('result').className='layer on show';
+    setHint('');
+  }, won?700:900);
+}
+let lastSec=0, lastWon=false;
+
+// ---------- input: touching the screen during endure = lose ----------
+function onPointerDown(e){
+  if(state==='enduring' && armed){ e.preventDefault(); loseGame(); }
+}
+cv.addEventListener('pointerdown', onPointerDown, {passive:false});
+// also catch taps anywhere on stage canvas area
+document.getElementById('stage').addEventListener('pointerdown', function(e){
+  if(state==='enduring' && armed && e.target===cv){ /* handled */ }
+});
+
+function setHint(s){ document.getElementById('hint').textContent=s; }
+
+// ---------- buttons ----------
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('shareBtn').addEventListener('click', shareCard);
+
+// ---------- main loop ----------
+function frame(now){
+  now/=1000; const dt=Math.min(0.05, now-lastT||0); lastT=now;
+  if(state==='enduring'){
+    elapsed = now-startT;
+    // spawn bait, accelerating
+    nextSpawn-=dt;
+    if(nextSpawn<=0){
+      spawnBait(elapsed);
+      const t=clamp(elapsed/CAP,0,1);
+      nextSpawn = lerp(0.85,0.16,t) * rand(0.7,1.3);
+    }
+    setTension(clamp(elapsed/CAP,0,1));
+    bgMag = lerp(0.5,0.0,clamp(elapsed/CAP,0,1)); // magenta recedes
+    // milestones
+    const ms = elapsed>=60?4:elapsed>=30?3:elapsed>=10?2:elapsed>=4?1:0;
+    if(ms>milestone){ milestone=ms; if(ms<4){ purify(); flash=Math.max(flash,0.35);} }
+    if(elapsed>=CAP) winGame();
+  }
+  // update bait
+  for(let i=bait.length-1;i>=0;i--){ const o=bait[i]; o.life+=dt;
+    if(o.type==='like'||o.type==='spark'){ o.x+=(o.vx||0)*dt; o.y+=o.vy*dt; }
+    else if(o.type==='notif'){ o.y+=o.vy*dt*(o.life<0.4?1:0.15); }
+    if(o.life>o.max) bait.splice(i,1);
+  }
+  // update particles
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life+=dt; p.vy+=240*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life>p.max) parts.splice(i,1); }
+  flash=Math.max(0, flash-dt*1.6);
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  // background
+  const g=ctx.createRadialGradient(W/2,H*0.46,0, W/2,H*0.46, Math.max(W,H)*0.8);
+  g.addColorStop(0,'#0a0d18'); g.addColorStop(1,'#04040a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // residual magenta vignette noise (recedes)
+  if(bgMag>0.01 && (state==='enduring')){
+    ctx.save(); ctx.globalAlpha=bgMag*0.5; ctx.globalCompositeOperation='lighter';
+    const vg=ctx.createRadialGradient(W/2,H*0.46, Math.min(W,H)*0.2, W/2,H*0.46, Math.max(W,H)*0.7);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(255,45,149,0.5)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H); ctx.restore();
+  }
+
+  drawBrain();
+  drawBait();
+  drawParticles();
+  drawHUD();
+
+  if(flash>0){ ctx.save(); ctx.globalAlpha=flash; ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+}
+
+function drawBrain(){
+  if(!brain) return;
+  if(state==='lost') return; // shattered
+  const grow = state==='won'?1: clamp(elapsed/CAP,0,1);
+  const col = grow<0.5? mix(GRAY,CYAN,grow/0.5) : mix(CYAN,WHITE,(grow-0.5)/0.5);
+  const pulse = 1+0.04*Math.sin(performance.now()/420);
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  // DMN halo when growing
+  if(grow>0.02){
+    ctx.save(); ctx.globalAlpha=0.10+grow*0.22;
+    const hg=ctx.createRadialGradient(brain.cx,brain.cy,0,brain.cx,brain.cy,brain.R*1.9*pulse);
+    hg.addColorStop(0,col); hg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(brain.cx,brain.cy,brain.R*1.9*pulse,0,6.28); ctx.fill(); ctx.restore();
+  }
+  // synapse links that have "grown"
+  ctx.lineWidth=1.6; ctx.strokeStyle=col; ctx.shadowColor=col; ctx.shadowBlur=10;
+  brain.links.forEach(l=>{
+    if(l.born<=grow){
+      const a=brain.nodes[l.a], b=brain.nodes[l.b];
+      const tg=clamp((grow-l.born)/0.12,0,1);
+      const mx=(a.x+b.x)/2 + Math.sin((l.a+l.b+performance.now()/600))*6;
+      const my=(a.y+b.y)/2 + Math.cos((l.a-l.b+performance.now()/650))*6;
+      ctx.globalAlpha=0.35+0.55*tg;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.quadraticCurveTo(mx,my, lerp(a.x,b.x,tg), lerp(a.y,b.y,tg)); ctx.stroke();
+    }
+  });
+  // nodes
+  ctx.shadowBlur=14;
+  brain.nodes.forEach((n,i)=>{
+    const r=(3+ (grow*3)) * (1+0.18*Math.sin(performance.now()/300+i));
+    ctx.globalAlpha=0.9; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(n.x,n.y,r,0,6.28); ctx.fill();
+  });
+  // best 残光 ghost in center
+  if(best>0 && state==='enduring'){
+    ctx.globalAlpha=0.25; ctx.fillStyle='#7aa2ff'; ctx.shadowBlur=0;
+    ctx.font='600 12px -apple-system,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('best '+best.toFixed(1), brain.cx, brain.cy+brain.R*1.0);
+  }
+  ctx.restore();
+}
+
+function drawBait(){
+  ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+  bait.forEach(o=>{
+    const fade = clamp(1-(o.life/o.max),0,1) * clamp(o.life/0.25,0,1);
+    ctx.globalAlpha=fade;
+    if(o.type==='like'){
+      ctx.globalCompositeOperation='lighter';
+      ctx.font=`900 ${o.sz}px -apple-system,sans-serif`; ctx.fillStyle=o.col; ctx.shadowColor=o.col; ctx.shadowBlur=12;
+      ctx.fillText(o.txt,o.x,o.y); ctx.globalCompositeOperation='source-over';
+    } else if(o.type==='spark'){
+      ctx.globalCompositeOperation='lighter'; ctx.fillStyle=o.col; ctx.shadowColor=o.col; ctx.shadowBlur=10;
+      ctx.beginPath(); ctx.arc(o.x,o.y,o.sz,0,6.28); ctx.fill(); ctx.globalCompositeOperation='source-over';
+    } else if(o.type==='notif'){
+      const w=o.w, h=46, x=o.x, y=o.y;
+      ctx.shadowColor='rgba(0,229,255,.5)'; ctx.shadowBlur=16;
+      ctx.fillStyle='rgba(12,20,34,.92)'; roundRect(x,y,w,h,12); ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle=o.col; ctx.beginPath(); ctx.arc(x+22,y+h/2,8,0,6.28); ctx.fill();
+      ctx.fillStyle='#dfeaff'; ctx.font='700 14px -apple-system,sans-serif'; ctx.textAlign='left';
+      ctx.fillText(o.txt, x+40, y+h/2); ctx.textAlign='center';
+    } else if(o.type==='cta'){
+      const r=o.r*(1+0.12*Math.sin(performance.now()/180+o.ph));
+      ctx.shadowColor=o.col; ctx.shadowBlur=26;
+      const grd=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,r); grd.addColorStop(0,'#fff7b0'); grd.addColorStop(1,o.col);
+      ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(o.x,o.y,r,0,6.28); ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle='#2a2300'; ctx.font='900 15px -apple-system,sans-serif'; ctx.fillText(o.txt,o.x,o.y);
+    } else if(o.type==='badge'){
+      const r=o.r*(1+0.15*Math.sin(performance.now()/150+o.ph));
+      ctx.shadowColor=o.col; ctx.shadowBlur=20; ctx.fillStyle=o.col;
+      ctx.beginPath(); ctx.arc(o.x,o.y,r,0,6.28); ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.font='900 13px -apple-system,sans-serif'; ctx.fillText(o.txt,o.x,o.y);
+    }
+  });
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawParticles(){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  parts.forEach(p=>{ ctx.globalAlpha=clamp(1-p.life/p.max,0,1); ctx.fillStyle=p.col; ctx.shadowColor=p.col; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,6.28); ctx.fill(); });
+  ctx.restore();
+}
+
+function drawHUD(){
+  if(state!=='enduring') return;
+  ctx.save(); ctx.textAlign='center';
+  // big timer
+  ctx.fillStyle='#ffffff'; ctx.shadowColor='rgba(0,229,255,.6)'; ctx.shadowBlur=18;
+  ctx.font='900 56px ui-monospace,Menlo,monospace';
+  ctx.fillText(elapsed.toFixed(1), W/2, H*0.135);
+  ctx.shadowBlur=0; ctx.fillStyle='#8da0c4'; ctx.font='700 12px -apple-system,sans-serif';
+  ctx.fillText('秒  /  '+rankFor(elapsed).replace(/ /g,''), W/2, H*0.135+34);
+  ctx.restore();
+}
+
+requestAnimationFrame(frame);
+
+// ---------- share card (9:16) ----------
+function shareCard(){
+  const w=1080,h=1920; const oc=document.createElement('canvas'); oc.width=w; oc.height=h;
+  const o=oc.getContext('2d');
+  const sec=lastSec, won=lastWon, rank=rankFor(sec);
+  // bg
+  const bg=o.createRadialGradient(w/2,h*0.42,0,w/2,h*0.42,h*0.7); bg.addColorStop(0,'#0b1020'); bg.addColorStop(1,'#04040a');
+  o.fillStyle=bg; o.fillRect(0,0,w,h);
+  // brain motif
+  const cx=w/2, cy=h*0.40, R=300; const col= won?'#ffffff':(sec>=10?'#00e5ff':'#ff2d95');
+  o.save(); o.globalCompositeOperation='lighter';
+  const hg=o.createRadialGradient(cx,cy,0,cx,cy,R*2); hg.addColorStop(0,col); hg.addColorStop(1,'rgba(0,0,0,0)');
+  o.globalAlpha=won?0.5:0.3; o.fillStyle=hg; o.beginPath(); o.arc(cx,cy,R*2,0,6.28); o.fill();
+  o.globalAlpha=1; o.strokeStyle=col; o.lineWidth=4; o.shadowColor=col; o.shadowBlur=30;
+  const NN=12; const pts=[];
+  for(let i=0;i<NN;i++){ const a=i/NN*6.28; const r=R*(0.5+0.5*((i*7)%5)/5); pts.push([cx+Math.cos(a)*r, cy+Math.sin(a)*r*0.8]); }
+  for(let i=0;i<NN;i++){ for(let j=i+1;j<NN;j++){ const d=Math.hypot(pts[i][0]-pts[j][0],pts[i][1]-pts[j][1]); if(d<R*1.05){ o.globalAlpha=0.7; o.beginPath(); o.moveTo(pts[i][0],pts[i][1]); o.lineTo(pts[j][0],pts[j][1]); o.stroke(); } } }
+  o.shadowBlur=18; o.fillStyle=col; pts.forEach(p=>{ o.globalAlpha=1; o.beginPath(); o.arc(p[0],p[1],10,0,6.28); o.fill(); });
+  o.restore();
+  // texts
+  o.textAlign='center';
+  o.fillStyle='#fff'; o.shadowColor='rgba(0,229,255,.6)'; o.shadowBlur=24;
+  o.font='900 120px -apple-system,"Hiragino Sans",sans-serif'; o.fillText('退屈王', w/2, h*0.13);
+  o.shadowBlur=0; o.fillStyle=col; o.font='900 70px -apple-system,sans-serif'; o.fillText(rank, w/2, h*0.69);
+  o.fillStyle='#fff'; o.font='900 230px ui-monospace,monospace'; o.fillText(sec.toFixed(1), w/2, h*0.82);
+  o.fillStyle='#9aa6c0'; o.font='700 46px -apple-system,sans-serif'; o.fillText(won?'秒 耐え抜いた':'秒 我慢した', w/2, h*0.87);
+  o.fillStyle='#6b7390'; o.font='600 36px -apple-system,sans-serif';
+  o.fillText('#退屈王  何もしないゲーム', w/2, h*0.945);
+  o.fillStyle='#4f5468'; o.font='500 28px -apple-system,sans-serif';
+  o.fillText('Idea Radar · t-aka-h.github.io', w/2, h*0.975);
+
+  oc.toBlob(function(blob){
+    const file = new File([blob],'taikutsu-o.png',{type:'image/png'});
+    const data = {files:[file], title:'退屈王', text:`退屈王: ${sec.toFixed(1)}秒 我慢した（${rank}）`};
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share(data).catch(()=>{});
+    } else {
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='taikutsu-o.png';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
+    }
+  },'image/png');
+}
+
+// prevent context menu / scroll
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('gesturestart',e=>e.preventDefault());
+})();
+</script>
+</body>
+</html>
