@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Rōbai（狼狽） — 暴落で売るな</title>
+<meta name="theme-color" content="#0a0e1a">
+<meta property="og:title" content="Rōbai（狼狽）">
+<meta property="og:description" content="暴落で群衆が狼狽売りに走る中、売らずに耐えるとV字反発で報われる。我慢の体感ゲー。">
+<style>
+  :root{ --bg:#0a0e1a; --red:#ff2d55; --red2:#ff1744; --green:#00e676; --gold:#ffd400; --cyan:#00e5ff; --ink:#eaf0ff; --sub:#8a93b0; }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#05070f;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:var(--ink);}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  #stage{position:relative;width:100%;height:100%;max-width:540px;max-height:100vh;background:radial-gradient(120% 80% at 50% 0%,#121a30 0%,#0a0e1a 55%,#05070f 100%);overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;padding:max(14px,env(safe-area-inset-top)) 16px 8px;pointer-events:none;z-index:5;}
+  #tick{font-weight:800;font-size:13px;letter-spacing:.12em;color:var(--sub);}
+  #price{font-weight:900;font-size:42px;line-height:1;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(255,45,85,.45);}
+  #pct{font-weight:800;font-size:17px;margin-top:3px;font-variant-numeric:tabular-nums;}
+  #setrow{margin-top:8px;display:flex;gap:6px;align-items:center;}
+  .seg{flex:1;height:5px;border-radius:3px;background:#1b2440;overflow:hidden;}
+  .seg>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),#3aa0ff);transition:width .2s;}
+  /* grip */
+  #gripWrap{position:absolute;left:16px;bottom:calc(118px + env(safe-area-inset-bottom));right:16px;z-index:5;pointer-events:none;}
+  #gripLabel{font-size:11px;letter-spacing:.18em;color:var(--sub);font-weight:700;margin-bottom:4px;}
+  #grip{height:7px;border-radius:4px;background:#16203c;overflow:hidden;}
+  #grip>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0a6,#00e5ff);box-shadow:0 0 12px rgba(0,229,255,.6);}
+  /* SELL button */
+  #sellBtn{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(34px + env(safe-area-inset-bottom));z-index:6;
+    width:min(78%,360px);padding:20px 0;border-radius:20px;border:2px solid #ff5a78;
+    background:linear-gradient(180deg,#ff3b60,#c4123a);color:#fff;font-weight:900;font-size:21px;letter-spacing:.14em;
+    box-shadow:0 0 0 0 rgba(255,45,85,.55),0 10px 34px rgba(255,23,68,.4);text-align:center;cursor:pointer;user-select:none;
+    transition:transform .05s;}
+  #sellBtn small{display:block;font-weight:700;font-size:11px;letter-spacing:.1em;opacity:.85;margin-top:3px;}
+  #sellBtn:active{transform:translateX(-50%) scale(.97);}
+  @keyframes pulseBtn{0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,.0),0 10px 34px rgba(255,23,68,.35);}50%{box-shadow:0 0 36px 6px rgba(255,45,85,.5),0 10px 34px rgba(255,23,68,.5);}}
+  #sellBtn.live{animation:pulseBtn 1.1s ease-in-out infinite;}
+  /* overlays */
+  .screen{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;
+    background:radial-gradient(120% 90% at 50% 30%,rgba(12,18,40,.92),rgba(5,7,15,.97));backdrop-filter:blur(2px);}
+  .hidden{display:none!important;}
+  .logo{font-weight:900;font-size:13vw;max-font-size:64px;letter-spacing:.04em;line-height:.95;
+    background:linear-gradient(180deg,#ff5a78,#ff1744);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 22px rgba(255,45,85,.45));}
+  .kanji{font-size:54px;font-weight:900;letter-spacing:.18em;color:#ff3b60;text-shadow:0 0 26px rgba(255,45,85,.5);}
+  .tag{color:var(--sub);font-size:15px;margin-top:14px;line-height:1.7;max-width:300px;}
+  .btn{margin-top:26px;padding:16px 40px;border-radius:999px;border:none;font-weight:900;font-size:18px;letter-spacing:.1em;
+    background:linear-gradient(180deg,#16e08a,#00b366);color:#04120b;box-shadow:0 10px 30px rgba(0,230,118,.35);cursor:pointer;}
+  .btn.ghost{background:transparent;border:1.5px solid #2d3a5c;color:var(--ink);box-shadow:none;margin-top:14px;font-size:15px;padding:13px 30px;}
+  .how{margin-top:22px;color:var(--sub);font-size:13px;line-height:2;}
+  .how b{color:var(--ink);}
+  /* result card */
+  #cardHolder{z-index:21;}
+  #card{width:min(86vw,330px);aspect-ratio:9/16;border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .small{font-size:12px;color:var(--sub);margin-top:10px;letter-spacing:.04em;}
+  #flash{position:absolute;inset:0;z-index:15;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 55%,rgba(0,230,118,.5),rgba(255,212,0,.18) 40%,transparent 70%);}
+  .credit{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:10px;color:#34405e;z-index:4;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="flash"></div>
+
+  <div id="hud">
+    <div id="tick">NIKKEI FEAR INDEX · LIVE</div>
+    <div id="price">63,838</div>
+    <div id="pct">-0.00%</div>
+    <div id="setrow"><span style="font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.1em">SET</span>
+      <div class="seg"><i id="s0"></i></div><div class="seg"><i id="s1"></i></div><div class="seg"><i id="s2"></i></div>
+    </div>
+  </div>
+
+  <div id="gripWrap">
+    <div id="gripLabel">握力 GRIP</div>
+    <div id="grip"><i id="gripFill"></i></div>
+  </div>
+
+  <div id="sellBtn">狼狽売り<small>SELL — 押すな</small></div>
+
+  <!-- TITLE -->
+  <div class="screen" id="title">
+    <div class="kanji">狼狽</div>
+    <div class="logo">RŌBAI</div>
+    <div class="tag">暴落で群衆が一斉に投げ売りする。<br>つられて売れば<b style="color:#ff5a78">底値で損切り</b>。<br>売らずに耐えればV字反発で報われる。</div>
+    <button class="btn" id="startBtn">耐え始める</button>
+    <div class="how">
+      ❌ <b>「狼狽売り」は押すな</b> ── 押した瞬間にゲーム終了<br>
+      🟢 ダマシ反発に釣られず耐え抜け<br>
+      📈 真の反発が来たら勝ち
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="screen hidden" id="result">
+    <div id="cardHolder"><canvas id="card"></canvas></div>
+    <div class="small" id="cardHint">長押しで画像を保存できます</div>
+    <button class="btn" id="shareBtn">結果をシェア</button>
+    <button class="btn ghost" id="againBtn">もう一度</button>
+  </div>
+
+  <div class="credit">Idea Radar · L11×ワイルドカード · 単一HTML体感ゲー</div>
+</div></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Rōbai（狼狽） — survive the crash, don't panic-sell.
+   All Canvas + WebAudio + vibrate. No external deps.
+   ============================================================ */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){
+  const r=stage.getBoundingClientRect();
+  W=r.width;H=r.height;
+  cv.width=W*DPR;cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);resize();
+
+/* ---------- Audio (WebAudio synth, missing-fundamental sub-bass) ---------- */
+let AC=null,master=null,dread=null,dreadGain=null,heartT=0;
+function audioInit(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  master=AC.createGain();master.gain.value=0.0001;master.connect(AC.destination);
+  // dread drone: detuned saws low + harmonics so phone speakers feel it
+  dreadGain=AC.createGain();dreadGain.gain.value=0.0;dreadGain.connect(master);
+  const freqs=[41,55,82,110];
+  freqs.forEach((f,i)=>{
+    const o=AC.createOscillator();o.type=i<2?'sawtooth':'sine';o.frequency.value=f;
+    const g=AC.createGain();g.gain.value=(i<2?0.10:0.05);
+    o.connect(g);g.connect(dreadGain);o.start();
+  });
+  master.gain.exponentialRampToValueAtTime(0.9,AC.currentTime+0.4);
+}
+function setDread(level){ // 0..1
+  if(!AC) return;
+  dreadGain.gain.setTargetAtTime(0.02+level*0.5,AC.currentTime,0.2);
+}
+function beep(freq,dur,type,vol,slideTo){
+  if(!AC) return;
+  const o=AC.createOscillator();o.type=type||'sine';o.frequency.value=freq;
+  if(slideTo)o.frequency.exponentialRampToValueAtTime(slideTo,AC.currentTime+dur);
+  const g=AC.createGain();g.gain.value=0.0001;
+  g.gain.exponentialRampToValueAtTime(vol||0.3,AC.currentTime+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+dur);
+  o.connect(g);g.connect(master);o.start();o.stop(AC.currentTime+dur+0.05);
+}
+function noiseBurst(dur,vol){
+  if(!AC) return;
+  const n=AC.createBufferSource();const b=AC.createBuffer(1,AC.sampleRate*dur,AC.sampleRate);
+  const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+  n.buffer=b;const g=AC.createGain();g.gain.value=vol||0.25;
+  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=3000;
+  n.connect(f);f.connect(g);g.connect(master);n.start();
+}
+function fakeBell(){ beep(880,0.18,'triangle',0.18,1200); setTimeout(()=>beep(740,0.12,'sine',0.1),60); }
+function reliefChord(){
+  if(!AC) return;
+  [55,165,220,330,440].forEach((f,i)=>setTimeout(()=>beep(f,0.9,'sine',i===0?0.4:0.16),i*70));
+  noiseBurst(0.5,0.18); // cheer-ish
+}
+function crashHit(){ beep(70,0.5,'sawtooth',0.4,38); noiseBurst(0.3,0.3); }
+function vib(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+/* ---------- Game state ---------- */
+const G={ phase:'title', set:0, t:0, price:63838, base:63838, pct:0,
+  pressed:false, reboundFired:false, gripFrames:0, grip:0, maxGrip:0,
+  fakeCount:0, fakeSurvived:0, maxDraw:0, shake:0,
+  candles:[], particles:[], rebTimer:0, rebAt:0, fakeSchedule:[], fakeNext:0,
+  trendV:0, trend:0, fakeActive:false, fakeEnd:0, won:false, lossPct:0 };
+const SETS=3;
+
+function resetGame(){
+  G.set=0; G.fakeSurvived=0; G.maxGripAll=0; G.totalFake=0; G.bestDraw=0;
+}
+function newSet(){
+  G.t=0; G.price=63838; G.base=63838; G.pct=0; G.pressed=false; G.reboundFired=false;
+  G.gripFrames=0; G.grip=0; G.maxGrip=0; G.maxDraw=0; G.shake=0; G.candles=[]; G.particles=[];
+  G.fakeActive=false; G.won=false;
+  // difficulty per set
+  const dur=[ rand(9,15), rand(14,24), rand(20,40) ][G.set]||rand(16,30); // sec to true rebound
+  G.rebAt=dur;
+  G.rebTimer=0;
+  // schedule fakes
+  const nFake=[1,2,3][G.set]||2;
+  G.fakeSchedule=[];
+  for(let i=0;i<nFake;i++){ G.fakeSchedule.push( 2.2 + (dur-3)*( (i+1)/(nFake+1) ) + rand(-0.8,0.8) ); }
+  G.fakeSchedule=G.fakeSchedule.filter(x=>x>1.2 && x<dur-1.0).sort((a,b)=>a-b);
+  G.fakeIdx=0;
+  G.trend=-1; G.candles.push({o:G.price,c:G.price,h:G.price,l:G.price});
+  document.getElementById('sellBtn').classList.add('live');
+}
+function rand(a,b){return a+Math.random()*(b-a);}
+
+/* ---------- Particles ---------- */
+function spawnSell(){
+  // SELL text/particles streaming from edges toward center
+  const edge=Math.floor(Math.random()*3); // 0 top,1 left,2 right
+  let x,y;
+  if(edge===0){x=rand(0,W);y=-10;}
+  else if(edge===1){x=-10;y=rand(60,H*0.8);}
+  else {x=W+10;y=rand(60,H*0.8);}
+  const cx=W*0.5,cy=H*0.45;
+  const a=Math.atan2(cy-y,cx-x);
+  const sp=rand(1.4,3.2);
+  G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,kind:'sell',
+    txt:['SELL!','投げろ','逃げろ','終わりだ','売れ'][Math.floor(Math.random()*5)],sz:rand(11,18)});
+}
+function spawnBurst(x,y,color,n,sp){
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2;const s=rand(0.5,sp);
+    G.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-rand(0,1.5),life:1,kind:'spark',color});}
+}
+
+/* ---------- Loop ---------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(G.phase==='play') update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function update(dt){
+  G.t+=dt; G.rebTimer+=dt;
+  // ---- fakes ----
+  if(!G.won && G.fakeIdx<G.fakeSchedule.length && G.t>=G.fakeSchedule[G.fakeIdx] && !G.fakeActive){
+    G.fakeActive=true; G.fakeEnd=G.t+rand(0.9,1.5); G.fakeIdx++; fakeBell();
+  }
+  if(G.fakeActive && G.t>G.fakeEnd){ G.fakeActive=false; G.fakeSurvived++; G.totalFake=(G.totalFake||0)+1; crashHit(); G.shake=Math.min(14,G.shake+8); }
+  // ---- true rebound ----
+  if(!G.won && G.rebTimer>=G.rebAt){ triggerRebound(); }
+
+  // ---- price walk ----
+  let target;
+  const drop=G.t; // accelerate fall over time
+  if(G.won){
+    // shoot up
+    G.trendV += 0.5*dt*60;
+    G.price += G.trendV*60*dt;
+  } else if(G.fakeActive){
+    // fake bounce up a bit
+    G.price += rand(20,90)*dt*8;
+  } else {
+    // crashing: downward biased random walk, accelerating
+    const accel=1+drop*0.10;
+    G.price += (rand(-1,1)*60 - rand(40,120)*accel)*dt*1.6;
+  }
+  G.base=63838;
+  G.pct=(G.price/G.base-1)*100;
+  const dd=Math.min(0,G.pct);
+  if(-dd>G.maxDraw)G.maxDraw=-dd;
+
+  // candle accumulation
+  let cl=G.candles[G.candles.length-1];
+  cl.c=G.price;cl.h=Math.max(cl.h,G.price);cl.l=Math.min(cl.l,G.price);
+  if((G.candles.length<1)||(performance.now()%1<1 && G._lastCandle!==Math.floor(G.t*4))){}
+  if(Math.floor(G.t*4)!==G._lastCandle){
+    G._lastCandle=Math.floor(G.t*4);
+    G.candles.push({o:G.price,c:G.price,h:G.price,l:G.price});
+    if(G.candles.length>60)G.candles.shift();
+  }
+
+  // ---- grip (reward holding while deep underwater) ----
+  if(!G.won && G.pct< -3){ G.gripFrames+=dt; }
+  G.grip=Math.min(1, G.gripFrames/Math.max(4,G.rebAt*0.7));
+  if(G.grip>G.maxGrip)G.maxGrip=G.grip;
+
+  // ---- pressure / audio / particles ----
+  const fear=Math.min(1, (-dd)/14 + G.t/G.rebAt*0.4);
+  setDread(G.won?0.04:fear);
+  if(!G.won){
+    const rate=2+fear*10;
+    G._sellAcc=(G._sellAcc||0)+rate*dt;
+    while(G._sellAcc>1){G._sellAcc--;spawnSell();}
+    G.shake=Math.max(G.shake, fear*7 + (G.fakeActive?0:Math.min(6,G.t*0.3)) );
+    // heartbeat thump
+    heartT+=dt;
+    const interval=Math.max(0.34,0.95-fear*0.6);
+    if(heartT>interval){heartT=0;beep(46,0.12,'sine',0.18+fear*0.2);}
+  }
+
+  // update particles
+  for(const p of G.particles){
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.kind==='spark'){p.vy+=0.08;p.vx*=0.99;}
+    p.life-=dt*(p.kind==='sell'?0.5:0.9);
+  }
+  G.particles=G.particles.filter(p=>p.life>0);
+  G.shake*=0.90;
+
+  // ---- win handling ----
+  if(G.won){
+    G.winT=(G.winT||0)+dt;
+    if(G.winT>1.6){ endSet(true); }
+  }
+  // HUD
+  updateHUD();
+}
+
+function triggerRebound(){
+  G.won=true; G.winT=0; G.trendV=2;
+  document.getElementById('sellBtn').classList.remove('live');
+  reliefChord(); vib([0,30,40,30,40,120]);
+  flash();
+  spawnBurst(W*0.5,H*0.5,'#00e676',60,6);
+  spawnBurst(W*0.5,H*0.55,'#ffd400',30,5);
+}
+function flash(){
+  const f=document.getElementById('flash');
+  f.style.transition='none';f.style.opacity='1';
+  requestAnimationFrame(()=>{f.style.transition='opacity .9s ease-out';f.style.opacity='0';});
+}
+
+/* ---------- press SELL (lose) ---------- */
+function panicSell(){
+  if(G.phase!=='play'||G.won) return;
+  G.pressed=true;
+  beep(120,0.5,'sawtooth',0.3,40); noiseBurst(0.4,0.35); vib([0,80,30,120]);
+  G.lossPct=Math.min(0,G.pct);
+  spawnBurst(W*0.5,H*0.62,'#ff2d55',40,5);
+  document.getElementById('sellBtn').classList.remove('live');
+  setTimeout(()=>endSet(false),650);
+}
+
+/* ---------- set transition ---------- */
+function endSet(survived){
+  // record
+  G.bestDraw=Math.max(G.bestDraw,G.maxDraw);
+  G.maxGripAll=Math.max(G.maxGripAll||0,G.maxGrip);
+  if(survived){
+    G.set++;
+    if(G.set>=SETS){ finish(); return; }
+    newSet();
+  } else {
+    // panic-sold: game over immediately
+    G.survivedSets=G.set; G.panicked=true;
+    finish();
+  }
+}
+
+function finish(){
+  G.phase='result';
+  setDread(0);
+  if(AC) master.gain.setTargetAtTime(0.25,AC.currentTime,0.4);
+  buildCard();
+  document.getElementById('result').classList.remove('hidden');
+}
+
+/* ---------- HUD ---------- */
+function updateHUD(){
+  document.getElementById('price').textContent=Math.round(G.price).toLocaleString('en-US');
+  const pe=document.getElementById('pct');
+  pe.textContent=(G.pct>=0?'+':'')+G.pct.toFixed(2)+'%';
+  pe.style.color=G.pct>=0?'var(--green)':'var(--red)';
+  document.getElementById('price').style.color=G.pct>=0?'var(--green)':'var(--red)';
+  document.getElementById('gripFill').style.width=(G.grip*100)+'%';
+  for(let i=0;i<3;i++){
+    const f=document.getElementById('s'+i);
+    f.style.width=(i<G.set?100:(i===G.set?Math.min(100,G.rebTimer/G.rebAt*100):0))+'%';
+    if(i<G.set)f.style.background='linear-gradient(90deg,#00e676,#0bd)';
+  }
+}
+
+/* ---------- Render ---------- */
+function render(){
+  ctx.clearRect(0,0,W,H);
+  const sx=(Math.random()-0.5)*G.shake, sy=(Math.random()-0.5)*G.shake;
+  ctx.save();ctx.translate(sx,sy);
+
+  // chart area
+  const top=H*0.22, bot=H*0.70;
+  drawChart(top,bot);
+
+  // pressure veil (red closing in)
+  if(G.phase==='play' && !G.won){
+    const fear=Math.min(1,(G.maxDraw)/14 + G.t/G.rebAt*0.4);
+    const g=ctx.createRadialGradient(W/2,H*0.45,H*0.12,W/2,H*0.45,H*0.75);
+    g.addColorStop(0,'rgba(255,23,68,0)');
+    g.addColorStop(1,'rgba(255,23,68,'+(0.10+fear*0.42)+')');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  }
+  if(G.won){
+    const g=ctx.createRadialGradient(W/2,H*0.5,0,W/2,H*0.5,H*0.7);
+    g.addColorStop(0,'rgba(0,230,118,0.18)');g.addColorStop(1,'rgba(0,230,118,0)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  }
+
+  // particles
+  for(const p of G.particles){
+    if(p.kind==='sell'){
+      ctx.globalAlpha=Math.min(1,p.life)*0.9;
+      ctx.fillStyle='#ff1744';
+      ctx.font='800 '+p.sz+'px -apple-system,sans-serif';
+      ctx.textAlign='center';ctx.fillText(p.txt,p.x,p.y);
+    }else{
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,2.5*p.life+0.5,0,7);ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function drawChart(top,bot){
+  const c=G.candles; if(c.length<2)return;
+  let hi=-1e9,lo=1e9;
+  for(const k of c){hi=Math.max(hi,k.h);lo=Math.min(lo,k.l);}
+  // include base line context
+  hi=Math.max(hi,63838);lo=Math.min(lo,63838*0.86);
+  const pad=(hi-lo)*0.08||1;hi+=pad;lo-=pad;
+  const x0=8,x1=W-8;
+  const xof=i=>x0+(x1-x0)*(i/(c.length-1));
+  const yof=v=>top+(bot-top)*(1-(v-lo)/(hi-lo));
+  // base (entry) dashed line
+  ctx.strokeStyle='rgba(138,147,176,.35)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(x0,yof(63838));ctx.lineTo(x1,yof(63838));ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(138,147,176,.6)';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';
+  ctx.fillText('買値 63,838',x0+2,yof(63838)-5);
+
+  // area fill under line
+  const up=G.won||G.pct>=0;
+  const col=up?'#00e676':'#ff2d55';
+  ctx.beginPath();
+  ctx.moveTo(xof(0),bot);
+  for(let i=0;i<c.length;i++)ctx.lineTo(xof(i),yof(c[i].c));
+  ctx.lineTo(xof(c.length-1),bot);ctx.closePath();
+  const ag=ctx.createLinearGradient(0,top,0,bot);
+  ag.addColorStop(0,up?'rgba(0,230,118,.28)':'rgba(255,45,85,.30)');
+  ag.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=ag;ctx.fill();
+
+  // line
+  ctx.lineWidth=2.4;ctx.strokeStyle=col;ctx.lineJoin='round';
+  ctx.shadowColor=col;ctx.shadowBlur=14;
+  ctx.beginPath();
+  for(let i=0;i<c.length;i++){const x=xof(i),y=yof(c[i].c);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();ctx.shadowBlur=0;
+
+  // head dot
+  const hx=xof(c.length-1),hy=yof(c[c.length-1].c);
+  ctx.fillStyle=col;ctx.beginPath();ctx.arc(hx,hy,4.5,0,7);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(hx,hy,7,0,7);ctx.stroke();
+}
+
+/* ============================================================
+   Result share card (9:16) drawn on canvas
+   ============================================================ */
+function buildCard(){
+  const card=document.getElementById('card');
+  const cw=720,ch=1280;card.width=cw;card.height=ch;
+  const x=card.getContext('2d');
+  const won=!G.panicked;
+  // bg
+  const bg=x.createLinearGradient(0,0,0,ch);
+  bg.addColorStop(0,'#0d1426');bg.addColorStop(1,'#05070f');
+  x.fillStyle=bg;x.fillRect(0,0,cw,ch);
+  // top glow
+  const tg=x.createRadialGradient(cw/2,ch*0.18,0,cw/2,ch*0.18,cw*0.9);
+  tg.addColorStop(0,won?'rgba(0,230,118,.22)':'rgba(255,45,85,.22)');tg.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=tg;x.fillRect(0,0,cw,ch*0.6);
+
+  x.textAlign='center';
+  // header kanji
+  x.fillStyle=won?'#16e08a':'#ff3b60';
+  x.font='900 92px -apple-system,sans-serif';
+  x.shadowColor=won?'rgba(0,230,118,.6)':'rgba(255,45,85,.6)';x.shadowBlur=30;
+  x.fillText('狼狽',cw/2,200);x.shadowBlur=0;
+  x.fillStyle='#8a93b0';x.font='800 26px -apple-system,sans-serif';
+  x.fillText('R Ō B A I   ·   FEAR INDEX',cw/2,250);
+
+  // verdict
+  x.font='900 50px -apple-system,sans-serif';
+  x.fillStyle=won?'#eafff4':'#ffe3ea';
+  x.fillText(won?'暴落を耐え抜いた':'狼狽売りした',cw/2,360);
+
+  // mini V-chart sketch
+  drawCardChart(x,cw*0.5-250,420,500,180,won);
+
+  // big metric: 狼狽指数 (lower=stronger). compute
+  const robaiIdx = G.panicked
+      ? Math.round( 60 + (-G.lossPct)*2 )       // panicked: high
+      : Math.round( 8 + (3-(G.maxGripAll||G.maxGrip))*6 + (G.bestDraw||G.maxDraw)*0.4 ); // survived: low
+  const idxClamped=Math.max(2,Math.min(99,robaiIdx));
+  x.fillStyle='#8a93b0';x.font='800 28px -apple-system,sans-serif';
+  x.fillText('狼狽指数',cw/2,700);
+  x.fillStyle=won?'#00e676':'#ff2d55';
+  x.font='900 150px -apple-system,sans-serif';
+  x.shadowColor=won?'rgba(0,230,118,.5)':'rgba(255,45,85,.5)';x.shadowBlur=26;
+  x.fillText(idxClamped,cw/2,840);x.shadowBlur=0;
+  x.fillStyle='#5b6373';x.font='600 22px -apple-system,sans-serif';
+  x.fillText('低いほど鋼のメンタル',cw/2,880);
+
+  // grip stars
+  const stars=Math.max(0,Math.min(5,Math.round((G.maxGripAll||G.maxGrip)*5)+(won?1:0)));
+  x.font='900 40px -apple-system,sans-serif';
+  x.fillStyle='#00e5ff';
+  x.fillText('握力  '+'★'.repeat(stars)+'☆'.repeat(5-stars),cw/2,960);
+
+  // sub stats
+  x.fillStyle='#aeb8d4';x.font='600 30px -apple-system,sans-serif';
+  const fake=G.totalFake||0;
+  x.fillText('ダマシ反発 '+fake+'回を見切った',cw/2,1040);
+  x.fillText('最大含み損 -'+(G.bestDraw||G.maxDraw).toFixed(1)+'% から'+(won?'生還':'損切り'),cw/2,1090);
+  x.fillText('耐え抜いたセット '+(won?SETS:(G.survivedSets||0))+' / '+SETS,cw/2,1140);
+
+  // footer
+  x.fillStyle=won?'#16e08a':'#ff3b60';x.font='900 38px -apple-system,sans-serif';
+  x.fillText('R Ō B A I（狼狽）',cw/2,1210);
+  x.fillStyle='#34405e';x.font='600 20px -apple-system,sans-serif';
+  x.fillText('暴落で売るな。— Idea Radar',cw/2,1248);
+
+  document.getElementById('cardHint').textContent = won
+    ? '長押しで保存 — あなたの握力をシェア'
+    : '長押しで保存 — 次は耐えよう';
+}
+function drawCardChart(x,ox,oy,w,h,won){
+  x.save();
+  // crash then (win) rebound or (lose) flatline
+  x.strokeStyle=won?'#00e676':'#ff2d55';x.lineWidth=5;x.lineJoin='round';
+  x.shadowColor=won?'rgba(0,230,118,.7)':'rgba(255,45,85,.7)';x.shadowBlur=18;
+  x.beginPath();
+  const pts=[];
+  pts.push([0,h*0.25]);
+  pts.push([w*0.42,h*0.92]);
+  if(won){pts.push([w*0.62,h*0.85]);pts.push([w,h*0.06]);}
+  else {pts.push([w*0.62,h*0.95]);pts.push([w,h*0.98]);}
+  pts.forEach((p,i)=>{const px=ox+p[0],py=oy+p[1];i?x.lineTo(px,py):x.moveTo(px,py);});
+  x.stroke();x.shadowBlur=0;
+  // dot
+  const last=pts[pts.length-1];
+  x.fillStyle=won?'#ffd400':'#ff2d55';x.beginPath();x.arc(ox+last[0],oy+last[1],8,0,7);x.fill();
+  x.restore();
+}
+
+/* ---------- share ---------- */
+async function shareCard(){
+  const card=document.getElementById('card');
+  try{
+    const blob=await new Promise(r=>card.toBlob(r,'image/png'));
+    const file=new File([blob],'robai.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],text:'狼狽売りせず耐えた。#Rōbai #狼狽 暴落で売るな'});
+      return;
+    }
+  }catch(e){}
+  // fallback: open image
+  const url=card.toDataURL('image/png');
+  const w=window.open();if(w)w.document.write('<img src="'+url+'" style="width:100%">');
+}
+
+/* ---------- wiring ---------- */
+function start(){
+  audioInit();
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('result').classList.add('hidden');
+  resetGame(); G.phase='play'; newSet();
+}
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('againBtn').addEventListener('click',start);
+document.getElementById('shareBtn').addEventListener('click',shareCard);
+const sb=document.getElementById('sellBtn');
+sb.addEventListener('click',(e)=>{e.preventDefault();panicSell();});
+sb.addEventListener('touchstart',(e)=>{e.preventDefault();panicSell();},{passive:false});
+// resume audio on any tap
+document.addEventListener('touchstart',()=>{if(AC&&AC.state==='suspended')AC.resume();},{passive:true});
+document.addEventListener('click',()=>{if(AC&&AC.state==='suspended')AC.resume();});
+</script>
+</body>
+</html>
