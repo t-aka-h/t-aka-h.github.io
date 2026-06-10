@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060E">
+<title>分け前 — Wakemae</title>
+<meta name="description" content="膨れあがる巨大AI企業の富を、ジャストのタイミングで国民みんなに分け前として降らせる。欲張ると企業に逃げ切られてゼロ。1分で遊べる富の再分配リアクションゲー。">
+<style>
+  :root{
+    --bg:#05060E; --ink:#eaf2ff; --sub:#8aa0c8;
+    --cyan:#00E5FF; --mag:#FF2D87; --gold:#FFB547; --red:#FF1A4B; --citizen:#3A4A6B;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+    overflow:hidden;overscroll-behavior:none;touch-action:manipulation;}
+  #wrap{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;z-index:10;background:radial-gradient(120% 90% at 50% 30%,rgba(10,14,30,.5),rgba(5,6,14,.9));}
+  .hidden{display:none!important;}
+  .ttl{font-size:clamp(58px,19vw,128px);font-weight:900;letter-spacing:.06em;line-height:.96;
+    background:linear-gradient(180deg,var(--cyan),var(--mag));-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 26px rgba(0,229,255,.35));}
+  .romaji{font-size:13px;letter-spacing:.55em;color:var(--sub);margin:14px 0 2px;text-transform:uppercase;padding-left:.55em;}
+  .lead{font-size:15px;line-height:1.85;color:#cdd9f3;max-width:340px;margin:20px 0 8px;}
+  .lead b{color:var(--gold);font-weight:800;}
+  .hint{font-size:12.5px;color:var(--sub);max-width:320px;line-height:1.7;margin-top:4px;}
+  .btn{margin-top:26px;border:none;cursor:pointer;font-family:inherit;font-weight:800;font-size:18px;letter-spacing:.14em;
+    color:#05060E;padding:17px 46px;border-radius:40px;
+    background:linear-gradient(180deg,#7af0ff,var(--cyan));box-shadow:0 0 30px rgba(0,229,255,.5),0 8px 24px rgba(0,0,0,.4);}
+  .btn.gold{background:linear-gradient(180deg,#ffd790,var(--gold));box-shadow:0 0 30px rgba(255,181,71,.5),0 8px 24px rgba(0,0,0,.4);}
+  .btn:active{transform:translateY(2px) scale(.98);}
+  .btnrow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+  .btn.ghost{background:transparent;color:var(--ink);border:1.5px solid rgba(138,160,200,.5);box-shadow:none;}
+  #cardImg{width:min(74vw,300px);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.06);margin-bottom:4px;}
+  .ovh{font-size:13px;letter-spacing:.4em;color:var(--sub);text-transform:uppercase;margin-bottom:14px;}
+  .src{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#46506e;z-index:5;padding:0 14px;}
+  .src a{color:#5d77b0;text-decoration:none;}
+  .savehint{font-size:11.5px;color:var(--sub);margin-top:12px;line-height:1.6;max-width:300px;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<!-- TITLE -->
+<div class="screen" id="title">
+  <div class="ttl">分け前</div>
+  <div class="romaji">Wakemae</div>
+  <div class="lead">巨大AI企業の富が膨れあがる。<br><b>ジャスト</b>で叩けば国民みんなに分け前が降る。<br>欲張ると企業に逃げ切られて<b>ゼロ</b>。</div>
+  <div class="hint">膨らみのピーク直前が最大。でも待つほど破裂のリスクも上がる——あなたの欲と勝負。</div>
+  <button class="btn" id="startBtn">は じ め る</button>
+  <div class="hint" style="margin-top:18px;opacity:.8">画面のどこでもタップで「分配」</div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen hidden" id="over">
+  <div class="ovh">RESULT</div>
+  <img id="cardImg" alt="結果カード">
+  <div class="savehint">画像を長押しで保存／シェア</div>
+  <div class="btnrow" style="margin-top:18px">
+    <button class="btn gold" id="shareBtn">シェア</button>
+    <button class="btn ghost" id="againBtn">もう一度</button>
+  </div>
+</div>
+
+<div class="src">発想元：Anthropic IPO機密提出(2026/6/1)・Sanders「AI大手の株50%を国民へ」法案 ｜ Idea Radar 🏆</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- canvas ---------- */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- audio (synth only) ---------- */
+let AC=null, master=null;
+function ensureAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  }catch(e){ AC=null; }
+}
+let drone=null;
+function startDrone(){
+  if(!AC) return; stopDrone();
+  const g = AC.createGain(); g.gain.value=0.0001; g.connect(master);
+  const base=55, parts=[1,2,3,4], oscs=[], gains=[];
+  parts.forEach((m,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=base*m;
+    const og=AC.createGain(); og.gain.value=[0.5,0.32,0.2,0.13][i];
+    o.connect(og); og.connect(g); o.start(); oscs.push(o); gains.push(og);
+  });
+  drone={g,oscs,base};
+}
+function setDrone(r){
+  if(!drone||!AC) return;
+  const t=AC.currentTime;
+  drone.g.gain.setTargetAtTime(0.06+r*0.16, t, 0.05);
+  drone.oscs.forEach((o,i)=>{ o.frequency.setTargetAtTime(drone.base*(i+1)*(1+r*0.28), t, 0.06); });
+}
+function stopDrone(){
+  if(!drone) return; const d=drone; drone=null;
+  try{ d.g.gain.setTargetAtTime(0.0001, AC.currentTime, 0.08);
+    setTimeout(()=>{ d.oscs.forEach(o=>{try{o.stop();}catch(e){}}); }, 220);
+  }catch(e){}
+}
+function tone(freq,dur,type,vol,delay){
+  if(!AC) return; const t=AC.currentTime+(delay||0);
+  const o=AC.createOscillator(); o.type=type||'sine'; o.frequency.value=freq;
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol||0.3,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+function noiseBurst(dur,vol){
+  if(!AC) return; const n=Math.floor(AC.sampleRate*dur);
+  const buf=AC.createBuffer(1,n,AC.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.6);
+  const s=AC.createBufferSource(); s.buffer=buf;
+  const g=AC.createGain(); g.gain.value=vol||0.4;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1800;
+  s.connect(f); f.connect(g); g.connect(master); s.start();
+}
+function sweep(f0,f1,dur,vol){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  const g=AC.createGain(); g.gain.setValueAtTime(vol||0.4,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+function sfxSeize(m){
+  const notes=[523.25,659.25,783.99,1046.5];
+  notes.forEach((n,i)=> tone(n,0.5,'triangle',0.26,i*0.06));
+  if(m>=2.3){ tone(1318.5,0.6,'sine',0.18,0.26); tone(1567.98,0.7,'sine',0.14,0.34); }
+  tone(2093,0.25,'sine',0.12,0.02);
+}
+function sfxBurst(){ noiseBurst(0.5,0.55); sweep(120,38,0.55,0.5); }
+function vib(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
+
+/* ---------- game ---------- */
+const ROUNDS=5;
+let state='title';     // title | play | reward | burst | over
+let round=0, total=0, maxMult=0, bursts=0;
+let r=0, speed=0, burstK=0, peakLo=0, peakHi=0, peakWindowSeen=false;
+let lastSeizeMult=0, lastSeizeShare=0, floatTxt=null;
+let coins=[], shards=[], flash=0, shake=0;
+let citizens=[];
+let tPrev=0, animPhase=0, stateTimer=0;
+const rounds=[]; // {mult, share, burst}
+
+function rngRange(a,b){ return a+Math.random()*(b-a); }
+
+function setupCitizens(){
+  citizens=[]; const n=14;
+  for(let i=0;i<n;i++){ citizens.push({x:(i+0.5)/n, bob:0}); }
+}
+setupCitizens();
+
+function newRound(){
+  round++;
+  r=0; peakWindowSeen=false;
+  speed = 0.17 + (round-1)*0.026 + rngRange(-0.012,0.012);
+  burstK = 0.016 + (round-1)*0.004 + rngRange(-0.002,0.004);
+  // randomize peak window slightly each round
+  const c = rngRange(0.875,0.915), half=rngRange(0.035,0.05);
+  peakLo=c-half; peakHi=c+half;
+  state='play';
+  startDrone();
+}
+
+function multiplier(rr){
+  if(rr<0.5) return 0.30 + rr*0.40;                       // 0.30..0.50
+  if(rr<peakLo){ const t=(rr-0.5)/(peakLo-0.5); return 0.50 + Math.pow(t,1.6)*1.55; } // ->~2.05
+  if(rr<peakHi){ const t=(rr-peakLo)/(peakHi-peakLo); return 2.05 + Math.sin(t*Math.PI)*1.15 + t*0.05; } // peak ~3.2
+  return 3.05 - (rr-peakHi)*1.0;                           // gently declines after peak
+}
+function baseShare(){ return Math.round(28000*(1+(round-1)*0.62)); }
+
+function startGame(){
+  ensureAudio();
+  round=0; total=0; maxMult=0; bursts=0; rounds.length=0;
+  coins=[]; shards=[]; flash=0; shake=0;
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('over').classList.add('hidden');
+  newRound();
+}
+
+function seize(){
+  if(state!=='play') return;
+  const m=multiplier(r); const share=Math.round(baseShare()*m);
+  lastSeizeMult=m; lastSeizeShare=share; total+=share; maxMult=Math.max(maxMult,m);
+  rounds.push({mult:m,share:share,burst:false});
+  floatTxt={t:1,txt:'+¥'+share.toLocaleString('ja-JP'),y:0};
+  spawnCoins(m);
+  flash=Math.min(1,0.4+(m-2)*0.4); shake=Math.min(10,m*2.2);
+  sfxSeize(m); vib(m>=2.3?[20,30,60]:30);
+  stopDrone();
+  state='reward'; stateTimer=1.15;
+}
+function bust(){
+  bursts++; rounds.push({mult:0,share:0,burst:true});
+  spawnShards(); flash=1; shake=14;
+  sfxBurst(); vib(400); stopDrone();
+  state='burst'; stateTimer=1.1;
+}
+function afterRound(){
+  if(round>=ROUNDS){ endGame(); }
+  else newRound();
+}
+function endGame(){ state='over'; buildCard(); }
+
+/* ---------- particles ---------- */
+function bubbleCenter(){ return {x:W*0.5, y:H*0.42, R:Math.min(W,H)*0.30}; }
+function spawnCoins(m){
+  const c=bubbleCenter(); const n=Math.floor(60+m*28);
+  for(let i=0;i<n;i++){
+    coins.push({x:c.x+rngRange(-c.R*0.6,c.R*0.6), y:c.y-rngRange(0,c.R*0.4),
+      vx:rngRange(-1.2,1.2), vy:rngRange(1.5,4.0), g:0.13+Math.random()*0.06,
+      sz:rngRange(4,9), rot:Math.random()*6.28, vr:rngRange(-0.2,0.2), life:1, hit:false});
+  }
+}
+function spawnShards(){
+  const c=bubbleCenter(); const n=70;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.28, sp=rngRange(2,8);
+    shards.push({x:c.x,y:c.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,sz:rngRange(2,7),life:1,
+      col:Math.random()<0.5?'#FF2D87':'#FF1A4B'});
+  }
+}
+
+/* ---------- draw ---------- */
+function lerpColor(a,b,t){
+  return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)];
+}
+function drawBG(){
+  const g=ctx.createRadialGradient(W*0.5,H*0.34,0,W*0.5,H*0.5,Math.max(W,H)*0.75);
+  g.addColorStop(0,'#0b1126'); g.addColorStop(1,'#05060E');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+function drawDanger(rr){
+  if(rr<=0.68) return;
+  const a=Math.min(1,(rr-0.68)/0.32);
+  ctx.save();
+  const pulse=0.5+0.5*Math.sin(animPhase*9);
+  const lw=6+a*22*pulse;
+  ctx.strokeStyle='rgba(255,26,75,'+(0.20+a*0.55*pulse)+')';
+  ctx.lineWidth=lw; ctx.strokeRect(lw/2,lw/2,W-lw,H-lw);
+  ctx.shadowBlur=30*a; ctx.shadowColor='rgba(255,26,75,'+a+')';
+  ctx.strokeRect(lw/2,lw/2,W-lw,H-lw);
+  ctx.restore();
+}
+function drawCitizens(){
+  const baseY=H*0.86, n=citizens.length, ww=W*0.92, x0=W*0.04;
+  for(let i=0;i<n;i++){
+    const c=citizens[i]; const x=x0+c.x*ww; const bob=c.bob;
+    const y=baseY-bob;
+    ctx.save();
+    ctx.globalAlpha=0.9;
+    // head
+    ctx.fillStyle='#3A4A6B';
+    ctx.beginPath(); ctx.arc(x,y-13,5,0,6.283); ctx.fill();
+    // body
+    ctx.beginPath();
+    ctx.moveTo(x-6,y); ctx.lineTo(x-4,y-9); ctx.quadraticCurveTo(x,y-12,x+4,y-9); ctx.lineTo(x+6,y); ctx.closePath();
+    ctx.fill();
+    if(bob>1){ ctx.fillStyle='rgba(255,181,71,'+Math.min(1,bob/12)+')'; ctx.beginPath(); ctx.arc(x,y-13,7,0,6.283); ctx.fill(); }
+    ctx.restore();
+    c.bob*=0.86;
+  }
+  // ground line
+  ctx.strokeStyle='rgba(58,74,107,.5)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(x0,baseY+2); ctx.lineTo(x0+ww,baseY+2); ctx.stroke();
+}
+function drawBubble(rr,showUI){
+  const c=bubbleCenter();
+  const grow = 0.45 + rr*0.85;
+  const pulse = 1 + 0.02*Math.sin(animPhase*(3+rr*5));
+  const R = c.R*grow*pulse;
+  const cyan=[0,229,255], mag=[255,45,135], red=[255,26,75];
+  let col = rr<0.7 ? lerpColor(cyan,mag,rr/0.7) : lerpColor(mag,red,(rr-0.7)/0.3);
+  const cs='rgb('+col[0]+','+col[1]+','+col[2]+')';
+  ctx.save();
+  // concentric pulse rings
+  for(let k=3;k>=1;k--){
+    ctx.beginPath(); ctx.arc(c.x,c.y,R*(1+k*0.10*(0.6+0.4*Math.sin(animPhase*4-k))),0,6.283);
+    ctx.strokeStyle='rgba('+col[0]+','+col[1]+','+col[2]+','+(0.06*k)+')'; ctx.lineWidth=2; ctx.stroke();
+  }
+  // glow body
+  const g=ctx.createRadialGradient(c.x,c.y,R*0.1,c.x,c.y,R);
+  g.addColorStop(0,'rgba('+col[0]+','+col[1]+','+col[2]+',0.95)');
+  g.addColorStop(0.6,'rgba('+col[0]+','+col[1]+','+col[2]+',0.55)');
+  g.addColorStop(1,'rgba('+col[0]+','+col[1]+','+col[2]+',0.05)');
+  ctx.shadowBlur=40+rr*30; ctx.shadowColor=cs;
+  ctx.beginPath(); ctx.arc(c.x,c.y,R,0,6.283); ctx.fillStyle=g; ctx.fill();
+  ctx.shadowBlur=0;
+  // rim
+  ctx.beginPath(); ctx.arc(c.x,c.y,R,0,6.283); ctx.strokeStyle=cs; ctx.lineWidth=2.5; ctx.globalAlpha=0.8; ctx.stroke();
+  ctx.globalAlpha=1;
+  if(showUI){
+    const m=multiplier(rr), share=Math.round(baseShare()*m);
+    // multiplier big
+    ctx.textAlign='center';
+    ctx.fillStyle='#ffffff'; ctx.shadowBlur=18; ctx.shadowColor=cs;
+    ctx.font='900 '+Math.round(R*0.46)+'px -apple-system,sans-serif';
+    ctx.fillText('×'+m.toFixed(2), c.x, c.y+R*0.06);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    ctx.font='800 '+Math.round(R*0.15)+'px -apple-system,sans-serif';
+    ctx.fillText('今なら ¥'+share.toLocaleString('ja-JP'), c.x, c.y+R*0.30);
+    ctx.fillStyle='rgba(180,200,235,.7)';
+    ctx.font='700 '+Math.round(R*0.10)+'px -apple-system,sans-serif';
+    ctx.fillText('時価総額 膨張中', c.x, c.y-R*0.42);
+  }
+  ctx.restore();
+}
+function drawHUD(){
+  ctx.save();
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(138,160,200,.9)';
+  ctx.font='800 13px -apple-system,sans-serif';
+  ctx.fillText('ROUND '+round+' / '+ROUNDS, 18, 30);
+  ctx.textAlign='right';
+  ctx.fillStyle='#FFB547';
+  ctx.font='900 19px -apple-system,sans-serif';
+  ctx.fillText('¥'+total.toLocaleString('ja-JP'), W-18, 31);
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(138,160,200,.6)';
+  ctx.font='700 10px -apple-system,sans-serif';
+  ctx.fillText('国民への分け前 累計', W-18-ctx.measureText('国民への分け前 累計').width, 46);
+  ctx.restore();
+}
+function drawSeizeBtn(rr){
+  const y=H*0.74, w=Math.min(W*0.72,300), h=64, x=W*0.5-w/2;
+  const pulse=0.5+0.5*Math.sin(animPhase*5);
+  ctx.save();
+  ctx.shadowBlur=20+pulse*16; ctx.shadowColor='rgba(0,229,255,.7)';
+  const g=ctx.createLinearGradient(x,y,x,y+h); g.addColorStop(0,'#7af0ff'); g.addColorStop(1,'#00E5FF');
+  roundRect(x,y,w,h,32); ctx.fillStyle=g; ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#05060E'; ctx.font='900 24px -apple-system,sans-serif';
+  ctx.fillText('分配  SEIZE', W*0.5, y+h/2+1);
+  ctx.textBaseline='alphabetic';
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawCoins(){
+  for(const p of coins){
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+    ctx.fillStyle='rgba(255,181,71,'+p.life+')'; ctx.shadowBlur=8; ctx.shadowColor='#FFB547';
+    ctx.beginPath(); ctx.ellipse(0,0,p.sz,p.sz*0.7,0,0,6.283); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawShards(){
+  for(const s of shards){
+    ctx.save(); ctx.globalAlpha=s.life; ctx.fillStyle=s.col; ctx.shadowBlur=8; ctx.shadowColor=s.col;
+    ctx.fillRect(s.x,s.y,s.sz,s.sz); ctx.restore();
+  }
+}
+function drawFloat(){
+  if(!floatTxt) return;
+  ctx.save(); ctx.textAlign='center';
+  ctx.globalAlpha=floatTxt.t;
+  ctx.fillStyle='#FFB547'; ctx.shadowBlur=14; ctx.shadowColor='#FFB547';
+  ctx.font='900 34px -apple-system,sans-serif';
+  ctx.fillText(floatTxt.txt, W*0.5, H*0.42-bubbleCenter().R*0.7 + floatTxt.y);
+  ctx.restore();
+}
+function drawFlash(){
+  if(flash<=0) return;
+  ctx.save(); ctx.globalAlpha=flash*0.5;
+  ctx.fillStyle= state==='burst' ? '#FF1A4B' : '#ffffff';
+  ctx.fillRect(0,0,W,H); ctx.restore();
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  animPhase+=dt;
+  flash=Math.max(0,flash-dt*2.2);
+  shake=Math.max(0,shake-dt*30);
+  if(floatTxt){ floatTxt.t-=dt*0.9; floatTxt.y-=dt*40; if(floatTxt.t<=0) floatTxt=null; }
+  // coins physics
+  const groundY=H*0.86;
+  for(const p of coins){
+    if(!p.hit){ p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+      if(p.y>=groundY){ p.hit=true; p.y=groundY;
+        // bounce nearest citizen
+        const ww=W*0.92,x0=W*0.04; let idx=Math.round(((p.x-x0)/ww)*citizens.length-0.5);
+        idx=Math.max(0,Math.min(citizens.length-1,idx)); if(citizens[idx]) citizens[idx].bob=Math.min(16,citizens[idx].bob+9);
+      }
+    } else { p.life-=dt*1.4; }
+  }
+  coins=coins.filter(p=>p.life>0);
+  for(const s of shards){ s.vy+=0.18; s.x+=s.vx; s.y+=s.vy; s.life-=dt*1.0; }
+  shards=shards.filter(s=>s.life>0);
+
+  if(state==='play'){
+    r+=speed*dt;
+    setDrone(r);
+    if(r>=peakLo&&r<=peakHi) peakWindowSeen=true;
+    // burst chance
+    if(r>0.68){
+      const t=(r-0.68)/0.32; const p=t*t*burstK;
+      if(Math.random()<p){ bust(); return; }
+    }
+    if(r>=1.06){ bust(); return; } // overinflated -> forced burst
+  } else if(state==='reward' || state==='burst'){
+    stateTimer-=dt;
+    if(stateTimer<=0) afterRound();
+  }
+}
+
+/* ---------- render ---------- */
+function render(){
+  ctx.save();
+  if(shake>0){ ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake); }
+  drawBG();
+  drawDanger(state==='play'?r:(state==='burst'?1:0));
+  drawCitizens();
+  if(state==='play'){ drawBubble(r,true); drawSeizeBtn(r); }
+  else if(state==='reward'){ /* bubble gone, coins fall */ }
+  else if(state==='burst'){ /* shards */ }
+  drawCoins(); drawShards();
+  drawFloat();
+  drawHUD();
+  ctx.restore();
+  drawFlash();
+}
+
+/* ---------- loop ---------- */
+function loop(ts){
+  if(!tPrev) tPrev=ts;
+  let dt=(ts-tPrev)/1000; tPrev=ts; if(dt>0.05) dt=0.05;
+  if(state==='play'||state==='reward'||state==='burst'){ update(dt); render(); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- input ---------- */
+function onTap(e){
+  if(state==='play'){ e.preventDefault(); seize(); }
+}
+cv.addEventListener('pointerdown', onTap, {passive:false});
+
+/* ---------- share card ---------- */
+function titleFor(){
+  const avg = rounds.length? rounds.reduce((a,b)=>a+b.mult,0)/rounds.length : 0;
+  if(bursts>=3) return ['ロビーに逃げられた者','欲を出しすぎ。富は煙のように消えた。'];
+  if(avg>=2.4 && bursts<=1) return ['庶民の英雄','見事な間合い。国民は歓喜した。'];
+  if(avg<=1.1) return ['小心な徴税官','安全運転すぎ。もっと攻めてよかった。'];
+  if(bursts===0) return ['堅実な分配人','破裂ゼロ。手堅くまとめあげた。'];
+  return ['ほどほど分配人','悪くない。次はもっと欲を。'];
+}
+let cardURL=null;
+function buildCard(){
+  const cw=1080, ch=1920;
+  const oc=document.createElement('canvas'); oc.width=cw; oc.height=ch;
+  const x=oc.getContext('2d');
+  // bg
+  const g=x.createRadialGradient(cw/2,ch*0.34,0,cw/2,ch*0.5,ch*0.7);
+  g.addColorStop(0,'#0c1330'); g.addColorStop(1,'#05060E');
+  x.fillStyle=g; x.fillRect(0,0,cw,ch);
+  // frame
+  x.strokeStyle='rgba(0,229,255,.5)'; x.lineWidth=4; x.strokeRect(34,34,cw-68,ch-68);
+  x.textAlign='center';
+  // header
+  x.fillStyle='#8aa0c8'; x.font='800 30px -apple-system,sans-serif';
+  x.fillText('W A K E M A E  ·  分 け 前', cw/2, 140);
+  // bubble icon
+  const bg=x.createRadialGradient(cw/2,470,20,cw/2,470,210);
+  bg.addColorStop(0,'rgba(0,229,255,.95)'); bg.addColorStop(0.6,'rgba(255,45,135,.5)'); bg.addColorStop(1,'rgba(255,45,135,0)');
+  x.shadowBlur=60; x.shadowColor='#00E5FF';
+  x.beginPath(); x.arc(cw/2,470,200,0,6.283); x.fillStyle=bg; x.fill(); x.shadowBlur=0;
+  // label
+  x.fillStyle='#cdd9f3'; x.font='800 40px -apple-system,sans-serif';
+  x.fillText('国民1人あたりの分け前', cw/2, 820);
+  // big yen
+  const per = citizens.length? Math.round(total/ Math.max(1,(ROUNDS-bursts))) : total;
+  x.fillStyle='#FFB547'; x.shadowBlur=34; x.shadowColor='#FFB547';
+  x.font='900 150px -apple-system,sans-serif';
+  x.fillText('¥'+total.toLocaleString('ja-JP'), cw/2, 980);
+  x.shadowBlur=0;
+  // title
+  const [tt,desc]=titleFor();
+  x.fillStyle='#00E5FF'; x.font='900 78px -apple-system,sans-serif';
+  x.fillText(tt, cw/2, 1180);
+  x.fillStyle='#9fb2d6'; x.font='600 36px -apple-system,sans-serif';
+  x.fillText(desc, cw/2, 1250);
+  // stats row
+  function stat(cx,val,lab){
+    x.fillStyle='#eaf2ff'; x.font='900 64px -apple-system,sans-serif'; x.fillText(val,cx,1470);
+    x.fillStyle='#7d92ba'; x.font='700 30px -apple-system,sans-serif'; x.fillText(lab,cx,1530);
+  }
+  stat(cw*0.27,'×'+maxMult.toFixed(2),'最大係数');
+  stat(cw*0.50,(ROUNDS-bursts)+'/'+ROUNDS,'分配成功');
+  stat(cw*0.73, bursts+'回','逃げられ破裂');
+  // footer
+  x.fillStyle='#5d77b0'; x.font='600 30px -apple-system,sans-serif';
+  const d=new Date(); const ds=d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
+  x.fillText('巨大AIの富は誰のもの？  #分け前  '+ds, cw/2, 1700);
+  x.fillStyle='#46506e'; x.font='600 26px -apple-system,sans-serif';
+  x.fillText('t-aka-h.github.io/idea-radar', cw/2, 1770);
+
+  cardURL = oc.toDataURL('image/png');
+  const img=document.getElementById('cardImg'); img.src=cardURL;
+  document.getElementById('over').classList.remove('hidden');
+}
+
+/* ---------- buttons ---------- */
+document.getElementById('startBtn').addEventListener('click', ()=>{ ensureAudio(); if(AC&&AC.state==='suspended')AC.resume(); startGame(); });
+document.getElementById('againBtn').addEventListener('click', ()=>{ startGame(); });
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  try{
+    if(cardURL && navigator.canShare){
+      const blob=await (await fetch(cardURL)).blob();
+      const file=new File([blob],'wakemae.png',{type:'image/png'});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:'分け前',text:'巨大AIの富、国民への分け前は ¥'+total.toLocaleString('ja-JP')+'！ #分け前'}); return; }
+    }
+    if(navigator.share){ await navigator.share({title:'分け前',text:'巨大AIの富、国民への分け前は ¥'+total.toLocaleString('ja-JP')+'！ #分け前 t-aka-h.github.io/idea-radar/wakemae/'}); return; }
+    const a=document.createElement('a'); a.href=cardURL; a.download='wakemae.png'; a.click();
+  }catch(e){ try{ const a=document.createElement('a'); a.href=cardURL; a.download='wakemae.png'; a.click(); }catch(_){} }
+});
+
+/* ---------- test hook ---------- */
+window.WAKEMAE = {
+  get state(){return state;}, get round(){return round;}, get total(){return total;},
+  get r(){return r;}, get bursts(){return bursts;},
+  start:startGame, seize:seize,
+  _step:function(dt){ update(dt); render(); }   // test-only frame pump (harmless in prod)
+};
+})();
+</script>
+</body>
+</html>
