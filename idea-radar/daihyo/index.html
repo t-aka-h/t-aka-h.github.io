@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070F">
+<title>Daihyō（代表）— 架空W杯代表ジェネレーター</title>
+<style>
+  :root{
+    --bg:#06070F; --bg2:#0B0E1A; --ink:#EAF0FF; --sub:#8b93b5;
+    --cyan:#00E5FF; --mag:#FF2D87; --gold:#FFD400; --grn:#34D399;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:
+      radial-gradient(1200px 800px at 50% -10%, #15193080 0%, transparent 60%),
+      radial-gradient(900px 700px at 80% 110%, #2a0e3a55 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    display:flex;flex-direction:column;align-items:center;
+    overflow:hidden;position:fixed;inset:0;width:100%;height:100dvh;
+    touch-action:manipulation;
+  }
+  header{padding:10px 0 4px;text-align:center;flex:0 0 auto;}
+  .logo{font-weight:900;letter-spacing:.14em;font-size:19px;
+    background:linear-gradient(90deg,var(--cyan),var(--mag));
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo b{color:var(--gold);-webkit-text-fill-color:var(--gold);margin-left:6px;font-size:15px;letter-spacing:.05em;}
+  .tag{font-size:10px;color:var(--sub);letter-spacing:.16em;margin-top:2px;}
+  .stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;width:100%;position:relative;min-height:0;}
+  .cardWrap{position:relative;will-change:transform;}
+  #card{display:block;border-radius:18px;box-shadow:0 14px 40px #000a, 0 0 0 1px #ffffff10;background:#0b0e1a;}
+  .flip{animation:flip .52s cubic-bezier(.6,.0,.2,1);}
+  @keyframes flip{0%{transform:scaleX(1);}50%{transform:scaleX(.02) skewX(8deg);}100%{transform:scaleX(1);}}
+  #fx{position:absolute;inset:0;pointer-events:none;z-index:5;}
+  .rarityTag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+    font-size:11px;font-weight:800;letter-spacing:.2em;padding:3px 12px;border-radius:999px;
+    background:#0008;border:1px solid #fff3;white-space:nowrap;opacity:0;transition:opacity .3s;}
+  .controls{flex:0 0 auto;width:100%;max-width:480px;padding:8px 16px calc(14px + env(safe-area-inset-bottom));}
+  .row{display:flex;gap:10px;margin-top:9px;}
+  button{font-family:inherit;border:0;border-radius:14px;color:var(--ink);font-weight:800;
+    padding:13px;cursor:pointer;letter-spacing:.05em;}
+  .summon{flex:1;font-size:20px;letter-spacing:.18em;color:#08111c;
+    background:linear-gradient(135deg,var(--cyan),#48ffd0);
+    box-shadow:0 8px 26px #00e5ff55, inset 0 0 0 1px #ffffff66;}
+  .summon:active{transform:translateY(2px) scale(.99);}
+  .ghost{flex:1;font-size:14px;background:#ffffff12;border:1px solid #ffffff22;color:var(--ink);}
+  .stats{display:flex;justify-content:center;gap:14px;font-size:11px;color:var(--sub);margin-top:10px;letter-spacing:.06em;}
+  .stats b{color:var(--gold);}
+  /* modal */
+  .modal{position:fixed;inset:0;background:#04060ccc;backdrop-filter:blur(3px);z-index:30;
+    display:none;flex-direction:column;padding:18px 16px calc(18px + env(safe-area-inset-bottom));}
+  .modal.open{display:flex;}
+  .modal h2{margin:4px 0 2px;font-size:16px;letter-spacing:.1em;}
+  .modal .msub{font-size:11px;color:var(--sub);margin-bottom:10px;}
+  .grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .slot{aspect-ratio:9/16;border-radius:10px;background:#11152a;border:1px solid #ffffff14;
+    position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:6px;cursor:pointer;}
+  .slot .nm{font-size:9.5px;font-weight:800;line-height:1.15;}
+  .slot .pz{font-size:8px;color:var(--sub);}
+  .slot .rr{position:absolute;top:4px;right:5px;font-size:7.5px;font-weight:900;letter-spacing:.08em;}
+  .empty{grid-column:1/-1;text-align:center;color:var(--sub);font-size:12px;padding:40px 0;}
+  .close{margin-top:12px;background:#ffffff14;border:1px solid #ffffff22;}
+  .hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:var(--sub);
+    font-size:13px;line-height:1.7;pointer-events:none;z-index:8;transition:opacity .4s;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">DAIHYŌ<b>代表</b></div>
+  <div class="tag">架空ワールドカップ代表ジェネレーター</div>
+</header>
+
+<div class="stage">
+  <div class="cardWrap" id="cardWrap">
+    <div class="rarityTag" id="rarityTag">—</div>
+    <canvas id="card" width="540" height="960"></canvas>
+    <canvas id="fx"></canvas>
+  </div>
+  <div class="hint" id="hint">「召集！」を押して<br>キミだけの代表選手を<br>爆誕させろ</div>
+</div>
+
+<div class="controls">
+  <div class="row">
+    <button class="summon" id="summon">召集！</button>
+  </div>
+  <div class="row">
+    <button class="ghost" id="daily">本日の代表</button>
+    <button class="ghost" id="share">シェア</button>
+    <button class="ghost" id="zukan">図鑑</button>
+  </div>
+  <div class="stats">
+    <span>召集 <b id="sTotal">0</b></span>
+    <span>金 <b id="sGold">0</b></span>
+    <span>虹 <b id="sRain">0</b></span>
+    <span>伝説 <b id="sLeg">0</b></span>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <h2>召集図鑑</h2>
+  <div class="msub">タップでそのカードを再召集 ・ 最大60枚保存</div>
+  <div class="grid" id="grid"></div>
+  <button class="close" id="closeM">閉じる</button>
+</div>
+
+<script>
+"use strict";
+/* ============ PRNG (mulberry32) ============ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ============ data tables ============ */
+const HEAD=["ヴェル","ザン","ノル","ガル","クレ","ミド","レオ","バル","トス","ウル","エン","フリ","グラン","ベル","カザ","ソル","ドラ","ネオ","リヴ","アズ","モン","ティ","ヴァス","ゴル"];
+const MID=["カニ","ドリ","メス","ターニ","ガリ","ヴィニ","スタ","ロニ","ベリ","ムン","ラジ","フェル","ニ","ヴァ","スキ","トピ","ザル","ミア"];
+const TAIL=["ア","ランド","スタン","シア","ニア","ーニャ","ガルド","ヴィア","ポリ","ドーラ"];
+const STATE=["共和国","王国","連邦","首長国","民主国","自治州","公国","帝国"];
+const POS=["GK","DF","DF","MF","MF","MF","FW","FW","WG","CB","SB","DM","AM"];
+const POS_CHAOS=["謎のFW","幻のSW","第12の男","影のキャプテン","自称エース","元GK"];
+const SPIN=["無回転","三回転","逆回転","重力無視","音速","異次元","残像","真空","虹色","二重","量子","闇"];
+const BODY=["バナナ","ファルコン","ドラゴン","三半規管","タイガー","ゴースト","裏拍","エビ反り","ムーンサルト","蜃気楼","稲妻","渦潮"];
+const KIND=["シュート","ヘッド","ボレー","オーバーヘッド","ロングフィード","ドリブル","トラップ","スルーパス","ヒールリフト"];
+const PHRASE=["走ると芝が逃げる","ボールより速く謝る","延長戦の支配者","ハーフタイムに消える","審判も見惚れる","重力と契約済み","観客の心拍を操る","ロスタイムから来た","笛が鳴る前に動く","オフサイドの概念を超えた","芝より緑のメンタル","スタジアムを黙らせる男"];
+const PHRASE_CHAOS=["ルールブックを食べた","次元の狭間から来訪","存在自体が反則級","誰も招集を覚えてない","CPUがバグって生まれた","実在を疑われている"];
+const AXES=["スピード","シュート","守備","メンタル","カオス度"];
+
+/* rarity */
+const RARITY=[
+  {key:"BRONZE", jp:"ブロンズ",  p:0.60, col:"#c08a4e", glow:"#c08a4e"},
+  {key:"SILVER", jp:"シルバー",  p:0.25, col:"#c8d0dc", glow:"#dfe7f5"},
+  {key:"GOLD",   jp:"ゴールド",  p:0.105,col:"#FFD400", glow:"#ffe45a"},
+  {key:"RAINBOW",jp:"虹",        p:0.035,col:"#ff5bd0", glow:"#00E5FF"},
+  {key:"LEGEND", jp:"伝説",      p:0.005,col:"#ff2d2d", glow:"#ff8a00"},
+];
+function rarityFromRoll(r){let acc=0;for(const x of RARITY){acc+=x.p;if(r<acc)return x;}return RARITY[0];}
+
+/* glitchify (legend) */
+function glitch(s){const g=["█","▓","∆","Ξ","¥","≋","◍"];let o="";for(const ch of s){o+=ch;if(Math.random()<0.18)o+=g[(Math.random()*g.length)|0];}return o;}
+
+/* ============ generate a player from seed ============ */
+function genPlayer(seed){
+  const rnd=mulberry32(seed>>>0);
+  const pick=a=>a[(rnd()*a.length)|0];
+  const ri=(lo,hi)=>lo+((rnd()*(hi-lo+1))|0);
+
+  const rar=rarityFromRoll(rnd());
+  const chaosCard = rar.key==="RAINBOW"||rar.key==="LEGEND";
+
+  // name
+  let nm = pick(HEAD)+pick(MID)+pick(TAIL);
+  if(rnd()<0.45) nm = pick(HEAD)+pick(TAIL);
+  let country = nm + (rnd()<0.55 ? pick(STATE) : "");
+  if(rar.key==="LEGEND") country = glitch(nm)+pick(STATE);
+
+  // position / number / age
+  let pos = (chaosCard && rnd()<0.7) ? pick(POS_CHAOS) : pick(POS);
+  let num = ri(1,99);
+  let age = ri(16,41);
+  if(rar.key==="LEGEND"){ num=99; age = rnd()<0.5? 99 : ri(16,20); }
+
+  // tech
+  const tech = (rar.key==="LEGEND") ? glitch(pick(SPIN)+pick(BODY))+pick(KIND)
+            : pick(SPIN)+pick(BODY)+pick(KIND);
+  const phrase = chaosCard && rnd()<0.6 ? pick(PHRASE_CHAOS) : pick(PHRASE);
+
+  // stats 1-99
+  let base = {BRONZE:[40,72],SILVER:[55,82],GOLD:[68,90],RAINBOW:[78,97],LEGEND:[90,99]}[rar.key];
+  const stat = ()=> ri(base[0],base[1]);
+  let stats=[stat(),stat(),stat(),stat(), ri(20,99)]; // last = カオス度
+  if(chaosCard) stats[4]=ri(80,99);
+  if(rar.key==="LEGEND") stats[4]=99;
+
+  // flag colors (HSL, distinct hues, high sat)
+  const h1=(rnd()*360)|0;
+  const h2=(h1 + 60 + (rnd()*180|0))%360;
+  const h3=(h2 + 40 + (rnd()*120|0))%360;
+  const pal=[`hsl(${h1},78%,52%)`,`hsl(${h2},80%,55%)`,`hsl(${h3},72%,48%)`];
+  const flagLayout=(rnd()*5)|0;   // 0 vstripe 1 hstripe 2 diag 3 cross 4 triband
+  const flagSymbol=(rnd()*5)|0;   // 0 none 1 circle 2 star 3 triangle 4 diamond
+  const symCol = `hsl(${(h3+180)%360},90%,${flagLayout===2?40:70}%)`;
+
+  return {seed,rar,country,pos,num,age,tech,phrase,stats,pal,flagLayout,flagSymbol,symCol};
+}
+
+/* ============ rendering ============ */
+const view = document.getElementById('card');
+const vctx = view.getContext('2d');
+const CW=1080, CH=1920;                 // master render resolution
+const master = document.createElement('canvas'); master.width=CW; master.height=CH;
+const mctx = master.getContext('2d');
+
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+function drawFlag(c,x,y,w,h,p){
+  c.save();roundRect(c,x,y,w,h,16);c.clip();
+  c.fillStyle=p.pal[0];c.fillRect(x,y,w,h);
+  const L=p.flagLayout;
+  if(L===0){c.fillStyle=p.pal[1];c.fillRect(x+w/3,y,w/3,h);c.fillStyle=p.pal[2];c.fillRect(x+2*w/3,y,w/3,h);}
+  else if(L===1){c.fillStyle=p.pal[1];c.fillRect(x,y+h/3,w,h/3);c.fillStyle=p.pal[2];c.fillRect(x,y+2*h/3,w,h/3);}
+  else if(L===2){c.fillStyle=p.pal[1];c.beginPath();c.moveTo(x,y+h);c.lineTo(x+w,y);c.lineTo(x+w,y+h);c.closePath();c.fill();
+       c.fillStyle=p.pal[2];c.beginPath();c.moveTo(x,y);c.lineTo(x+w*0.5,y);c.lineTo(x,y+h*0.5);c.closePath();c.fill();}
+  else if(L===3){c.fillStyle=p.pal[1];c.fillRect(x,y+h*0.40,w,h*0.20);c.fillRect(x+w*0.40,y,w*0.20,h);
+       c.fillStyle=p.pal[2];c.fillRect(x+w*0.44,y,w*0.12,h);}
+  else {c.fillStyle=p.pal[1];c.fillRect(x,y,w*0.5,h);c.fillStyle=p.pal[2];c.fillRect(x,y,w*0.18,h);}
+  // symbol
+  const cx=x+w*0.5, cy=y+h*0.5, s=Math.min(w,h)*0.22;
+  c.fillStyle=p.symCol;c.strokeStyle=p.symCol;c.lineWidth=8;
+  const S=p.flagSymbol;
+  if(S===1){c.beginPath();c.arc(cx,cy,s,0,7);c.fill();}
+  else if(S===2){star(c,cx,cy,s,s*0.45,5);c.fill();}
+  else if(S===3){c.beginPath();c.moveTo(cx,cy-s);c.lineTo(cx+s,cy+s);c.lineTo(cx-s,cy+s);c.closePath();c.fill();}
+  else if(S===4){c.beginPath();c.moveTo(cx,cy-s);c.lineTo(cx+s,cy);c.lineTo(cx,cy+s);c.lineTo(cx-s,cy);c.closePath();c.fill();}
+  c.restore();
+}
+function star(c,cx,cy,R,r,n){c.beginPath();for(let i=0;i<n*2;i++){const a=Math.PI*i/n - Math.PI/2;const rr=i%2?r:R;c.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr);}c.closePath();}
+
+function drawRadar(c,cx,cy,R,stats){
+  const n=5;
+  // grid
+  c.strokeStyle="#ffffff22";c.lineWidth=2;
+  for(let ring=1;ring<=3;ring++){c.beginPath();for(let i=0;i<n;i++){const a=Math.PI*2*i/n-Math.PI/2;const rr=R*ring/3;const X=cx+Math.cos(a)*rr,Y=cy+Math.sin(a)*rr;i?c.lineTo(X,Y):c.moveTo(X,Y);}c.closePath();c.stroke();}
+  for(let i=0;i<n;i++){const a=Math.PI*2*i/n-Math.PI/2;c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);c.stroke();}
+  // value polygon
+  c.beginPath();for(let i=0;i<n;i++){const a=Math.PI*2*i/n-Math.PI/2;const rr=R*(stats[i]/99);const X=cx+Math.cos(a)*rr,Y=cy+Math.sin(a)*rr;i?c.lineTo(X,Y):c.moveTo(X,Y);}c.closePath();
+  c.fillStyle="#34D39966";c.strokeStyle="#34D399";c.lineWidth=4;
+  c.shadowColor="#34D399";c.shadowBlur=18;c.fill();c.stroke();c.shadowBlur=0;
+  // labels + values
+  c.font="600 26px sans-serif";c.textAlign="center";
+  for(let i=0;i<n;i++){const a=Math.PI*2*i/n-Math.PI/2;const X=cx+Math.cos(a)*(R+44),Y=cy+Math.sin(a)*(R+44)+9;
+    c.fillStyle="#aeb6d6";c.fillText(AXES[i],X,Y-20);
+    c.fillStyle=i===4?"#FF2D87":"#EAF0FF";c.font="800 30px sans-serif";c.fillText(stats[i],X,Y+12);c.font="600 26px sans-serif";}
+}
+
+function renderCard(c,P,foilT){
+  c.clearRect(0,0,CW,CH);
+  // base
+  c.fillStyle="#0a0d18";roundRect(c,0,0,CW,CH,40);c.fill();
+  const g=c.createLinearGradient(0,0,0,CH);g.addColorStop(0,"#121733");g.addColorStop(1,"#070a14");
+  c.fillStyle=g;roundRect(c,0,0,CW,CH,40);c.fill();
+  // rarity frame
+  const fr=P.rar;
+  c.lineWidth=18;
+  if(fr.key==="RAINBOW"||fr.key==="LEGEND"){
+    const lg=c.createLinearGradient(0,0,CW,CH);
+    const hue=(Date.now()/12)%360;
+    for(let i=0;i<=6;i++)lg.addColorStop(i/6,`hsl(${(hue+i*60)%360},90%,60%)`);
+    c.strokeStyle=lg;
+  } else c.strokeStyle=fr.col;
+  c.shadowColor=fr.glow;c.shadowBlur=fr.key==="BRONZE"?8:28;
+  roundRect(c,16,16,CW-32,CH-32,34);c.stroke();c.shadowBlur=0;
+
+  // top label band
+  c.fillStyle=fr.col;c.font="800 34px sans-serif";c.textAlign="left";
+  c.fillText("WORLD CUP",70,86);
+  c.textAlign="right";c.fillStyle="#7f88ad";c.font="700 26px sans-serif";c.fillText("FANTASY XI",CW-70,86);
+
+  // flag
+  drawFlag(c,70,120,CW-140,500,P);
+
+  // foil sweep overlay on flag area (gold+)
+  if(foilT!=null && (fr.key==="GOLD"||fr.key==="RAINBOW"||fr.key==="LEGEND")){
+    c.save();roundRect(c,70,120,CW-140,500,16);c.clip();
+    const sx=-300+(CW+600)*foilT;
+    const fg=c.createLinearGradient(sx-160,0,sx+160,0);
+    fg.addColorStop(0,"#fff0");fg.addColorStop(.5,"#ffffff66");fg.addColorStop(1,"#fff0");
+    c.fillStyle=fg;c.fillRect(0,120,CW,500);c.restore();
+  }
+
+  // country name
+  c.textAlign="center";c.fillStyle="#fff";
+  let nm=P.country, fs=64; c.font=`900 ${fs}px sans-serif`;
+  while(c.measureText(nm).width>CW-140 && fs>30){fs-=2;c.font=`900 ${fs}px sans-serif`;}
+  c.shadowColor=fr.glow;c.shadowBlur=fr.key==="BRONZE"?0:16;
+  c.fillText(nm,CW/2,712);c.shadowBlur=0;
+
+  // pos / num / age chips
+  const chips=[["POS",P.pos],["NO.",String(P.num)],["AGE",String(P.age)]];
+  const cw=300, gap=30, totalW=cw*3+gap*2, sx0=(CW-totalW)/2;
+  chips.forEach((ch,i)=>{const x=sx0+i*(cw+gap);
+    c.fillStyle="#ffffff10";roundRect(c,x,748,cw,108,18);c.fill();
+    c.strokeStyle="#ffffff20";c.lineWidth=2;roundRect(c,x,748,cw,108,18);c.stroke();
+    c.fillStyle="#8b93b5";c.font="700 24px sans-serif";c.fillText(ch[0],x+cw/2,786);
+    c.fillStyle=fr.col;c.font="900 50px sans-serif";c.fillText(ch[1],x+cw/2,838);});
+
+  // radar
+  drawRadar(c,CW/2,1180,210,P.stats);
+
+  // signature move
+  c.fillStyle="#8b93b5";c.font="700 26px sans-serif";c.textAlign="center";
+  c.fillText("必殺技",CW/2,1520);
+  c.fillStyle="#00E5FF";c.font="900 46px sans-serif";
+  let tech=P.tech, tfs=46; while(c.measureText(tech).width>CW-150 && tfs>26){tfs-=2;c.font=`900 ${tfs}px sans-serif`;}
+  c.shadowColor="#00E5FF";c.shadowBlur=14;c.fillText(tech,CW/2,1576);c.shadowBlur=0;
+
+  // catchphrase
+  c.fillStyle="#cdd4f0";c.font="italic 700 34px sans-serif";
+  c.fillText("「"+P.phrase+"」",CW/2,1670);
+
+  // footer: rarity + seed + app
+  c.fillStyle=fr.col;c.font="900 30px sans-serif";c.textAlign="left";
+  c.fillText("★ "+fr.jp,70,CH-70);
+  c.fillStyle="#5b6383";c.font="700 24px sans-serif";c.textAlign="right";
+  c.fillText("#"+P.seed,CW-70,CH-110);
+  c.fillStyle="#7f88ad";c.fillText("DAIHYŌ 代表 — t-aka-h.github.io",CW-70,CH-70);
+}
+
+function blitToView(){
+  const dpr=Math.min(window.devicePixelRatio||1,2.5);
+  // fit card to viewport
+  const stageEl=document.querySelector('.stage');
+  const stageH=(stageEl.clientHeight||Math.round(window.innerHeight*0.62))-18;
+  const stageW=Math.min(window.innerWidth-32,460);
+  let h=stageH, w=h*9/16; if(w>stageW){w=stageW;h=w*16/9;}
+  view.style.width=w+'px';view.style.height=h+'px';
+  view.width=Math.round(w*dpr);view.height=Math.round(h*dpr);
+  fx.style.width=w+'px';fx.style.height=h+'px';fx.width=Math.round(w*dpr);fx.height=Math.round(h*dpr);
+  vctx.clearRect(0,0,view.width,view.height);
+  vctx.drawImage(master,0,0,view.width,view.height);
+}
+
+/* ============ audio (WebAudio, all synth) ============ */
+let AC=null;
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(AC&&AC.state==="suspended")AC.resume();return AC;}
+function bassHit(rarity){
+  const a=ac();if(!a)return;const t=a.currentTime;
+  const base=rarity==="LEGEND"?42:48;
+  const partials=rarity==="LEGEND"?[1,2,3,4]:rarity==="RAINBOW"?[1,2,3]:[1,2];
+  partials.forEach((m,i)=>{const o=a.createOscillator(),g=a.createGain();o.type="sine";o.frequency.value=base*m;
+    o.connect(g);g.connect(a.destination);const amp=(i===0?0.5:0.22)/ (i+1);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(amp,t+0.006);g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+    o.start(t);o.stop(t+0.6);});
+  if(rarity==="RAINBOW"||rarity==="LEGEND"){ // noise burst
+    const n=a.sampleRate*0.25,buf=a.createBuffer(1,n,a.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+    const src=a.createBufferSource();src.buffer=buf;const f=a.createBiquadFilter();f.type="lowpass";f.frequency.value=900;
+    const g=a.createGain();g.gain.setValueAtTime(0.4,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+    src.connect(f);f.connect(g);g.connect(a.destination);src.start(t);
+  }
+}
+function blip(rarity){
+  const a=ac();if(!a)return;const t=a.currentTime;
+  const o=a.createOscillator(),g=a.createGain();o.type="triangle";
+  o.frequency.setValueAtTime(rarity==="SILVER"?560:420,t);o.frequency.exponentialRampToValueAtTime(rarity==="SILVER"?880:520,t+0.09);
+  g.gain.setValueAtTime(0.18,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.18);
+}
+function summonSfx(){const a=ac();if(!a)return;const t=a.currentTime;
+  const o=a.createOscillator(),g=a.createGain();o.type="sawtooth";
+  o.frequency.setValueAtTime(180,t);o.frequency.exponentialRampToValueAtTime(60,t+0.3);
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.12,t+0.04);g.gain.exponentialRampToValueAtTime(0.001,t+0.34);
+  const f=a.createBiquadFilter();f.type="lowpass";f.frequency.value=1200;
+  o.connect(f);f.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.36);}
+
+function vibe(rarity){if(!navigator.vibrate)return;
+  const map={BRONZE:[12],SILVER:[10,40,10],GOLD:[28,30,12],RAINBOW:[40,30,40,30,80],LEGEND:[60,40,60,40,120,40,140]};
+  navigator.vibrate(map[rarity]||[12]);}
+
+/* ============ particles (fx canvas) ============ */
+const fx=document.getElementById('fx');const fctx=fx.getContext('2d');
+let parts=[],fxRun=false;
+function burst(rarity){
+  const W=fx.width,H=fx.height;const cx=W/2,cy=H*0.36;
+  const N=rarity==="LEGEND"?220:rarity==="RAINBOW"?150:rarity==="GOLD"?60:0;
+  for(let i=0;i<N;i++){const a=Math.random()*7,sp=2+Math.random()*9;
+    parts.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,life:1,
+      col:rarity==="GOLD"?"#FFD400":`hsl(${(Math.random()*360)|0},90%,62%)`,r:2+Math.random()*4});}
+  if(!fxRun){fxRun=true;requestAnimationFrame(stepFx);}
+}
+function stepFx(){fctx.clearRect(0,0,fx.width,fx.height);let alive=false;
+  for(const p of parts){if(p.life<=0)continue;alive=true;p.vy+=0.18;p.x+=p.vx;p.y+=p.vy;p.life-=0.018;
+    fctx.globalAlpha=Math.max(0,p.life);fctx.fillStyle=p.col;fctx.beginPath();fctx.arc(p.x,p.y,p.r,0,7);fctx.fill();}
+  fctx.globalAlpha=1;
+  if(alive)requestAnimationFrame(stepFx);else{parts=[];fxRun=false;fctx.clearRect(0,0,fx.width,fx.height);}
+}
+
+/* ============ state & flow ============ */
+let current=null;
+const rarityTag=document.getElementById('rarityTag');
+const wrap=document.getElementById('cardWrap');
+const hint=document.getElementById('hint');
+
+function newSeed(){return (Math.random()*2_000_000_000)>>>0;}
+
+function show(P,opts){
+  current=P;
+  cancelAnimationFrame(foilRAF);   // stop any prior card's foil loop (prevents race)
+  // animate flip; swap content at midpoint
+  wrap.classList.remove('flip');void wrap.offsetWidth;wrap.classList.add('flip');
+  summonSfx();
+  rarityTag.style.opacity=0;
+  setTimeout(()=>{
+    renderCard(mctx,P,null);blitToView();
+    rarityTag.textContent="★ "+P.rar.jp;rarityTag.style.color=P.rar.col;
+    rarityTag.style.borderColor=P.rar.col+"99";rarityTag.style.opacity=1;
+    // sfx by rarity
+    if(P.rar.key==="GOLD"||P.rar.key==="RAINBOW"||P.rar.key==="LEGEND")bassHit(P.rar.key);
+    else blip(P.rar.key);
+    vibe(P.rar.key);
+    burst(P.rar.key);
+    foilAnim(P);
+    if(!(opts&&opts.record===false))record(P);
+    location.replace("#s="+P.seed);
+  },250);
+  hint.style.opacity=0;
+}
+
+let foilRAF=0;
+function foilAnim(P){
+  if(!(P.rar.key==="GOLD"||P.rar.key==="RAINBOW"||P.rar.key==="LEGEND")){return;}
+  cancelAnimationFrame(foilRAF);const t0=performance.now();
+  const loop=(now)=>{if(current!==P)return;let t=(now-t0)/850;
+    if(t>1){renderCard(mctx,P,null);blitToView();return;}
+    renderCard(mctx,P,t);blitToView();foilRAF=requestAnimationFrame(loop);};
+  foilRAF=requestAnimationFrame(loop);
+}
+
+function summon(){show(genPlayer(newSeed()));}
+function daily(){const d=new Date();const seed=parseInt(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`);show(genPlayer(seed));}
+
+/* ============ collection (localStorage) ============ */
+const LS="daihyo_v1";
+function loadDB(){try{return JSON.parse(localStorage.getItem(LS))||{total:0,gold:0,rain:0,leg:0,cards:[]};}catch(e){return{total:0,gold:0,rain:0,leg:0,cards:[]};}}
+function saveDB(db){try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}}
+function record(P){const db=loadDB();db.total++;if(P.rar.key==="GOLD")db.gold++;if(P.rar.key==="RAINBOW")db.rain++;if(P.rar.key==="LEGEND")db.leg++;
+  if(!db.cards.some(c=>c.seed===P.seed)){db.cards.unshift({seed:P.seed,nm:P.country,pos:P.pos,num:P.num,rk:P.rar.key,col:P.rar.col});db.cards=db.cards.slice(0,60);}
+  saveDB(db);renderStats(db);}
+function renderStats(db){db=db||loadDB();sTotal.textContent=db.total;sGold.textContent=db.gold;sRain.textContent=db.rain;sLeg.textContent=db.leg;}
+
+/* zukan modal */
+const modal=document.getElementById('modal'),grid=document.getElementById('grid');
+function openZukan(){const db=loadDB();grid.innerHTML="";
+  if(!db.cards.length){grid.innerHTML='<div class="empty">まだ召集していません</div>';}
+  db.cards.forEach(c=>{const r=RARITY.find(x=>x.key===c.rk)||RARITY[0];
+    const el=document.createElement('div');el.className="slot";el.style.borderColor=r.col+"66";
+    el.style.boxShadow=`inset 0 0 22px ${r.col}22`;
+    el.innerHTML=`<div class="rr" style="color:${r.col}">${r.jp}</div><div class="nm">${c.nm}</div><div class="pz">${c.pos} ・ No.${c.num}</div>`;
+    el.onclick=()=>{modal.classList.remove('open');show(genPlayer(c.seed),{record:false});};
+    grid.appendChild(el);});
+  modal.classList.add('open');}
+
+/* ============ share ============ */
+async function share(){
+  if(!current){summon();return;}
+  renderCard(mctx,current,null);
+  master.toBlob(async(blob)=>{
+    if(!blob)return;
+    const file=new File([blob],`daihyo_${current.seed}.png`,{type:"image/png"});
+    const text=`架空W杯代表「${current.country}」を召集！ #DAIHYŌ\nt-aka-h.github.io/idea-radar/daihyo/`;
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],text});return;}catch(e){}
+    }
+    // fallback download
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  },"image/png");
+}
+
+/* ============ wire up ============ */
+document.getElementById('summon').onclick=()=>{ac();summon();};
+document.getElementById('daily').onclick=()=>{ac();daily();};
+document.getElementById('share').onclick=()=>{ac();share();};
+document.getElementById('zukan').onclick=()=>{ac();openZukan();};
+document.getElementById('closeM').onclick=()=>modal.classList.remove('open');
+modal.onclick=(e)=>{if(e.target===modal)modal.classList.remove('open');};
+window.addEventListener('resize',()=>{if(current){renderCard(mctx,current,null);blitToView();}});
+
+renderStats();
+// deep link: if URL has seed, show it (no record); else idle until tap
+(function init(){
+  const m=location.hash.match(/s=(\d+)/);
+  blitToView();
+  if(m){const P=genPlayer(parseInt(m[1])>>>0);renderCard(mctx,P,null);blitToView();current=P;
+    rarityTag.textContent="★ "+P.rar.jp;rarityTag.style.color=P.rar.col;rarityTag.style.borderColor=P.rar.col+"99";rarityTag.style.opacity=1;hint.style.opacity=0;}
+})();
+</script>
+</body>
+</html>
