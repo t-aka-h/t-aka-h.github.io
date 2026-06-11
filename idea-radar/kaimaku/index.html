@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>開幕 — Kaimaku</title>
+<style>
+  :root{
+    --r:#ff2d55; --g:#34e0a1; --b:#2d9bff;
+    --bg:#04030a; --ink:#eaf2ff; --dim:#7d8aa8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:manipulation;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;width:100%;height:100%;}
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:28px;}
+  .hidden{display:none!important;}
+  h1{font-size:clamp(42px,16vw,86px);font-weight:900;letter-spacing:.04em;line-height:.95;
+    background:linear-gradient(92deg,var(--r),var(--g) 52%,var(--b));-webkit-background-clip:text;
+    background-clip:text;color:transparent;filter:drop-shadow(0 0 18px rgba(80,180,255,.35));}
+  .romaji{margin-top:6px;font-size:14px;letter-spacing:.5em;color:var(--dim);padding-left:.5em;}
+  .sub{margin-top:22px;font-size:15px;line-height:1.7;color:#b9c6e6;max-width:300px;}
+  .tag{margin-top:14px;font-size:11px;letter-spacing:.22em;color:var(--dim);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .cta{margin-top:30px;padding:17px 40px;border-radius:40px;font-size:18px;font-weight:800;
+    letter-spacing:.12em;color:#04030a;background:linear-gradient(92deg,#ffe24a,#ff9d3c);
+    box-shadow:0 0 28px rgba(255,180,60,.5);}
+  .ghost{margin-top:16px;padding:13px 30px;border-radius:34px;font-size:14px;font-weight:700;
+    letter-spacing:.1em;color:var(--ink);background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.16);}
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;padding:16px 20px;
+    display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:5;}
+  .hcol{display:flex;flex-direction:column;}
+  .hk{font-size:10px;letter-spacing:.2em;color:var(--dim);}
+  .hv{font-size:26px;font-weight:900;line-height:1;margin-top:3px;
+    font-variant-numeric:tabular-nums;}
+  #hint{position:absolute;bottom:46px;left:0;right:0;text-align:center;font-size:13px;
+    letter-spacing:.16em;color:#9fb0d6;pointer-events:none;z-index:5;transition:opacity .3s;}
+  /* result */
+  .rank{font-size:clamp(34px,12vw,64px);font-weight:900;letter-spacing:.06em;
+    filter:drop-shadow(0 0 16px currentColor);}
+  .bignum{font-size:clamp(64px,26vw,130px);font-weight:900;line-height:.9;
+    font-variant-numeric:tabular-nums;
+    background:linear-gradient(92deg,var(--r),var(--g) 52%,var(--b));-webkit-background-clip:text;
+    background-clip:text;color:transparent;}
+  .bignum small{font-size:.32em;color:var(--dim);-webkit-text-fill-color:var(--dim);letter-spacing:.1em;}
+  .rrow{margin-top:10px;font-size:13px;letter-spacing:.14em;color:#9fb0d6;}
+  .credit{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:10px;
+    letter-spacing:.14em;color:#4a5675;z-index:6;}
+  .credit a{color:#6678a0;text-decoration:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="hcol"><span class="hk">KICKOFF</span><span class="hv" id="kRound">1 / 7</span></div>
+  <div class="hcol" style="align-items:flex-end"><span class="hk">SYNC</span><span class="hv" id="kAvg">—</span></div>
+</div>
+<div id="hint" class="hidden">3つの笛が中央で重なる瞬間に画面をタップ</div>
+
+<!-- TITLE -->
+<div class="layer" id="title">
+  <h1>開幕</h1>
+  <div class="romaji">KAIMAKU</div>
+  <div class="sub">2026.6.11 — 史上初、3カ国“同時”開幕。<br>米・墨・加、3つの笛をひとつに揃えろ。</div>
+  <button class="cta" id="startBtn">タップして整列</button>
+  <div class="tag">3カ国同時キックオフ・同期体感</div>
+</div>
+
+<!-- RESULT -->
+<div class="layer hidden" id="result">
+  <div class="rank" id="rRank">PERFECT SYNC</div>
+  <div class="bignum" id="rNum" style="margin-top:14px">98<small>%</small></div>
+  <div class="rrow" id="rDetail">最高同期 99% ・ PERFECT ×3</div>
+  <button class="cta" id="shareBtn">結果カードをシェア</button>
+  <button class="ghost" id="againBtn">もう一度</button>
+</div>
+
+<div class="credit">Idea Radar 🏆 2026-06-11 ・ <a href="../">他の優勝作を見る</a></div>
+
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){W=cv.clientWidth;H=cv.clientHeight;cv.width=W*DPR;cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);}
+window.addEventListener("resize",resize);resize();
+
+const LANES=[
+  {name:"USA",   col:"#ff2d55", rgb:[255,45,85]},
+  {name:"MEXICO",col:"#34e0a1", rgb:[52,224,161]},
+  {name:"CANADA",col:"#2d9bff", rgb:[45,155,255]}
+];
+const TOTAL=7;
+
+// ---------- audio ----------
+let AC=null;
+function ac(){ if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}
+  if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+function bass(strength){ // missing-fundamental stadium rumble (base 44Hz)
+  const a=ac(); if(!a)return; const t=a.currentTime;
+  const g=a.createGain(); g.connect(a.destination);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.0001,t);
+  const partials=[88,132,176,220,264,308], vol=0.16*strength;
+  partials.forEach((f,i)=>{const o=a.createOscillator();o.type="sine";o.frequency.value=f;
+    const og=a.createGain();og.gain.value=vol/(1+i*0.5);o.connect(og);og.connect(g);
+    o.start(t);o.stop(t+0.9);});
+  g.gain.linearRampToValueAtTime(strength,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.9);
+}
+function whistle(ok){
+  const a=ac(); if(!a)return; const t=a.currentTime;
+  const o=a.createOscillator(),g=a.createGain();o.type="square";
+  o.frequency.setValueAtTime(ok?2100:900,t);
+  o.frequency.exponentialRampToValueAtTime(ok?760:520,t+0.16);
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.10,t+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.20);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.22);
+}
+function crowd(strength){ // band-limited noise swell = stadium roar
+  const a=ac(); if(!a)return; const t=a.currentTime,dur=0.9;
+  const buf=a.createBuffer(1,a.sampleRate*dur,a.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1);
+  const src=a.createBufferSource();src.buffer=buf;
+  const f=a.createBiquadFilter();f.type="bandpass";f.frequency.value=620;f.Q.value=0.7;
+  const g=a.createGain();g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(0.16*strength,t+0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  src.connect(f);f.connect(g);g.connect(a.destination);src.start(t);src.stop(t+dur);
+}
+function chord(){ const a=ac(); if(!a)return; const t=a.currentTime;
+  [523,659,784,1046].forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();
+    o.type="triangle";o.frequency.value=f;const tt=t+i*0.06;
+    g.gain.setValueAtTime(0.0001,tt);g.gain.linearRampToValueAtTime(0.08,tt+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,tt+0.5);
+    o.connect(g);g.connect(a.destination);o.start(tt);o.stop(tt+0.5);});
+}
+function vibe(p){ if(navigator.vibrate)try{navigator.vibrate(p);}catch(e){} }
+
+// ---------- state ----------
+let mode="title"; // title|play|result
+let round=0, scores=[], best=0, perfects=0;
+let freqs=[0,0,0], phases=[0,0,0], pos=[0.5,0.5,0.5];
+let armed=false, t0=0, lockT=-99, lastLock=null;
+let particles=[], flash=0, shake=0;
+let lockedPositions=null, lockedAvgErr=0;
+
+function newRound(){
+  // speeds drift apart with round → harder to find the common centre
+  const spread=0.18+round*0.05;
+  const base=0.34+round*0.03;
+  freqs=[base*(1-spread*0.5), base, base*(1+spread*0.5)];
+  phases=[Math.random()*6.28, Math.random()*6.28, Math.random()*6.28];
+  armed=true; t0=performance.now()/1000; lockT=-99; lockedPositions=null;
+  document.getElementById("kRound").textContent=(round+1)+" / "+TOTAL;
+}
+function startGame(){
+  ac(); whistle(true);
+  mode="play"; round=0; scores=[]; best=0; perfects=0;
+  document.getElementById("title").classList.add("hidden");
+  document.getElementById("result").classList.add("hidden");
+  document.getElementById("hud").classList.remove("hidden");
+  document.getElementById("hint").classList.remove("hidden");
+  document.getElementById("hint").style.opacity=1;
+  document.getElementById("kAvg").textContent="—";
+  newRound();
+}
+
+function lock(){
+  if(mode!=="play"||!armed)return;
+  armed=false; lockT=performance.now()/1000;
+  lockedPositions=pos.slice();
+  // error = how far each puck is from centre (0.5). 0 = perfect.
+  const d=pos.map(p=>Math.abs(p-0.5));
+  const e=(d[0]+d[1]+d[2])/3;          // 0 .. ~0.45
+  lockedAvgErr=e;
+  const sync=Math.max(0,Math.round(100*(1-e/0.30)));
+  let rank;
+  if(e<0.035){rank="PERFECT";perfects++;bass(1.0);crowd(1.0);whistle(true);chord();vibe([40,30,40,30,90]);
+    burst(1.0);flash=1;shake=10;}
+  else if(e<0.10){rank="GREAT";bass(0.6);crowd(0.7);whistle(true);vibe([30,30,60]);burst(0.6);flash=0.5;shake=5;}
+  else {rank="OFF";bass(0.2);whistle(false);vibe(28);flash=0.15;shake=2;}
+  lastLock={sync,rank};
+  scores.push(sync); if(sync>best)best=sync;
+  document.getElementById("kAvg").textContent=Math.round(scores.reduce((a,b)=>a+b,0)/scores.length)+"%";
+  document.getElementById("hint").style.opacity=0;
+  setTimeout(()=>{
+    round++;
+    if(round>=TOTAL){finish();}
+    else{document.getElementById("hint").style.opacity=1;newRound();}
+  },1150);
+}
+function finish(){
+  mode="result";
+  const avg=Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+  let rk,rc;
+  if(avg>=92){rk="PERFECT SYNC";rc="#ffe24a";}
+  else if(avg>=78){rk="WORLD READY";rc="#34e0a1";}
+  else if(avg>=60){rk="ALMOST";rc="#2d9bff";}
+  else{rk="OUT OF SYNC";rc="#ff2d55";}
+  document.getElementById("rRank").textContent=rk;
+  document.getElementById("rRank").style.color=rc;
+  document.getElementById("rNum").innerHTML=avg+'<small>%</small>';
+  document.getElementById("rDetail").textContent="最高同期 "+best+"% ・ PERFECT ×"+perfects;
+  lastResult={avg,best,perfects,rk,rc};
+  document.getElementById("hud").classList.add("hidden");
+  document.getElementById("hint").classList.add("hidden");
+  setTimeout(()=>document.getElementById("result").classList.remove("hidden"),650);
+}
+let lastResult={avg:0,best:0,perfects:0,rk:"",rc:"#fff"};
+
+// ---------- particles ----------
+function burst(strength){
+  const cx=W/2, n=Math.floor(120*strength);
+  for(let i=0;i<n;i++){
+    const lane=i%3, col=LANES[lane].rgb;
+    const ang=(Math.random()-0.5)*Math.PI*2;
+    const sp=2+Math.random()*7*strength;
+    particles.push({x:cx,y:laneY(lane),vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp*0.6,
+      life:1,col,sz:1.5+Math.random()*2.5});
+  }
+}
+function laneY(i){ const top=H*0.30, span=H*0.40; return top+span*(i/2); }
+
+// ---------- render ----------
+function draw(now){
+  const t=now/1000;
+  ctx.clearRect(0,0,W,H);
+  // bg vignette
+  const bgGrad=ctx.createRadialGradient(W/2,H*0.45,40,W/2,H*0.45,H*0.75);
+  bgGrad.addColorStop(0,"#0a0a18");bgGrad.addColorStop(1,"#04030a");
+  ctx.fillStyle=bgGrad;ctx.fillRect(0,0,W,H);
+
+  let sx=0,sy=0;
+  if(shake>0){sx=(Math.random()-0.5)*shake;sy=(Math.random()-0.5)*shake;shake*=0.86;if(shake<0.3)shake=0;}
+  ctx.save();ctx.translate(sx,sy);
+
+  if(mode==="play"||mode==="result"){
+    const trackTop=H*0.27, trackBot=H*0.73, span=trackBot-trackTop;
+    const padX=W*0.10, x0=padX, x1=W-padX, trackW=x1-x0;
+    const cxLine=W/2;
+
+    // update positions
+    if(mode==="play"&&armed){
+      const el=t-t0;
+      for(let i=0;i<3;i++) pos[i]=0.5+0.46*Math.sin(2*Math.PI*freqs[i]*el+phases[i]);
+    } else if(lockedPositions){ pos=lockedPositions; }
+
+    // proximity glow: how aligned the 3 are at centre right now
+    const dNow=(Math.abs(pos[0]-0.5)+Math.abs(pos[1]-0.5)+Math.abs(pos[2]-0.5))/3;
+    const align=Math.max(0,1-dNow/0.12); // 0..1
+
+    // central SYNC line
+    ctx.save();
+    const pulse=0.4+0.6*align+0.15*Math.sin(t*8);
+    ctx.strokeStyle="rgba(255,255,255,"+(0.25+0.6*align)+")";
+    ctx.lineWidth=1+3*align;
+    ctx.shadowColor="rgba(180,220,255,"+pulse+")";ctx.shadowBlur=10+34*align;
+    ctx.setLineDash([8,9]);
+    ctx.beginPath();ctx.moveTo(cxLine,trackTop-26);ctx.lineTo(cxLine,trackBot+26);ctx.stroke();
+    ctx.restore();
+    // sync label
+    ctx.font="700 10px -apple-system,sans-serif";ctx.textAlign="center";
+    ctx.fillStyle="rgba(200,220,255,"+(0.4+0.5*align)+")";
+    ctx.fillText("SYNC",cxLine,trackTop-32);
+
+    for(let i=0;i<3;i++){
+      const y=trackTop+span*(i/2);
+      const col=LANES[i].col, rgb=LANES[i].rgb;
+      // lane track
+      ctx.strokeStyle="rgba("+rgb.join(",")+",0.25)";ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+      // edge neon caps
+      ctx.fillStyle=col;
+      [x0,x1].forEach(xx=>{ctx.save();ctx.shadowColor=col;ctx.shadowBlur=10;
+        ctx.beginPath();ctx.arc(xx,y,3,0,7);ctx.fill();ctx.restore();});
+      // lane name
+      ctx.font="700 9px -apple-system,sans-serif";ctx.textAlign="left";
+      ctx.fillStyle="rgba("+rgb.join(",")+",0.7)";
+      ctx.fillText(LANES[i].name,x0,y-12);
+      // puck
+      const px=x0+trackW*pos[i];
+      const atC=Math.max(0,1-Math.abs(pos[i]-0.5)/0.08);
+      ctx.save();ctx.shadowColor=col;ctx.shadowBlur=14+18*atC;
+      const grd=ctx.createRadialGradient(px,y,0,px,y,12+8*atC);
+      grd.addColorStop(0,"#ffffff");grd.addColorStop(0.4,col);grd.addColorStop(1,"rgba("+rgb.join(",")+",0)");
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(px,y,12+8*atC,0,7);ctx.fill();
+      ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(px,y,3.5,0,7);ctx.fill();
+      ctx.restore();
+      // locked offset marker
+      if(lockedPositions&&mode==="play"){
+        ctx.strokeStyle="rgba(255,255,255,.5)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(px,y-16);ctx.lineTo(px,y+16);ctx.stroke();
+      }
+    }
+
+    // lock banner
+    if(mode==="play"&&lastLock&&t-lockT<1.1){
+      const a=1-(t-lockT)/1.1;
+      ctx.globalAlpha=Math.min(1,a*1.6);
+      ctx.textAlign="center";
+      const c=lastLock.rank==="PERFECT"?"#ffe24a":lastLock.rank==="GREAT"?"#34e0a1":"#ff6b8a";
+      ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=24;
+      ctx.font="900 40px -apple-system,sans-serif";
+      ctx.fillText(lastLock.rank+"!",W/2,H*0.20);
+      ctx.shadowBlur=0;ctx.font="800 20px -apple-system,sans-serif";ctx.fillStyle="#fff";
+      ctx.fillText(lastLock.sync+"%",W/2,H*0.20+30);
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.vx*=0.985;p.life-=0.018;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    ctx.globalAlpha=p.life;ctx.fillStyle="rgba("+p.col.join(",")+",1)";
+    ctx.shadowColor="rgba("+p.col.join(",")+",1)";ctx.shadowBlur=8;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.sz,0,7);ctx.fill();
+  }
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+  ctx.restore();
+
+  // white flash overlay
+  if(flash>0){ctx.fillStyle="rgba(255,255,255,"+flash*0.5+")";ctx.fillRect(0,0,W,H);flash*=0.85;if(flash<0.02)flash=0;}
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---------- input ----------
+function tap(e){
+  if(mode==="play"){e.preventDefault();lock();}
+}
+cv.addEventListener("pointerdown",tap,{passive:false});
+
+document.getElementById("startBtn").addEventListener("click",startGame);
+document.getElementById("againBtn").addEventListener("click",startGame);
+
+// ---------- share card ----------
+document.getElementById("shareBtn").addEventListener("click",async function(){
+  const c=document.createElement("canvas");c.width=1080;c.height=1920;
+  const g=c.getContext("2d");
+  // bg
+  const bg=g.createRadialGradient(540,820,80,540,820,1200);
+  bg.addColorStop(0,"#0c0c1c");bg.addColorStop(1,"#04030a");
+  g.fillStyle=bg;g.fillRect(0,0,1080,1920);
+  // three neon waves
+  const cols=["#ff2d55","#34e0a1","#2d9bff"];
+  for(let i=0;i<3;i++){
+    g.save();g.globalAlpha=0.5;g.strokeStyle=cols[i];g.lineWidth=4;
+    g.shadowColor=cols[i];g.shadowBlur=40;g.beginPath();
+    const yb=560+i*70;
+    for(let x=0;x<=1080;x+=8){const y=yb+Math.sin(x*0.012+i*1.6)*46;x===0?g.moveTo(x,y):g.lineTo(x,y);}
+    g.stroke();g.restore();
+  }
+  g.textAlign="center";
+  g.fillStyle="#ff9d3c";g.font="900 60px -apple-system,sans-serif";
+  g.fillText("開幕  KAIMAKU",540,360);
+  g.fillStyle="#7d8aa8";g.font="600 30px -apple-system,sans-serif";
+  g.fillText("3カ国同時開幕・同期精度",540,420);
+  // big number
+  g.fillStyle=lastResult.rc;g.font="900 320px -apple-system,sans-serif";
+  g.shadowColor=lastResult.rc;g.shadowBlur=50;
+  g.fillText(lastResult.avg+"%",540,1060);g.shadowBlur=0;
+  g.fillStyle="#eaf2ff";g.font="900 78px -apple-system,sans-serif";
+  g.fillText(lastResult.rk,540,1230);
+  g.fillStyle="#9fb0d6";g.font="600 38px -apple-system,sans-serif";
+  g.fillText("最高同期 "+lastResult.best+"%  ・  PERFECT ×"+lastResult.perfects,540,1330);
+  g.fillStyle="#4a5675";g.font="600 30px -apple-system,sans-serif";
+  g.fillText("2026.6.11  世界同時キックオフ",540,1760);
+  g.fillStyle="#6678a0";g.font="600 26px -apple-system,sans-serif";
+  g.fillText("Idea Radar  🏆  t-aka-h.github.io",540,1820);
+
+  c.toBlob(async(blob)=>{
+    const file=new File([blob],"kaimaku.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:"開幕 Kaimaku",
+        text:"3カ国同時開幕、同期精度"+lastResult.avg+"%！ #開幕 #Kaimaku"});return;}catch(e){}
+    }
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="kaimaku.png";a.click();
+  },"image/png");
+});
+})();
+</script>
+</body>
+</html>
