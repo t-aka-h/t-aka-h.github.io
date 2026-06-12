@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060A">
+<title>閃光 Senkō — 10秒を切れ</title>
+<style>
+  :root{
+    --bg:#05060A; --track:#0b1326; --lane:#00E5FF; --pb:#34D399;
+    --foul:#FF2D87; --amber:#FFB547; --txt:#EAF2FF; --sub:#7d8aa8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    color:var(--txt);touch-action:none;user-select:none;-webkit-user-select:none;
+    position:fixed;inset:0;
+  }
+  #wrap{position:absolute;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;pointer-events:none;padding:24px;}
+  .hide{display:none!important;}
+  .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";letter-spacing:.02em;}
+
+  /* TITLE */
+  #title .logo{font-size:clamp(64px,22vw,140px);font-weight:900;line-height:.9;
+    letter-spacing:.04em;color:#fff;text-shadow:0 0 28px rgba(0,229,255,.55),0 0 64px rgba(0,229,255,.3);}
+  #title .en{margin-top:6px;font-size:clamp(15px,4.5vw,22px);font-weight:800;letter-spacing:.5em;
+    color:var(--lane);text-indent:.5em;}
+  #title .tag{margin-top:22px;font-size:clamp(13px,3.8vw,16px);color:var(--sub);line-height:1.7;font-weight:600;}
+  #title .vs{margin-top:18px;font-size:13px;color:var(--amber);font-weight:800;letter-spacing:.05em;opacity:.9}
+  .cta{margin-top:34px;font-size:clamp(15px,4.5vw,19px);font-weight:900;color:#05060A;
+    background:linear-gradient(135deg,#00E5FF,#34D399);padding:15px 38px;border-radius:40px;
+    box-shadow:0 0 30px rgba(0,229,255,.45);animation:pulse 1.5s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.92}50%{transform:scale(1.05);opacity:1}}
+
+  /* CUE */
+  #cue{justify-content:flex-start;padding-top:18vh;}
+  #cueText{font-size:clamp(34px,12vw,80px);font-weight:900;letter-spacing:.06em;
+    text-shadow:0 0 30px rgba(255,255,255,.3);}
+  #cueSub{margin-top:14px;font-size:14px;color:var(--sub);font-weight:700;}
+
+  /* HUD */
+  #hud{justify-content:flex-start;padding-top:14px;}
+  #hudRow{display:flex;gap:10px;align-items:center;}
+  .chip{background:rgba(8,14,28,.6);border:1px solid rgba(0,229,255,.25);border-radius:12px;
+    padding:7px 13px;font-weight:800;font-size:13px;color:var(--lane);backdrop-filter:blur(6px);}
+  .chip b{color:#fff;font-size:16px}
+  #leanCue{margin-top:0;font-size:clamp(40px,14vw,96px);font-weight:900;color:var(--amber);
+    text-shadow:0 0 32px rgba(255,181,71,.7);letter-spacing:.08em;}
+
+  /* RESULT */
+  #result{justify-content:flex-start;padding-top:6vh;gap:0;}
+  #cardHolder{pointer-events:auto;}
+  #card{border-radius:22px;display:block;width:min(78vw,300px);height:auto;aspect-ratio:9/16;
+    box-shadow:0 18px 60px rgba(0,0,0,.6),0 0 50px rgba(0,229,255,.15);}
+  #rBtns{margin-top:20px;display:flex;gap:12px;pointer-events:auto;}
+  .btn{font-size:15px;font-weight:900;padding:13px 26px;border-radius:30px;border:none;cursor:pointer;}
+  .btn.p{color:#05060A;background:linear-gradient(135deg,#00E5FF,#34D399);box-shadow:0 0 24px rgba(0,229,255,.4);}
+  .btn.s{color:var(--lane);background:rgba(8,14,28,.7);border:1px solid rgba(0,229,255,.35);}
+  #hint{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:12px;color:var(--sub);font-weight:600;}
+  .fl{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div class="fl" id="flash"></div>
+
+  <div class="layer" id="title">
+    <div class="logo">閃光</div>
+    <div class="en">SENKŌ</div>
+    <div class="tag">号砲にジャスト反応。刻んで加速。<br>胸を倒し込め。<b style="color:#fff">10秒</b>を切れ。</div>
+    <div class="vs mono">TARGET ▸ 桐生 10.09（日本選手権 予選）</div>
+    <div class="cta" id="startBtn">タップでスタブロへ</div>
+  </div>
+
+  <div class="layer hide" id="cue">
+    <div id="cueText">位置について</div>
+    <div id="cueSub">合図でフライングするな</div>
+  </div>
+
+  <div class="layer hide" id="hud">
+    <div id="hudRow">
+      <div class="chip mono">REACT <b id="hReact">—</b></div>
+      <div class="chip mono">SPD <b id="hSpd">0.0</b></div>
+      <div class="chip mono">DIST <b id="hDist">0</b>m</div>
+    </div>
+    <div style="flex:1"></div>
+    <div id="leanCue" class="hide">LEAN!</div>
+  </div>
+
+  <div class="layer hide" id="result">
+    <div id="cardHolder"><img id="card" alt="result"></div>
+    <div id="rBtns">
+      <button class="btn p" id="retry">もう一度</button>
+      <button class="btn s" id="share">記録を共有</button>
+    </div>
+  </div>
+
+  <div id="hint" class="hide"></div>
+</div>
+
+<script>
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const FL=document.getElementById('flash');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);resize();
+
+/* ---------- AUDIO (WebAudio only, missing-fundamental bass) ---------- */
+let AC=null;
+function initAudio(){ if(AC)return; try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} }
+function now(){return AC?AC.currentTime:0;}
+function osc(type,f,t0,dur,g,ramp){
+  if(!AC)return;const o=AC.createOscillator(),G=AC.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,t0);
+  if(ramp)o.frequency.exponentialRampToValueAtTime(Math.max(20,ramp),t0+dur);
+  G.gain.setValueAtTime(0,t0);G.gain.linearRampToValueAtTime(g,t0+0.008);
+  G.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(G).connect(AC.destination);o.start(t0);o.stop(t0+dur+0.02);
+}
+function noise(t0,dur,g,lp){
+  if(!AC)return;const n=Math.floor(AC.sampleRate*dur),b=AC.createBuffer(1,n,AC.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.3);
+  const s=AC.createBufferSource();s.buffer=b;const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=lp||1800;
+  const G=AC.createGain();G.gain.setValueAtTime(g,t0);G.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  s.connect(f).connect(G).connect(AC.destination);s.start(t0);s.stop(t0+dur+0.02);
+}
+// gun: noise crack + missing-fundamental bass (44Hz + overtones)
+function sndGun(){ if(!AC)return;const t=now();
+  noise(t,0.10,0.7,3500);
+  [44,88,132,176,220].forEach((f,i)=>osc('sine',f,t,0.5-i*0.04,0.45/(i+1),f*0.7));
+  osc('triangle',120,t,0.18,0.25,60);
+}
+function sndStep(power){ if(!AC)return;const t=now();
+  osc('sine',70,t,0.10,0.22*power,42); noise(t,0.05,0.12*power,900);
+}
+function sndFalse(){ if(!AC)return;const t=now();
+  osc('square',180,t,0.32,0.3,70); noise(t,0.2,0.25,1400);
+}
+let crowdNode=null;
+function startCrowd(){ if(!AC||crowdNode)return;
+  const n=AC.sampleRate*2,b=AC.createBuffer(1,n,AC.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+  const s=AC.createBufferSource();s.buffer=b;s.loop=true;
+  const f=AC.createBiquadFilter();f.type='bandpass';f.frequency.value=600;f.Q.value=0.7;
+  const G=AC.createGain();G.gain.value=0.0;
+  s.connect(f).connect(G).connect(AC.destination);s.start();
+  crowdNode={s,G,f};
+}
+function crowdLevel(v,burst){ if(!crowdNode||!AC)return;const t=now();
+  crowdNode.G.gain.cancelScheduledValues(t);crowdNode.G.gain.linearRampToValueAtTime(v,t+(burst?0.05:0.4));
+  if(burst)crowdNode.f.frequency.linearRampToValueAtTime(1600,t+0.3);
+}
+function stopCrowd(){ if(crowdNode){try{crowdNode.s.stop();}catch(e){}crowdNode=null;} }
+function sndFanfare(){ if(!AC)return;const t=now();
+  [392,494,587,784].forEach((f,i)=>osc('sawtooth',f,t+i*0.07,0.5,0.18,f));
+  [44,66,88].forEach(f=>osc('sine',f,t,0.9,0.4,f*0.8));
+}
+function vib(p){ if(navigator.vibrate)try{navigator.vibrate(p);}catch(e){} }
+
+/* ---------- GAME STATE ---------- */
+const TARGET=10.09; // 桐生 ref
+let phase='title';
+let gunFired=false,gunAt=0,gunVisualT=0;
+let reactionMs=0,falseStart=false;
+let strides=0; const STRIDE_GOAL=18;
+let lastSide=0; // 1 left,2 right; first accepts either
+let stepTimes=[]; let mistakes=0;
+let dist=0; // meters 0..100
+let speed=0; // visual m/s
+let leanArmed=false,leanReadyT=0,leanDone=false,leanErr=0;
+let finishT=0,totalTime=0,subTen=false,timeScale=1;
+let camShake=0;
+let scrollX=0; // world scroll for parallax/lanes
+let particles=[];
+let bg=[]; // crowd neon dots
+let runStart=0;
+let best=parseFloat(localStorage.getItem('senko_best')||'0')||0;
+
+function rnd(a,b){return a+Math.random()*(b-a);}
+function buildBG(){ bg=[]; for(let i=0;i<70;i++){bg.push({x:Math.random(),y:rnd(0.04,0.42),
+  c:Math.random()<0.5?'#00E5FF':(Math.random()<0.5?'#FF2D87':'#FFB547'),s:rnd(1.2,3.2),tw:Math.random()*6.28});} }
+buildBG();
+
+/* ---------- DOM ---------- */
+const $=id=>document.getElementById(id);
+const L={title:$('title'),cue:$('cue'),hud:$('hud'),result:$('result')};
+function show(name){for(const k in L)L[k].classList.toggle('hide',k!==name);}
+function flash(a,col){FL.style.background=col||'#fff';FL.style.opacity=a;requestAnimationFrame(()=>{FL.style.transition='opacity .5s';FL.style.opacity=0;setTimeout(()=>FL.style.transition='',520);});}
+
+/* ---------- FLOW ---------- */
+function reset(){
+  phase='title';gunFired=false;falseStart=false;strides=0;lastSide=0;stepTimes=[];mistakes=0;
+  dist=0;speed=0;leanArmed=false;leanDone=false;leanErr=0;subTen=false;timeScale=1;camShake=0;scrollX=0;particles=[];
+  $('leanCue').classList.add('hide');$('hint').classList.add('hide');
+  stopCrowd(); show('title');
+}
+function startSet(){
+  initAudio();startCrowd();crowdLevel(0.05);
+  show('cue');phase='set';gunFired=false;falseStart=false;
+  const c=$('cueText'),s=$('cueSub');
+  c.textContent='位置について';s.textContent='';
+  setTimeout(()=>{ if(phase!=='set')return; c.textContent='よーい';c.style.color='#FFB547';s.textContent='動くな…';},900);
+  gunAt=performance.now()+rnd(1700,3600);
+  scheduleGun();
+}
+let gunTimer=null;
+function scheduleGun(){
+  if(gunTimer)clearTimeout(gunTimer);
+  const wait=Math.max(0,gunAt-performance.now());
+  gunTimer=setTimeout(fireGun,wait);
+}
+function fireGun(){
+  if(phase!=='set'||gunFired||falseStart)return;
+  gunFired=true;gunVisualT=performance.now();
+  sndGun();vib(15);flash(0.95,'#fff');
+  $('cueText').textContent='ダッシュ！';$('cueText').style.color='#00E5FF';
+  $('cueSub').textContent='タップで飛び出せ';
+}
+function doFalseStart(){
+  falseStart=true;phase='false';
+  sndFalse();vib([90,50,90]);flash(0.6,'#FF2D87');
+  $('cueText').textContent='フライング';$('cueText').style.color='#FF2D87';
+  $('cueSub').textContent='失格… タップでやり直し';
+}
+function registerReaction(){
+  reactionMs=performance.now()-gunVisualT;
+  $('hReact').textContent=(reactionMs/1000).toFixed(3);
+  const el=$('hReact');el.style.color=reactionMs<160?'#34D399':(reactionMs<260?'#fff':'#FFB547');
+  phase='run';runStart=performance.now();show('hud');
+  $('hint').textContent='左右を交互にタップして加速';$('hint').classList.remove('hide');
+  crowdLevel(0.16);
+  vib(15);
+}
+function registerStride(side){
+  // first stride: accept either, set expected next
+  const t=performance.now();
+  let ok;
+  if(lastSide===0){ ok=true; }
+  else ok=(side!==lastSide);
+  if(ok){
+    strides++; lastSide=side; stepTimes.push(t);
+    speed=Math.min(13.5,speed+1.7);
+    sndStep(Math.min(1,0.5+strides/STRIDE_GOAL));
+    vib(8);
+    burst(side===1?0.32:0.68, 0.9, side===1?'#00E5FF':'#34D399',8);
+    crowdLevel(0.16+0.30*(strides/STRIDE_GOAL));
+    if(strides>=STRIDE_GOAL) armLean();
+  } else {
+    mistakes++; speed=Math.max(3,speed-3.4);camShake=12;
+    sndStep(0.3);vib([20,30,20]);
+  }
+  $('hint').classList.add('hide');
+}
+function armLean(){
+  phase='lean';leanArmed=true;leanReadyT=performance.now();leanDone=false;
+  $('leanCue').classList.remove('hide');
+  $('hint').textContent='ジャストでタップ／下スワイプ';$('hint').classList.remove('hide');
+  crowdLevel(0.5);
+}
+function doLean(){
+  if(leanDone)return;leanDone=true;
+  // ideal lean ~ 520ms after armLean (a marker sweep). closer = better.
+  const el=performance.now()-leanReadyT;
+  const ideal=520;
+  leanErr=Math.abs(el-ideal); // ms
+  $('leanCue').classList.add('hide');$('hint').classList.add('hide');
+  finish();
+}
+function finish(){
+  phase='finish';finishT=performance.now();
+  // ---- time model ----
+  // base + reaction + cadence + lean, mapped to feel like a real 100m
+  const reactPen = (reactionMs-130)/1000*2.2;           // s, faster = negative
+  let avgInt=0.18;
+  if(stepTimes.length>2){let s=0;for(let i=1;i<stepTimes.length;i++)s+=stepTimes[i]-stepTimes[i-1];avgInt=(s/(stepTimes.length-1))/1000;}
+  // cadence: ideal ~0.10s/step -> -0.55 ; slow 0.26s -> +0.85
+  let cadPen = (avgInt-0.10)/(0.16)*1.40 - 0.55;
+  cadPen = Math.max(-0.55,Math.min(1.6,cadPen));
+  const missPen = mistakes*0.09;
+  let leanPen = leanErr/1000*0.9 - 0.10;                 // perfect ~ -0.10
+  leanPen=Math.max(-0.12,Math.min(0.5,leanPen));
+  totalTime = 9.70 + reactPen + cadPen + missPen + leanPen;
+  totalTime = Math.max(9.42, Math.min(13.99, totalTime));
+  subTen = totalTime < 10.00;
+
+  if(subTen){
+    timeScale=0.18;flash(0.9,'#fff');sndFanfare();crowdLevel(0.9,true);vib([10,30,10,30,80]);
+    bigBurst('#fff',60);bigBurst('#00E5FF',40);
+  }else{
+    timeScale=0.4;crowdLevel(0.6,true);vib([15,40,30]);bigBurst('#FFB547',26);
+  }
+  setTimeout(()=>{ timeScale=1; showResult(); }, subTen?1500:900);
+}
+
+/* ---------- PARTICLES ---------- */
+function burst(nx,ny,col,n){
+  const x=nx*W,y=H*ny;
+  for(let i=0;i<n;i++)particles.push({x,y,vx:rnd(-2.5,2.5),vy:rnd(-5,-0.5),life:1,col,r:rnd(1.5,3.5)});
+}
+function bigBurst(col,n){
+  const x=W*0.5,y=H*0.52;
+  for(let i=0;i<n;i++){const a=Math.random()*6.28,sp=rnd(3,12);
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1.4,col,r:rnd(2,5)});}
+}
+
+/* ---------- RENDER ---------- */
+let last=performance.now();
+function loop(t){
+  let dt=(t-last)/1000;last=t;dt=Math.min(0.05,dt)*timeScale;
+  // physics-ish
+  if(phase==='run'||phase==='lean'){ dist=Math.min(100,(strides/STRIDE_GOAL)*95 + (leanDone?5:0)); }
+  if(phase==='lean'&&leanDone)dist=100;
+  speed=Math.max(0,speed-dt*1.2);
+  scrollX+=(speed*60+ (phase==='set'?0:40))*dt;
+  if(camShake>0)camShake=Math.max(0,camShake-dt*60);
+  // update particles
+  for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=0.18;p.life-=dt*1.6;}
+  particles=particles.filter(p=>p.life>0);
+
+  draw(t);
+  // hud live
+  if(phase==='run'||phase==='lean'){$('hSpd').textContent=(speed).toFixed(1);$('hDist').textContent=Math.round(dist);}
+  requestAnimationFrame(loop);
+}
+function draw(t){
+  ctx.clearRect(0,0,W,H);
+  const shx=(Math.random()-0.5)*camShake, shy=(Math.random()-0.5)*camShake;
+  ctx.save();ctx.translate(shx,shy);
+
+  // sky gradient
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#05060A');g.addColorStop(0.42,'#080d1c');g.addColorStop(0.45,'#0b1326');g.addColorStop(1,'#05060A');
+  ctx.fillStyle=g;ctx.fillRect(-20,-20,W+40,H+40);
+
+  // crowd neon dots (parallax slow)
+  const ph=t/600;
+  for(const d of bg){
+    const x=((d.x*W - scrollX*0.12)%W+W)%W;
+    const fl=0.5+0.5*Math.sin(ph+d.tw);
+    ctx.globalAlpha=0.25+0.5*fl;ctx.fillStyle=d.c;
+    ctx.beginPath();ctx.arc(x,d.y*H,d.s,0,6.28);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // horizon line glow
+  ctx.strokeStyle='rgba(0,229,255,.25)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(0,H*0.45);ctx.lineTo(W,H*0.45);ctx.stroke();
+
+  // ---- TRACK (perspective) ----
+  const horizon=H*0.45, vpx=W*0.5;
+  // lane fill
+  ctx.fillStyle='#7a2419';
+  ctx.beginPath();ctx.moveTo(W*0.30,horizon);ctx.lineTo(W*0.70,horizon);
+  ctx.lineTo(W*1.15,H);ctx.lineTo(W*-0.15,H);ctx.closePath();
+  const tg=ctx.createLinearGradient(0,horizon,0,H);
+  tg.addColorStop(0,'#3a1410');tg.addColorStop(1,'#9c3322');ctx.fillStyle=tg;ctx.fill();
+
+  // lane lines (3) scrolling rungs via dashes
+  ctx.strokeStyle='rgba(255,255,255,.85)';
+  for(let li=-1;li<=1;li++){
+    const topx=vpx+li*(W*0.10), botx=vpx+li*(W*0.62);
+    ctx.lineWidth=2;ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(topx,horizon);ctx.lineTo(botx,H);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  // distance rungs (moving toward viewer)
+  ctx.strokeStyle='rgba(0,229,255,.55)';
+  for(let i=0;i<10;i++){
+    let f=((scrollX*0.02 + i*0.1)%1);
+    const y=horizon + Math.pow(f,2.2)*(H-horizon);
+    const wRatio=Math.pow(f,2.2);
+    const lw=W*(0.20+0.86*wRatio);
+    ctx.globalAlpha=0.15+0.5*wRatio;ctx.lineWidth=1+2*wRatio;
+    ctx.beginPath();ctx.moveTo(vpx-lw/2,y);ctx.lineTo(vpx+lw/2,y);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // motion lines (speed)
+  if(speed>1){
+    ctx.strokeStyle='rgba(255,255,255,'+Math.min(.5,speed/26)+')';ctx.lineWidth=2;
+    for(let i=0;i<10;i++){const yy=rnd(0,1)*H;const len=20+speed*6*Math.random();
+      const xx=((i/10)*W + (t*0.5*speed)%W)%W;
+      ctx.beginPath();ctx.moveTo(xx,yy);ctx.lineTo(xx-len,yy);ctx.stroke();}
+  }
+
+  // finish tape near goal
+  if(phase==='lean'||phase==='finish'){
+    const prog=Math.min(1,(strides+ (leanDone?2:0))/(STRIDE_GOAL+1));
+    const ty=horizon + Math.pow(leanDone?1:0.86,1)*(H-horizon)*0.9;
+    ctx.fillStyle='#FFB547';ctx.globalAlpha=0.9;
+    const gy = leanDone? H*0.62 : H*0.5;
+    ctx.fillRect(W*0.12,gy,W*0.76,5);
+    ctx.globalAlpha=1;
+  }
+
+  // lean sweep marker
+  if(phase==='lean'&&!leanDone){
+    const el=performance.now()-leanReadyT;const dur=1040;
+    const f=Math.min(1,el/dur);
+    const x=W*0.12+f*W*0.76;
+    const sweet=Math.abs(el-520)<120;
+    ctx.fillStyle=sweet?'#34D399':'#FFB547';
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=18;
+    ctx.fillRect(x-3,H*0.30,6,H*0.18);ctx.shadowBlur=0;
+    // sweet zone
+    ctx.fillStyle='rgba(52,211,153,.18)';
+    ctx.fillRect(W*0.12+(400/dur)*W*0.76,H*0.30,(240/dur)*W*0.76,H*0.18);
+    if(el>dur)doLean();
+  }
+
+  // runner pulse (abstract first-person feet) — neon chevrons
+  if(phase==='run'||phase==='lean'){
+    const fy=H*0.78 + Math.sin(scrollX*0.4)*6;
+    const sw=(lastSide===1)?-1:1;
+    ctx.globalAlpha=0.85;ctx.fillStyle=lastSide===1?'#00E5FF':'#34D399';
+    ctx.beginPath();ctx.moveTo(W*0.5+sw*40,fy);ctx.lineTo(W*0.5+sw*70,fy+26);ctx.lineTo(W*0.5+sw*16,fy+22);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  // particles
+  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.col;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();}
+  ctx.globalAlpha=1;
+
+  // sub-10 radial flash overlay handled by FL div + here streaks
+  if(phase==='finish'&&subTen){
+    ctx.save();ctx.translate(W*0.5,H*0.5);
+    ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=2;
+    for(let i=0;i<22;i++){const a=i/22*6.28+t*0.002;ctx.beginPath();ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(a)*W,Math.sin(a)*H);ctx.stroke();}
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+requestAnimationFrame(loop);
+
+/* ---------- RESULT CARD ---------- */
+let cardURL=null;
+function showResult(){
+  phase='result';timeScale=1;particles=[];camShake=0;
+  if(best===0||totalTime<best){best=totalTime;localStorage.setItem('senko_best',best.toFixed(2));}
+  drawCard();show('result');
+  $('hint').classList.add('hide');stopCrowd();
+}
+function drawCard(){
+  const w=720,h=1280,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+  // bg
+  const g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,'#070a14');g.addColorStop(1,'#020308');
+  x.fillStyle=g;x.fillRect(0,0,w,h);
+  // scanlines
+  x.globalAlpha=0.05;x.fillStyle='#00E5FF';for(let y=0;y<h;y+=4)x.fillRect(0,y,w,1);x.globalAlpha=1;
+  // frame
+  x.strokeStyle='rgba(0,229,255,.5)';x.lineWidth=4;x.strokeRect(20,20,w-40,h-40);
+  // header
+  x.textAlign='center';
+  x.fillStyle='#fff';x.font='900 96px sans-serif';x.shadowColor='rgba(0,229,255,.6)';x.shadowBlur=30;
+  x.fillText('閃光',w/2,140);x.shadowBlur=0;
+  x.fillStyle='#00E5FF';x.font='800 26px sans-serif';x.fillText('S E N K Ō   1 0 0 m',w/2,180);
+
+  // big time (7-seg amber)
+  const col= falseStart?'#FF2D87':(subTen?'#34D399':'#FFB547');
+  x.fillStyle=col;x.shadowColor=col;x.shadowBlur=40;
+  x.font='900 230px ui-monospace,monospace';
+  const tStr= falseStart?'FOUL':totalTime.toFixed(2);
+  x.fillText(tStr,w/2, 470);x.shadowBlur=0;
+  x.fillStyle='#7d8aa8';x.font='800 30px sans-serif';
+  x.fillText(falseStart?'FALSE START — 失格':'FINISH TIME (sec)',w/2,540);
+
+  // stats grid
+  function stat(yy,label,val,vc){
+    x.fillStyle='#7d8aa8';x.font='700 28px sans-serif';x.textAlign='left';x.fillText(label,70,yy);
+    x.fillStyle=vc||'#fff';x.font='900 46px ui-monospace,monospace';x.textAlign='right';x.fillText(val,w-70,yy);
+  }
+  if(!falseStart){
+    stat(680,'REACTION',(reactionMs/1000).toFixed(3)+'s',reactionMs<160?'#34D399':'#fff');
+    stat(760,'TOP SPEED',(speed>0?speed:Math.min(13.5,STRIDE_GOAL*0.7)).toFixed(1)+' m/s','#00E5FF');
+    stat(840,'MISSTEPS', mistakes+'', mistakes===0?'#34D399':'#FFB547');
+    stat(920,'LEAN', leanErr<120?'PERFECT':(leanErr<300?'GOOD':'LATE'), leanErr<120?'#34D399':'#FFB547');
+  }
+  // vs Kiryu
+  const diff=totalTime-TARGET;
+  x.textAlign='center';
+  x.fillStyle='rgba(255,181,71,.12)';x.fillRect(60,990,w-120,140);
+  x.strokeStyle='rgba(255,181,71,.4)';x.lineWidth=2;x.strokeRect(60,990,w-120,140);
+  x.fillStyle='#FFB547';x.font='800 28px sans-serif';x.fillText('vs 桐生 10.09（日本選手権 予選）',w/2,1040);
+  if(!falseStart){
+    const dc= diff<0?'#34D399':'#FF2D87';
+    x.fillStyle=dc;x.font='900 70px ui-monospace,monospace';
+    x.fillText((diff<0?'−':'+')+Math.abs(diff).toFixed(2),w/2,1108);
+  }else{x.fillStyle='#FF2D87';x.font='900 50px sans-serif';x.fillText('再挑戦せよ',w/2,1100);}
+
+  // best + footer
+  x.fillStyle='#34D399';x.font='800 30px sans-serif';
+  if(best>0)x.fillText('YOUR BEST  '+best.toFixed(2)+'s',w/2,1190);
+  x.fillStyle='#5b6373';x.font='700 24px sans-serif';
+  x.fillText('閃光 SENKŌ ・ タップで挑戦 ・ 完全オンデバイス',w/2,1235);
+
+  cardURL=c.toDataURL('image/png');
+  $('card').src=cardURL;
+}
+async function shareCard(){
+  try{
+    const blob=await (await fetch(cardURL)).blob();
+    const file=new File([blob],'senko.png',{type:'image/png'});
+    const txt=falseStart?'閃光でフライング失格…🥲 #閃光Senko':((subTen?'🔥9秒台！':'')+'100m '+totalTime.toFixed(2)+'秒 / 反応'+(reactionMs/1000).toFixed(3)+'s #閃光Senko');
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],text:txt});return;
+    }
+  }catch(e){}
+  // fallback: download
+  const a=document.createElement('a');a.href=cardURL;a.download='senko.png';a.click();
+}
+
+/* ---------- INPUT ---------- */
+let downY=0,downT=0,moved=false;
+function onDown(e){
+  const px=(e.touches?e.touches[0].clientX:e.clientX);
+  const py=(e.touches?e.touches[0].clientY:e.clientY);
+  downY=py;downT=performance.now();moved=false;
+  if(phase==='title'){startSet();return;}
+  if(phase==='false'){reset();return;}
+  if(phase==='set'){
+    if(!gunFired){doFalseStart();}
+    else{registerReaction();}
+    return;
+  }
+  if(phase==='run'){
+    registerStride(px< W/2 ?1:2);return;
+  }
+  if(phase==='lean'){ doLean(); return; }
+}
+function onMove(e){
+  if(phase!=='lean'||leanDone)return;
+  const py=(e.touches?e.touches[0].clientY:e.clientY);
+  if(py-downY>34){moved=true;doLean();}
+}
+window.addEventListener('pointerdown',onDown,{passive:false});
+window.addEventListener('pointermove',onMove,{passive:false});
+window.addEventListener('touchstart',e=>{e.preventDefault();},{passive:false});
+
+$('retry').addEventListener('click',e=>{e.stopPropagation();reset();startSet();});
+$('share').addEventListener('click',e=>{e.stopPropagation();shareCard();});
+// stop bubbling so result buttons don't trigger global restart
+$('result').addEventListener('pointerdown',e=>e.stopPropagation());
+
+reset();
+</script>
+</body>
+</html>
