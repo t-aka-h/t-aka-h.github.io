@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>積もる — Tsumoru</title>
+<meta name="theme-color" content="#05060A">
+<meta name="description" content="日用品の値上げが雪のように積もる。降る値上げ札をフリックで払いのけ、家計の埋没を防ぐ体感サバイバル。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05060A;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    color:#dfe9f5;-webkit-user-select:none;user-select:none;touch-action:none;}
+  #wrap{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;z-index:10;background:radial-gradient(120% 90% at 50% 12%,rgba(20,32,52,.55),rgba(5,6,10,.94));
+    backdrop-filter:blur(2px);}
+  .hidden{display:none!important;}
+  h1{font-size:clamp(54px,17vw,108px);font-weight:900;letter-spacing:.04em;line-height:.92;
+    color:#eaf6ff;text-shadow:0 0 18px rgba(34,224,255,.55),0 0 42px rgba(255,45,155,.35);}
+  .sub{margin-top:6px;font-size:13px;letter-spacing:.34em;color:#7fa6c9;font-weight:700;}
+  .lead{margin-top:22px;font-size:15px;line-height:1.85;color:#bcd2e8;max-width:330px;}
+  .lead b{color:#22E0FF;font-weight:800;}
+  .lead .mg{color:#FF2D9B;font-weight:800;}
+  .btn{margin-top:30px;padding:17px 46px;border:none;border-radius:40px;font-size:20px;font-weight:900;letter-spacing:.12em;
+    color:#04121a;background:linear-gradient(135deg,#3DF5A0,#22E0FF);cursor:pointer;
+    box-shadow:0 0 28px rgba(34,224,255,.5);transition:transform .12s;}
+  .btn:active{transform:scale(.95);}
+  .btn.sec{background:linear-gradient(135deg,#26344a,#1a2436);color:#cfe2f4;box-shadow:none;border:1px solid #2c4258;
+    font-size:15px;padding:13px 30px;}
+  .tip{margin-top:18px;font-size:12px;color:#62809b;letter-spacing:.06em;line-height:1.7;}
+  .src{position:absolute;bottom:14px;left:0;right:0;font-size:10px;color:#3f5670;letter-spacing:.05em;padding:0 20px;}
+  .src a{color:#5b7da0;}
+  /* result */
+  #resultScreen .rcard{width:min(86vw,330px);}
+  #shareImg{width:min(72vw,260px);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6);display:block;margin:0 auto;}
+  .rtitle{font-size:22px;font-weight:900;color:#eaf6ff;margin-bottom:14px;letter-spacing:.04em;}
+  .rrow{display:flex;gap:12px;margin-top:18px;justify-content:center;flex-wrap:wrap;}
+  @media (max-height:680px){h1{font-size:84px;} .lead{margin-top:14px;}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- START -->
+  <div id="startScreen" class="screen">
+    <h1>積もる</h1>
+    <div class="sub">T S U M O R U</div>
+    <div class="lead">
+      「<b>+¥30</b>」「<span class="mg">+¥120</span>」――値上げが雪のように降ってくる。<br>
+      横フリックで<b>安い代替へ払いのけろ</b>。<br>
+      見過ごせば床に<span class="mg">積もり</span>、家計を埋め尽くす。
+    </div>
+    <button class="btn" id="startBtn">プレイ</button>
+    <div class="tip">片手でOK・どこでも横にフリック<br>払うほど「手間ゲージ」を消費。使いすぎ注意。</div>
+    <div class="src">発想元: 帝国データバンク「2026年6月 食品559品目値上げ」 — Idea Radar L08</div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="resultScreen" class="screen hidden">
+    <div class="rcard">
+      <div class="rtitle" id="rTitle">埋没した…</div>
+      <img id="shareImg" alt="今月の家計レシート">
+      <div class="rrow">
+        <button class="btn" id="retryBtn">もう一度</button>
+        <button class="btn sec" id="shareBtn">レシートを保存/共有</button>
+      </div>
+      <div class="tip" id="shareHint">#Tsumoru でシェア</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio (WebAudio, fully synthesized) ---------- */
+let AC=null, master=null, drone=null, droneFilt=null, droneGain=null, noiseBuf=null;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+  }catch(e){ return; }
+  master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  // ominous low drone: 55Hz + harmonics through lowpass, modulated by pile
+  droneGain=AC.createGain(); droneGain.gain.value=0.0;
+  droneFilt=AC.createBiquadFilter(); droneFilt.type='lowpass'; droneFilt.frequency.value=320; droneFilt.Q.value=6;
+  droneGain.connect(droneFilt); droneFilt.connect(master);
+  const freqs=[55,110,165,82.5];
+  drone=[];
+  freqs.forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type=i===3?'sawtooth':'sine'; o.frequency.value=f;
+    const g=AC.createGain(); g.gain.value=i===0?0.7:(i===3?0.12:0.22);
+    o.connect(g); g.connect(droneGain); o.start();
+    drone.push({o,g});
+  });
+  // noise buffer for flick / rumble
+  const n=AC.sampleRate*1.0; noiseBuf=AC.createBuffer(1,n,AC.sampleRate);
+  const d=noiseBuf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+}
+function flickSound(){
+  if(!AC) return;
+  const src=AC.createBufferSource(); src.buffer=noiseBuf;
+  const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=1800;
+  const g=AC.createGain(); const t=AC.currentTime;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.35,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t+0.18);
+}
+function justSound(){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(46,t+0.22);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.85,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.38);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.4);
+}
+function landSound(big){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(big?90:140,t); o.frequency.exponentialRampToValueAtTime(big?40:70,t+0.18);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(big?0.6:0.3,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.32);
+}
+function gameoverSound(){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const src=AC.createBufferSource(); src.buffer=noiseBuf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(600,t); f.frequency.exponentialRampToValueAtTime(60,t+1.0);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.7,t+0.05); g.gain.exponentialRampToValueAtTime(0.0001,t+1.3);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t+1.35);
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(80,t); o.frequency.exponentialRampToValueAtTime(28,t+1.1);
+  const og=AC.createGain(); og.gain.setValueAtTime(0.5,t); og.gain.exponentialRampToValueAtTime(0.0001,t+1.2);
+  o.connect(og); og.connect(master); o.start(t); o.stop(t+1.25);
+}
+function vibe(ms){ if(navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+
+/* ---------- game state ---------- */
+const CYAN='#22E0FF', MAG='#FF2D9B', GREEN='#3DF5A0', RED='#FF3B57';
+const ITEMS=[
+  {n:'即席麺',a:30},{n:'スナック',a:48},{n:'プロテイン',a:120},{n:'食用油',a:128},
+  {n:'即席スープ',a:38},{n:'調味料',a:60},{n:'冷凍食品',a:80},{n:'パン',a:28},
+  {n:'チョコ',a:58},{n:'コーヒー',a:98},{n:'マヨネーズ',a:42},{n:'カップ麺',a:33}
+];
+let tags=[], parts=[], floats=[];
+let pile=0;          // 0..1 household burial
+let effort=100;      // 手間ゲージ
+let savedYen=0, piledYen=0;
+let wave=1, elapsed=0, spawnT=0, running=false, ended=false;
+let shake=0, flashT=0, flashCol=CYAN;
+const FLOOR_PAD=14;
+
+function reset(){
+  tags=[];parts=[];floats=[];pile=0;effort=100;savedYen=0;piledYen=0;wave=1;elapsed=0;spawnT=0;
+  running=true;ended=false;shake=0;flashT=0;
+}
+
+function spawnTag(){
+  const it=ITEMS[(Math.random()*ITEMS.length)|0];
+  const big=it.a>=100;
+  const r=big?34:26;
+  tags.push({
+    x:r+8+Math.random()*(W-2*r-16), y:-r-10,
+    vy:(0.7+wave*0.10)*(big?1.18:1.0)*(40+Math.random()*18),
+    a:it.a, n:it.n, r:r, big:big, dead:false, born:elapsed
+  });
+}
+
+function floorY(){ return H - FLOOR_PAD - pile*(H*0.80); }
+
+/* deflect tag near (px,py) in direction dir(-1/1) */
+function tryFlick(px,py,dir){
+  if(effort<10){ return false; }
+  let best=-1,bd=1e9;
+  for(let i=0;i<tags.length;i++){
+    const t=tags[i]; if(t.dead) continue;
+    const dx=t.x-px, dy=t.y-py, d=dx*dx+dy*dy;
+    // bias toward tags below the touch / near it
+    if(d<bd){ bd=d; best=i; }
+  }
+  if(best<0) return false;
+  const t=tags[best];
+  const reach=140*140;
+  if(bd>reach) return false;
+  t.dead=true;
+  effort=Math.max(0,effort-14);
+  savedYen+=t.a;
+  const justSave = t.y > floorY()-90;
+  // particles
+  burst(t.x,t.y, justSave?MAG:CYAN, t.big?34:22);
+  pushFloat(t.x,t.y,'-¥'+t.a, justSave?MAG:CYAN);
+  flickSound();
+  if(justSave){ justSound(); vibe(34); flash(MAG,0.5); pushFloat(t.x,t.y-34,'NICE 回避!',GREEN); savedYen+=Math.round(t.a*0.5); }
+  else { vibe(10); flash(CYAN,0.22); }
+  // fling visual
+  burstLine(t.x,t.y,dir,t.big?MAG:CYAN);
+  return true;
+}
+
+function burst(x,y,col,n){
+  for(let i=0;i<n;i++){
+    const an=Math.random()*Math.PI*2, sp=1+Math.random()*5;
+    parts.push({x,y,vx:Math.cos(an)*sp,vy:Math.sin(an)*sp-1.5,life:1,col,sz:1.5+Math.random()*2.5});
+  }
+}
+function burstLine(x,y,dir,col){
+  for(let i=0;i<10;i++){
+    parts.push({x,y,vx:dir*(4+Math.random()*7),vy:(Math.random()-0.5)*2,life:1,col,sz:2+Math.random()*2});
+  }
+}
+function pushFloat(x,y,txt,col){ floats.push({x,y,txt,col,life:1}); }
+function flash(col,a){ flashCol=col; flashT=a; }
+
+/* ---------- input ---------- */
+let ps=null;
+function onDown(e){
+  const p=pt(e); ps={x:p.x,y:p.y,t:performance.now(),moved:false};
+}
+function onMove(e){
+  if(!ps) return; const p=pt(e);
+  if(Math.abs(p.x-ps.x)>10) ps.moved=true;
+}
+function onUp(e){
+  if(!ps) return;
+  const p=pt(e); const dx=p.x-ps.x, dy=p.y-ps.y, dt=performance.now()-ps.t;
+  let dir = dx>=0?1:-1;
+  if(Math.abs(dx)<14){ // tap fallback: deflect toward nearer edge
+    dir = ps.x < W/2 ? -1 : 1;
+    tryFlick(ps.x,ps.y,dir);
+  } else if(Math.abs(dx)>=Math.abs(dy)*0.6 || Math.abs(dx)>30){
+    tryFlick(ps.x,ps.y,dir);
+  } else {
+    tryFlick(ps.x,ps.y,dx>=0?1:-1);
+  }
+  ps=null;
+}
+function pt(e){
+  const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e;
+  return {x:t.clientX,y:t.clientY};
+}
+cv.addEventListener('touchstart',e=>{e.preventDefault();onDown(e);},{passive:false});
+cv.addEventListener('touchmove',e=>{e.preventDefault();onMove(e);},{passive:false});
+cv.addEventListener('touchend',e=>{e.preventDefault();onUp(e);},{passive:false});
+cv.addEventListener('mousedown',onDown);
+cv.addEventListener('mousemove',onMove);
+cv.addEventListener('mouseup',onUp);
+
+/* ---------- loop ---------- */
+let last=0;
+function frame(ts){
+  const dt=Math.min((ts-last)/1000||0,0.05); last=ts;
+  if(running) update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  elapsed+=dt;
+  wave=1+Math.floor(elapsed/12);
+  effort=Math.min(100,effort+22*dt);
+  // spawn
+  spawnT-=dt;
+  const interval=Math.max(0.42, 1.25 - wave*0.085);
+  if(spawnT<=0){ spawnTag(); spawnT=interval*(0.7+Math.random()*0.6); }
+  const fy=floorY();
+  for(const t of tags){
+    if(t.dead) continue;
+    t.y+=t.vy*dt;
+    if(t.y+t.r>=fy){
+      t.dead=true;
+      const add=t.a/2600;
+      pile=Math.min(1.2, pile+add);
+      piledYen+=t.a;
+      landSound(t.big);
+      shake=Math.min(14, shake+(t.big?9:4));
+      flash(RED, t.big?0.4:0.18);
+      if(t.big) vibe(18);
+      if(pile>=1.0 && !ended){ endGame(); }
+    }
+  }
+  tags=tags.filter(t=>!t.dead || t.y<H+60);
+  tags=tags.filter(t=>!t.dead);
+  // particles
+  for(const p of parts){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.25; p.life-=dt*1.6; }
+  parts=parts.filter(p=>p.life>0);
+  for(const f of floats){ f.y-=0.6; f.life-=dt*1.0; }
+  floats=floats.filter(f=>f.life>0);
+  if(shake>0) shake=Math.max(0,shake-dt*40);
+  if(flashT>0) flashT=Math.max(0,flashT-dt*2.2);
+  // drone modulation
+  if(droneGain){
+    const g=0.05+pile*0.9; droneGain.gain.value=g*0.5;
+    droneFilt.frequency.value=340 - pile*250;
+    drone[0].o.frequency.value=55 - pile*9;
+  }
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // background
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a1320'); bg.addColorStop(0.4,'#070a12'); bg.addColorStop(1,'#05060a');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  // cold vignette grows with pile
+  if(pile>0.05){
+    const v=ctx.createRadialGradient(W/2,H*0.9,H*0.2,W/2,H*0.6,H*0.95);
+    v.addColorStop(0,'rgba(20,60,110,'+(pile*0.32)+')');
+    v.addColorStop(1,'rgba(5,6,10,0)');
+    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  }
+
+  ctx.save();
+  if(shake>0){ ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake); }
+
+  const fy=floorY();
+  // snow pile mound
+  drawPile(fy);
+
+  // tags
+  for(const t of tags){ if(!t.dead) drawTag(t); }
+
+  // particles
+  for(const p of parts){
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,7); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // floats
+  ctx.textAlign='center';
+  for(const f of floats){
+    ctx.globalAlpha=Math.max(0,f.life);
+    ctx.font='800 '+(f.txt.length>4?15:20)+'px sans-serif';
+    ctx.fillStyle=f.col;
+    ctx.shadowColor=f.col; ctx.shadowBlur=12;
+    ctx.fillText(f.txt,f.x,f.y);
+    ctx.shadowBlur=0;
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  // HUD
+  drawHUD();
+
+  // flash
+  if(flashT>0){
+    ctx.fillStyle=flashCol; ctx.globalAlpha=flashT*0.25; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1;
+  }
+}
+
+function drawPile(fy){
+  ctx.save();
+  const grad=ctx.createLinearGradient(0,fy-10,0,H);
+  grad.addColorStop(0,'rgba(120,170,220,0.9)');
+  grad.addColorStop(0.25,'#26405c');
+  grad.addColorStop(1,'#16263a');
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  ctx.lineTo(0,fy+6);
+  const segs=10;
+  for(let i=0;i<=segs;i++){
+    const x=W*i/segs;
+    const j=Math.sin(i*1.7+elapsed*0.4)*4 + Math.sin(i*0.6)*6;
+    ctx.lineTo(x, fy + j);
+  }
+  ctx.lineTo(W,H); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  // frozen ¥ marks embedded
+  ctx.globalAlpha=0.5;
+  ctx.fillStyle='#46688f'; ctx.font='700 13px sans-serif'; ctx.textAlign='center';
+  const rows=Math.floor(pile*6);
+  for(let r=0;r<rows;r++){
+    const yy=fy+24+r*26;
+    for(let c=0;c<5;c++){ if((r+c)%2===0) ctx.fillText('¥', (c+0.5)*W/5 + (r%2)*16, yy); }
+  }
+  ctx.globalAlpha=1;
+  // glowing crust line
+  ctx.strokeStyle='rgba(160,210,255,0.8)'; ctx.lineWidth=2; ctx.shadowColor=CYAN; ctx.shadowBlur=10;
+  ctx.beginPath();
+  for(let i=0;i<=segs;i++){ const x=W*i/segs; const j=Math.sin(i*1.7+elapsed*0.4)*4 + Math.sin(i*0.6)*6; if(i===0)ctx.moveTo(x,fy+j); else ctx.lineTo(x,fy+j);}
+  ctx.stroke(); ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawTag(t){
+  const col=t.big?MAG:CYAN;
+  ctx.save();
+  ctx.shadowColor=col; ctx.shadowBlur=t.big?22:14;
+  // body
+  const w=t.r*2.0, h=t.r*1.45;
+  roundRect(t.x-w/2,t.y-h/2,w,h,9);
+  const g=ctx.createLinearGradient(t.x,t.y-h/2,t.x,t.y+h/2);
+  g.addColorStop(0,'rgba(10,20,30,0.92)'); g.addColorStop(1,'rgba(6,12,20,0.92)');
+  ctx.fillStyle=g; ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.lineWidth=2; ctx.strokeStyle=col; ctx.stroke();
+  // tag hole
+  ctx.beginPath(); ctx.arc(t.x-w/2+9,t.y-h/2+9,2.4,0,7); ctx.fillStyle=col; ctx.fill();
+  // amount
+  ctx.fillStyle='#eaf6ff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='900 '+(t.big?20:16)+'px sans-serif';
+  ctx.fillText('+¥'+t.a, t.x, t.y-3);
+  ctx.fillStyle=col; ctx.font='700 9px sans-serif';
+  ctx.fillText(t.n, t.x, t.y+ (t.big?13:11));
+  ctx.restore();
+  ctx.textBaseline='alphabetic';
+}
+
+function drawHUD(){
+  // household gauge (right vertical) = headroom
+  const gx=W-22, gy=78, gh=H*0.42, gw=10;
+  ctx.fillStyle='rgba(255,255,255,0.08)'; roundRect(gx-gw/2,gy,gw,gh,5); ctx.fill();
+  const head=Math.max(0,1-pile);
+  const col = pile<0.5?GREEN : pile<0.8?'#FFD23B':RED;
+  ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=12;
+  const fh=gh*head; roundRect(gx-gw/2,gy+gh-fh,gw,fh,5); ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='#7fa6c9'; ctx.font='700 9px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('家計',gx,gy-6);
+
+  // effort gauge (left vertical)
+  const ex=22;
+  ctx.fillStyle='rgba(255,255,255,0.08)'; roundRect(ex-gw/2,gy,gw,gh,5); ctx.fill();
+  const ec='#9b7bff';
+  ctx.fillStyle = effort<15?'#5a4a8a':ec; ctx.shadowColor=ec; ctx.shadowBlur=effort<15?0:10;
+  const efh=gh*(effort/100); roundRect(ex-gw/2,gy+gh-efh,gw,efh,5); ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='#9b8fd0'; ctx.fillText('手間',ex,gy-6);
+
+  // top: saved / piled
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.font='800 13px sans-serif'; ctx.fillStyle=GREEN;
+  ctx.fillText('払いのけ ¥'+savedYen.toLocaleString(), 16, 34);
+  ctx.fillStyle=MAG; ctx.font='800 13px sans-serif';
+  ctx.textAlign='right'; ctx.fillText('積もり ¥'+piledYen.toLocaleString(), W-16, 34);
+  ctx.textAlign='center'; ctx.fillStyle='#7fa6c9'; ctx.font='700 12px sans-serif';
+  ctx.fillText('WAVE '+wave, W/2, 34);
+}
+
+/* ---------- end / share ---------- */
+function titleFor(){
+  const total=savedYen+piledYen;
+  const ratio = total>0 ? savedYen/total : 0;
+  if(wave>=7 && ratio>0.7) return ['節約の達人','#3DF5A0'];
+  if(ratio>0.6) return ['倹約戦士','#22E0FF'];
+  if(ratio>0.4) return ['なんとか家計','#FFD23B'];
+  if(ratio>0.22) return ['見て見ぬふり王','#FF9B3B'];
+  return ['埋没世帯','#FF3B57'];
+}
+function endGame(){
+  if(ended) return;
+  running=false; ended=true; pile=1.0;
+  gameoverSound(); vibe([40,60,120]);
+  setTimeout(()=>{ buildReceipt(); showScreen('result'); }, 650);
+}
+
+function buildReceipt(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+  const x=c.getContext('2d');
+  // thermal paper bg
+  const bg=x.createLinearGradient(0,0,0,1920); bg.addColorStop(0,'#f6f3ea'); bg.addColorStop(1,'#e7e0d0');
+  x.fillStyle=bg; x.fillRect(0,0,1080,1920);
+  // neon frame
+  x.strokeStyle='#22E0FF'; x.lineWidth=10; x.shadowColor='#22E0FF'; x.shadowBlur=30;
+  x.strokeRect(36,36,1080-72,1920-72); x.shadowBlur=0;
+  // jagged top/bottom
+  function jag(yc,dir){ x.fillStyle='#05060A'; x.beginPath(); x.moveTo(36,yc); for(let i=0;i<1008/24;i++){const xx=36+i*24; x.lineTo(xx+12,yc+dir*16); x.lineTo(xx+24,yc);} x.lineTo(1044, dir>0?0:1920); x.lineTo(36, dir>0?0:1920); x.closePath(); x.fill(); }
+  const [ttl,tcol]=titleFor();
+  x.textAlign='center'; x.fillStyle='#1b1f27';
+  x.font='900 92px sans-serif'; x.fillText('積もる', 540, 210);
+  x.font='800 30px sans-serif'; x.fillStyle='#6a7280'; x.fillText('今 月 の 家 計 レ シ ー ト', 540, 270);
+  x.strokeStyle='#b9b09a'; x.lineWidth=3; x.setLineDash([12,10]);
+  x.beginPath(); x.moveTo(110,330); x.lineTo(970,330); x.stroke(); x.setLineDash([]);
+  // rows
+  function row(y,label,val,col){
+    x.textAlign='left'; x.font='700 44px sans-serif'; x.fillStyle='#2a2f3a'; x.fillText(label,120,y);
+    x.textAlign='right'; x.font='900 50px sans-serif'; x.fillStyle=col||'#1b1f27'; x.fillText(val,960,y);
+  }
+  row(440,'払いのけた額','¥'+savedYen.toLocaleString(),'#1f9e63');
+  row(530,'積もった額','¥'+piledYen.toLocaleString(),'#c5316b');
+  row(620,'到達ウェーブ','WAVE '+wave,'#1b1f27');
+  row(710,'耐えた時間', Math.floor(elapsed)+' 秒','#1b1f27');
+  x.strokeStyle='#b9b09a'; x.lineWidth=3; x.setLineDash([12,10]);
+  x.beginPath(); x.moveTo(110,770); x.lineTo(970,770); x.stroke(); x.setLineDash([]);
+  // 称号 big
+  x.textAlign='center'; x.font='800 34px sans-serif'; x.fillStyle='#6a7280'; x.fillText('称　号', 540, 900);
+  x.font='900 104px sans-serif'; x.fillStyle=tcol; x.shadowColor=tcol; x.shadowBlur=24; x.fillText(ttl, 540, 1010); x.shadowBlur=0;
+  // red stamp
+  x.save(); x.translate(820,1180); x.rotate(-0.22); x.strokeStyle='rgba(200,30,50,0.85)'; x.lineWidth=8;
+  x.strokeRect(-150,-70,300,140); x.fillStyle='rgba(200,30,50,0.9)'; x.font='900 64px sans-serif'; x.textAlign='center'; x.fillText('要節約',0,24); x.restore();
+  // faux barcode
+  x.fillStyle='#1b1f27'; let bx=160; for(let i=0;i<70;i++){ const bw=2+Math.floor(Math.random()*7); x.fillRect(bx,1560,bw,150); bx+=bw+2+Math.floor(Math.random()*5); if(bx>920)break; }
+  x.textAlign='center'; x.font='800 40px sans-serif'; x.fillStyle='#1b1f27'; x.fillText('#Tsumoru　積もる', 540, 1790);
+  x.font='600 26px sans-serif'; x.fillStyle='#8a8270'; x.fillText('t-aka-h.github.io/idea-radar/tsumoru', 540, 1845);
+  jag(0,1); jag(1920,-1);
+  const url=c.toDataURL('image/png');
+  document.getElementById('shareImg').src=url;
+  window.__receipt=c;
+  document.getElementById('rTitle').textContent=ttl+'！';
+  document.getElementById('rTitle').style.color=tcol;
+}
+
+/* ---------- screens ---------- */
+function showScreen(which){
+  document.getElementById('startScreen').classList.toggle('hidden',which!=='start');
+  document.getElementById('resultScreen').classList.toggle('hidden',which!=='result');
+}
+document.getElementById('startBtn').addEventListener('click',()=>{
+  initAudio(); if(AC&&AC.state==='suspended') AC.resume();
+  showScreen('none'); document.getElementById('startScreen').classList.add('hidden');
+  reset();
+});
+document.getElementById('retryBtn').addEventListener('click',()=>{
+  if(AC&&AC.state==='suspended') AC.resume();
+  showScreen('none'); document.getElementById('resultScreen').classList.add('hidden');
+  reset();
+});
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  const c=window.__receipt; if(!c) return;
+  const hint=document.getElementById('shareHint');
+  try{
+    const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+    const file=new File([blob],'tsumoru.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'積もる',text:'値上げが積もる…今月の家計レシート #Tsumoru'});
+      return;
+    }
+  }catch(e){}
+  // fallback download
+  const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download='tsumoru.png'; a.click();
+  hint.textContent='画像を保存しました';
+});
+
+requestAnimationFrame(frame);
+// expose for verification
+window.__tsumoru={get state(){return{running,ended,pile,wave,savedYen,piledYen,tags:tags.length};},
+  forcePile(v){pile=v;}, spawn(){spawnTag();} };
+})();
+</script>
+</body>
+</html>
