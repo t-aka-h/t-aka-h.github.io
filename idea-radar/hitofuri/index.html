@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>一振り Hitofuri — ジャイアントキリング体感</title>
+<meta name="theme-color" content="#04060D">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:#04060D; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    color:#eaf2ff; user-select:none; -webkit-user-select:none; touch-action:none; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  #stage { position:relative; width:100%; height:100%; max-width:540px; max-height:100vh; }
+  canvas { display:block; width:100%; height:100%; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:28px; }
+  .hidden { display:none !important; }
+  h1 { font-size:clamp(52px,17vw,90px); font-weight:900; letter-spacing:6px;
+    background:linear-gradient(180deg,#fff,#00E5FF 60%,#0B3D91);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(0,229,255,.35); line-height:1; }
+  .romaji { font-size:13px; letter-spacing:8px; color:#5fa8c9; margin-top:10px; font-weight:700; }
+  .sub { margin-top:22px; font-size:15px; line-height:1.9; color:#9fc3da; max-width:300px; font-weight:600; }
+  .sub b { color:#00E5FF; }
+  .btn { margin-top:30px; padding:17px 50px; border:none; border-radius:50px;
+    font-size:19px; font-weight:900; letter-spacing:3px; color:#031018;
+    background:linear-gradient(135deg,#00E5FF,#3a7bff);
+    box-shadow:0 0 28px rgba(0,229,255,.55); cursor:pointer; }
+  .btn:active { transform:scale(.95); }
+  .tag { position:absolute; top:14px; left:0; right:0; text-align:center;
+    font-size:11px; letter-spacing:5px; color:#3f6f86; font-weight:700; }
+  .ghost { margin-top:16px; background:none; box-shadow:none; border:1px solid #2a4d63;
+    color:#7fb3cc; font-size:13px; padding:12px 30px; letter-spacing:2px; }
+  #resultCard { width:100%; max-width:360px; border-radius:20px; overflow:hidden; }
+  canvas#card { width:100%; height:auto; border-radius:18px; box-shadow:0 0 40px rgba(0,80,200,.4); }
+  .hint { position:absolute; bottom:24px; left:0; right:0; text-align:center;
+    font-size:13px; color:#6f9fc0; letter-spacing:1px; font-weight:600; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="game"></canvas>
+
+  <!-- TITLE -->
+  <div id="title" class="overlay">
+    <div class="tag">IDEA RADAR · WORLD CUP 2026</div>
+    <h1>一振り</h1>
+    <div class="romaji">H I T O F U R I</div>
+    <div class="sub">格上オランダ相手、決定機は<b>5回</b>だけ。<br>守備の壁が<b>一瞬だけ開く</b>そのコースへ<br><b>スワイプ一閃</b>で振り抜け。</div>
+    <button class="btn" id="startBtn">キックオフ</button>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result" class="overlay hidden">
+    <div id="resultCard"><canvas id="card"></canvas></div>
+    <button class="btn" id="shareBtn" style="margin-top:22px;">結果をシェア</button>
+    <button class="btn ghost" id="againBtn">もう一度</button>
+  </div>
+
+  <div id="hint" class="hint hidden">白く光ったコースへ素早くスワイプ</div>
+</div></div>
+
+<script>
+(()=>{
+"use strict";
+const DPR = Math.min(window.devicePixelRatio||1, 2.5);
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W=0,H=0;
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W=r.width; H=r.height;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);
+
+// ---------- Audio ----------
+let AC=null;
+function audio(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function bass(){ const ac=audio(); if(!ac)return; const t=ac.currentTime;
+  // sub bass 55Hz + harmonics (missing fundamental punch)
+  [55,110,165,220].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain();
+    o.type='sine'; o.frequency.value=f; g.gain.value=0; o.connect(g); g.connect(ac.destination);
+    const amp=[0.9,0.5,0.32,0.2][i];
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(amp,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.6); o.start(t); o.stop(t+0.65); });
+  // kick sweep 80->40
+  const k=ac.createOscillator(),kg=ac.createGain(); k.type='sine';
+  k.frequency.setValueAtTime(90,t); k.frequency.exponentialRampToValueAtTime(38,t+0.18);
+  kg.gain.setValueAtTime(0.8,t); kg.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+  k.connect(kg); kg.connect(ac.destination); k.start(t); k.stop(t+0.32);
+}
+function crowd(big){ const ac=audio(); if(!ac)return; const t=ac.currentTime;
+  const dur=big?1.6:0.5; const len=Math.floor(ac.sampleRate*dur);
+  const buf=ac.createBuffer(1,len,ac.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1);
+  const src=ac.createBufferSource(); src.buffer=buf;
+  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=big?900:1400; bp.Q.value=0.7;
+  const g=ac.createGain(); g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(big?0.5:0.18,t+(big?0.18:0.05));
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(t);
+}
+function thud(){ const ac=audio(); if(!ac)return; const t=ac.currentTime;
+  const o=ac.createOscillator(),g=ac.createGain(); o.type='square'; o.frequency.value=150;
+  g.gain.setValueAtTime(0.25,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.17); }
+function whoosh(){ const ac=audio(); if(!ac)return; const t=ac.currentTime;
+  const len=Math.floor(ac.sampleRate*0.18); const buf=ac.createBuffer(1,len,ac.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const src=ac.createBufferSource(); src.buffer=buf;
+  const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1800;
+  const g=ac.createGain(); g.gain.value=0.16; src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start(t); }
+function vibe(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+// ---------- Game ----------
+const LANES=5;
+let state='title';
+let chancesLeft, goals, shots, hitLanes;
+let phase, phaseT, openLane, windowLen, ball, flash, shake, slowmo, resultMsg, resultMsgT;
+let timeScale=1;
+
+function reset(){
+  chancesLeft=5; goals=0; shots=0; hitLanes=[];
+  startWindowCycle(true);
+  flash=0; shake=0; slowmo=0; resultMsg=null; resultMsgT=0; ball=null; timeScale=1;
+}
+function startWindowCycle(first){
+  phase='closed';
+  phaseT = first?0.9:(0.55+Math.random()*0.7);
+  openLane=-1; ball=null;
+}
+function openGate(){
+  phase='open';
+  openLane=Math.floor(Math.random()*LANES);
+  windowLen=0.34+Math.random()*0.18; // 0.34-0.52s
+  phaseT=windowLen;
+}
+
+// lane geometry — goal mouth band near top, converging perspective
+function laneCenterX(i){
+  const goalL=W*0.16, goalR=W*0.84;
+  return goalL + (goalR-goalL)*( (i+0.5)/LANES );
+}
+function laneWidth(){ return (W*0.68)/LANES; }
+
+// ball path: from bottom center up to goal-mouth lane
+const GOAL_Y_TOP=0.18, GOAL_Y_BOT=0.34, START_Y=0.86;
+
+function shoot(lane, power){
+  if(state!=='playing') return;
+  if(ball) return; // one shot per window
+  shots++;
+  whoosh(); vibe(15);
+  const success = (phase==='open' && lane===openLane);
+  ball={ lane, t:0, dur: Math.max(0.28, 0.5 - power*0.18), success,
+         sx:W*0.5, sy:H*START_Y, ex:laneCenterX(lane), ey:H*(GOAL_Y_TOP+GOAL_Y_BOT)/2, trail:[] };
+  // lock window
+  phase='shooting'; phaseT=ball.dur+0.55;
+  // record outcome resolution on ball arrival
+}
+function resolveShot(){
+  const s=ball.success;
+  hitLanes.push({lane:ball.lane, ok:s});
+  if(s){
+    goals++; bass(); crowd(true); flash=1; slowmo=0.42; vibe([40,30,90]);
+    showMsg('ゴオオオル！','#00E5FF');
+  } else {
+    thud(); crowd(false); shake=14; flash=0.35; vibe(200);
+    showMsg('ブロック','#ff4d5e');
+  }
+  chancesLeft--;
+  ball.resolved=true;
+}
+function passWindow(){ // window closed w/o shot
+  if(ball) return;
+  shots++; hitLanes.push({lane:openLane, ok:false});
+  thud(); shake=6; vibe(120); showMsg('見送り','#ffae3a');
+  chancesLeft--;
+  if(chancesLeft<=0){ setTimeout(endGame,700); } else startWindowCycle(false);
+}
+function showMsg(txt,col){ resultMsg={txt,col}; resultMsgT=1.0; }
+
+// ---------- Input (swipe) ----------
+let tStart=null;
+function pos(e){ const r=cv.getBoundingClientRect(); const p=e.touches?e.touches[0]:e;
+  return {x:p.clientX-r.left, y:p.clientY-r.top, t:performance.now()}; }
+function down(e){ audio(); if(state!=='playing')return; tStart=pos(e); e.preventDefault(); }
+function up(e){
+  if(state!=='playing'||!tStart)return;
+  const end = e.changedTouches?pos({touches:[e.changedTouches[0]]}):pos(e);
+  const dx=end.x-tStart.x, dy=end.y-tStart.y, dt=Math.max(1,end.t-tStart.t);
+  const dist=Math.hypot(dx,dy), speed=dist/dt; // px/ms
+  tStart=null; e.preventDefault();
+  if(dist<24 || dy>0) return; // need an upward flick
+  // snap end x to nearest lane
+  let best=0,bd=1e9; for(let i=0;i<LANES;i++){ const d=Math.abs(end.x-laneCenterX(i)); if(d<bd){bd=d;best=i;} }
+  const power=Math.min(1, speed*0.9);
+  shoot(best,power);
+}
+cv.addEventListener('touchstart',down,{passive:false});
+cv.addEventListener('touchend',up,{passive:false});
+cv.addEventListener('mousedown',down);
+cv.addEventListener('mouseup',up);
+
+// ---------- Loop ----------
+let last=performance.now();
+function frame(now){
+  let dt=Math.min(0.05,(now-last)/1000); last=now;
+  const sdt=dt*timeScale;
+  // slowmo
+  if(slowmo>0){ timeScale=0.3; slowmo-=dt; } else timeScale=1;
+
+  if(state==='playing') update(sdt);
+  draw();
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  if(resultMsgT>0) resultMsgT-=dt/timeScale*1; // msg fades in real time-ish
+  if(flash>0) flash-=dt*2.2;
+  if(shake>0) shake-=dt*40;
+
+  if(phase==='closed'){ phaseT-=dt; if(phaseT<=0){ if(chancesLeft>0) openGate(); else endGame(); } }
+  else if(phase==='open'){ phaseT-=dt; if(phaseT<=0) passWindow(); }
+  else if(phase==='shooting'){
+    if(ball){
+      ball.t+=dt;
+      const k=Math.min(1,ball.t/ball.dur);
+      const ease=1-Math.pow(1-k,2);
+      const x=ball.sx+(ball.ex-ball.sx)*ease;
+      const y=ball.sy+(ball.ey-ball.sy)*ease - Math.sin(k*Math.PI)*H*0.04;
+      ball.x=x; ball.y=y; ball.k=k;
+      ball.trail.push({x,y,a:1}); if(ball.trail.length>22) ball.trail.shift();
+      ball.trail.forEach(p=>p.a-=dt*2.6);
+      if(k>=1 && !ball.resolved) resolveShot();
+    }
+    phaseT-=dt;
+    if(phaseT<=0){ if(chancesLeft>0) startWindowCycle(false); else setTimeout(endGame,300); }
+  }
+}
+
+// ---------- Draw ----------
+let haze=0;
+function draw(){
+  haze+=0.02;
+  let ox=0,oy=0; if(shake>0){ ox=(Math.random()-.5)*shake; oy=(Math.random()-.5)*shake; }
+  ctx.save(); ctx.translate(ox,oy);
+
+  // bg
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#061029'); g.addColorStop(0.45,'#04060D'); g.addColorStop(1,'#020308');
+  ctx.fillStyle=g; ctx.fillRect(-20,-20,W+40,H+40);
+
+  drawStadium();
+  drawPitch();
+  drawGoal();
+  drawWall();
+  if(ball) drawBall();
+  drawHUD();
+
+  // heat haze flash overlay
+  if(flash>0){ ctx.fillStyle=`rgba(${flash>0.6?'200,240,255':'255,80,90'},${Math.min(0.6,flash)})`;
+    ctx.fillRect(-20,-20,W+40,H+40); }
+  // result message
+  if(resultMsg && resultMsgT>0){
+    ctx.globalAlpha=Math.min(1,resultMsgT*1.6);
+    ctx.fillStyle=resultMsg.col; ctx.font='900 '+Math.round(W*0.11)+'px system-ui';
+    ctx.textAlign='center'; ctx.shadowColor=resultMsg.col; ctx.shadowBlur=30;
+    ctx.fillText(resultMsg.txt, W/2, H*0.5);
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function drawStadium(){
+  // bloom lights
+  for(let i=0;i<6;i++){ const x=(i+0.5)/6*W; const y=H*0.06;
+    const rg=ctx.createRadialGradient(x,y,0,x,y,W*0.14);
+    rg.addColorStop(0,'rgba(120,180,255,0.25)'); rg.addColorStop(1,'rgba(120,180,255,0)');
+    ctx.fillStyle=rg; ctx.fillRect(x-W*0.14,0,W*0.28,H*0.2); }
+  // crowd dots
+  ctx.fillStyle='rgba(60,90,140,0.5)';
+  for(let i=0;i<140;i++){ const x=(Math.sin(i*12.9)*0.5+0.5)*W; const y=H*0.08+(Math.sin(i*7.7)*0.5+0.5)*H*0.06;
+    ctx.fillRect(x,y,2,2); }
+}
+function drawPitch(){
+  // perspective ground lines (heat shimmer)
+  ctx.strokeStyle='rgba(40,90,120,0.35)'; ctx.lineWidth=1.5;
+  const horizon=H*0.34;
+  for(let i=0;i<=10;i++){ const t=i/10;
+    const y=horizon+(H-horizon)*t*t;
+    const sh=Math.sin(haze+t*6)*2*(1-t*0.5);
+    ctx.beginPath(); ctx.moveTo(0,y+sh); ctx.lineTo(W,y+sh); ctx.stroke(); }
+  for(let i=-3;i<=3;i++){ const cx=W/2;
+    ctx.beginPath(); ctx.moveTo(cx+i*W*0.06,horizon); ctx.lineTo(cx+i*W*0.4,H); ctx.stroke(); }
+}
+function drawGoal(){
+  const gl=W*0.16, gr=W*0.84, gt=H*GOAL_Y_TOP, gb=H*GOAL_Y_BOT;
+  // net
+  ctx.strokeStyle='rgba(120,170,210,0.22)'; ctx.lineWidth=1;
+  for(let x=gl;x<=gr;x+=12){ ctx.beginPath(); ctx.moveTo(x,gt); ctx.lineTo(x,gb); ctx.stroke(); }
+  for(let y=gt;y<=gb;y+=10){ ctx.beginPath(); ctx.moveTo(gl,y); ctx.lineTo(gr,y); ctx.stroke(); }
+  // posts
+  ctx.strokeStyle='rgba(220,240,255,0.9)'; ctx.lineWidth=4; ctx.shadowColor='#bfe4ff'; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.moveTo(gl,gb); ctx.lineTo(gl,gt); ctx.lineTo(gr,gt); ctx.lineTo(gr,gb); ctx.stroke();
+  ctx.shadowBlur=0;
+}
+function drawWall(){
+  const gt=H*GOAL_Y_TOP, gb=H*GOAL_Y_BOT, lw=laneWidth();
+  for(let i=0;i<LANES;i++){
+    const cx=laneCenterX(i);
+    const isOpen=(phase==='open'||phase==='shooting')&&i===openLane;
+    if(isOpen){
+      // glowing open gate + guide line
+      const pulse=0.6+0.4*Math.sin(haze*8);
+      ctx.fillStyle=`rgba(255,255,255,${0.10+0.10*pulse})`;
+      ctx.fillRect(cx-lw*0.46,gt,lw*0.92,gb-gt);
+      ctx.strokeStyle=`rgba(255,255,255,${0.7*pulse})`; ctx.lineWidth=3;
+      ctx.shadowColor='#fff'; ctx.shadowBlur=20;
+      ctx.strokeRect(cx-lw*0.46,gt,lw*0.92,gb-gt); ctx.shadowBlur=0;
+      // guide line to player
+      ctx.strokeStyle=`rgba(255,255,255,${0.25*pulse})`; ctx.lineWidth=2; ctx.setLineDash([6,8]);
+      ctx.beginPath(); ctx.moveTo(cx,gb); ctx.lineTo(W/2,H*START_Y); ctx.stroke(); ctx.setLineDash([]);
+    } else {
+      // defender silhouette covering lane
+      const dh=(gb-gt)*1.7, dw=lw*0.82;
+      const bx=cx, by=gb+ (Math.sin(haze*2+i)*3);
+      const grd=ctx.createLinearGradient(0,by-dh,0,by);
+      grd.addColorStop(0,'#0a1530'); grd.addColorStop(1,'#16264d');
+      ctx.fillStyle=grd; ctx.strokeStyle='rgba(255,120,40,0.5)'; ctx.lineWidth=1.5;
+      roundRect(bx-dw/2,by-dh,dw,dh,dw*0.4); ctx.fill(); ctx.stroke();
+      // head
+      ctx.fillStyle='#16264d'; ctx.beginPath(); ctx.arc(bx,by-dh,dw*0.26,0,7); ctx.fill();
+      // GK marker (orange jersey accent) on center-ish
+      if(i===2){ ctx.fillStyle='rgba(255,140,40,0.55)'; ctx.fillRect(bx-dw*0.3,by-dh*0.7,dw*0.6,dh*0.18); }
+    }
+  }
+}
+function drawBall(){
+  // trail
+  ball.trail.forEach(p=>{ if(p.a<=0)return; ctx.fillStyle=`rgba(140,235,255,${p.a*0.7})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,7*p.a+2,0,7); ctx.fill(); });
+  // ball
+  ctx.fillStyle='#ffffff'; ctx.shadowColor='#00E5FF'; ctx.shadowBlur=18;
+  ctx.beginPath(); ctx.arc(ball.x,ball.y,9,0,7); ctx.fill(); ctx.shadowBlur=0;
+}
+function drawHUD(){
+  // chances as bullet markers
+  ctx.textAlign='left';
+  ctx.fillStyle='#6f9fc0'; ctx.font='700 12px system-ui';
+  ctx.fillText('決定機',16,28);
+  for(let i=0;i<5;i++){ const x=70+i*20; const used=i>=chancesLeft;
+    ctx.beginPath(); ctx.arc(x,24,5,0,7);
+    ctx.fillStyle=used?'rgba(80,100,130,0.4)':'#00E5FF';
+    if(!used){ctx.shadowColor='#00E5FF';ctx.shadowBlur=8;} ctx.fill(); ctx.shadowBlur=0; }
+  // goals
+  ctx.textAlign='right'; ctx.fillStyle='#fff'; ctx.font='900 20px system-ui';
+  ctx.fillText('GOAL '+goals, W-16,30);
+  // matchup
+  ctx.textAlign='center'; ctx.fillStyle='rgba(140,180,220,0.5)'; ctx.font='700 11px system-ui';
+  ctx.fillText('JPN vs NED · DALLAS', W/2, H-14);
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+// ---------- Flow ----------
+const titleEl=document.getElementById('title');
+const resultEl=document.getElementById('result');
+const hintEl=document.getElementById('hint');
+function startGame(){ audio(); reset(); state='playing'; titleEl.classList.add('hidden');
+  resultEl.classList.add('hidden'); hintEl.classList.remove('hidden'); last=performance.now(); }
+function endGame(){ if(state==='result')return; state='result';
+  hintEl.classList.add('hidden'); renderCard(); resultEl.classList.remove('hidden'); bass(); }
+document.getElementById('startBtn').onclick=startGame;
+document.getElementById('againBtn').onclick=startGame;
+
+// ---------- Result card 1080x1920 ----------
+const card=document.getElementById('card');
+function renderCard(){
+  const cw=1080,ch=1920; card.width=cw; card.height=ch;
+  const c=card.getContext('2d');
+  const rate = shots>0 ? Math.round(goals/shots*100) : 0;
+  const g=c.createLinearGradient(0,0,0,ch);
+  g.addColorStop(0,'#0B3D91'); g.addColorStop(0.5,'#061029'); g.addColorStop(1,'#04060D');
+  c.fillStyle=g; c.fillRect(0,0,cw,ch);
+  // glow
+  const rg=c.createRadialGradient(cw/2,ch*0.42,0,cw/2,ch*0.42,cw*0.7);
+  rg.addColorStop(0,'rgba(0,229,255,0.22)'); rg.addColorStop(1,'rgba(0,229,255,0)');
+  c.fillStyle=rg; c.fillRect(0,0,cw,ch);
+  c.textAlign='center';
+  c.fillStyle='#5fa8c9'; c.font='700 34px system-ui'; c.fillText('H I T O F U R I · 一振り',cw/2,180);
+  // title kanji
+  const tg=c.createLinearGradient(0,240,0,420);
+  tg.addColorStop(0,'#fff'); tg.addColorStop(1,'#00E5FF');
+  c.fillStyle=tg; c.font='900 170px system-ui'; c.fillText('一振り',cw/2,420);
+  // badge
+  const got = goals>=3?'ジャイキリ達成':goals>=1?'一矢報いた':'無得点';
+  c.fillStyle= goals>=3?'#00E5FF':goals>=1?'#9fc3da':'#ff6b7a';
+  c.font='900 64px system-ui'; c.fillText(got,cw/2,560);
+  // big rate
+  c.fillStyle='#fff'; c.font='900 90px system-ui'; c.fillText('一振り成功率',cw/2,800);
+  const ng=c.createLinearGradient(0,820,0,1040);
+  ng.addColorStop(0,'#fff'); ng.addColorStop(1,'#00E5FF');
+  c.fillStyle=ng; c.font='900 360px system-ui'; c.shadowColor='#00E5FF'; c.shadowBlur=50;
+  c.fillText(rate+'%',cw/2,1090); c.shadowBlur=0;
+  c.fillStyle='#9fc3da'; c.font='700 48px system-ui';
+  c.fillText('GOAL '+goals+' / SHOT '+shots,cw/2,1200);
+  // lane heatmap
+  c.fillStyle='#5fa8c9'; c.font='700 36px system-ui'; c.fillText('狙ったコース',cw/2,1380);
+  const cellW=150, gap=24, total=LANES*cellW+(LANES-1)*gap, x0=(cw-total)/2;
+  for(let i=0;i<LANES;i++){ const x=x0+i*(cellW+gap);
+    const hit=hitLanes.filter(h=>h.lane===i); const ok=hit.filter(h=>h.ok).length;
+    c.fillStyle= ok>0?'#00E5FF':(hit.length>0?'rgba(255,90,110,0.6)':'rgba(80,110,150,0.3)');
+    c.fillRect(x,1430,cellW,150);
+    c.fillStyle='#04060D'; c.font='900 60px system-ui'; c.fillText(ok>0?'⚽':(hit.length>0?'×':'·'),x+cellW/2,1520); }
+  // footer
+  c.fillStyle='#7fb3cc'; c.font='700 40px system-ui';
+  c.fillText('2026.6.14 · JPN × NED · ダラス',cw/2,1740);
+  c.fillStyle='#3f6f86'; c.font='600 30px system-ui';
+  c.fillText('Idea Radar — t-aka-h.github.io/idea-radar',cw/2,1830);
+  crowd(true);
+}
+document.getElementById('shareBtn').onclick=async()=>{
+  card.toBlob(async(blob)=>{
+    const file=new File([blob],'hitofuri.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],title:'一振り',text:'#一振り でジャイアントキリング！ #WorldCup'}); return;}catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hitofuri.png'; a.click();
+  },'image/png');
+};
+
+resize(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
