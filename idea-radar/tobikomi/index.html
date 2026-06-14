@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Tobikomi（飛び込み） — GKセーブ体感ゲー</title>
+<meta name="description" content="飛んでくるシュートを一人称キーパー視点で読み、刹那にスワイプで弾く。完全オンデバイスのGKセーブ体感ゲー。">
+<style>
+  :root{
+    --bg:#05060E; --pitch:#0A1A12;
+    --save:#00E5FF; --danger:#FF2D6F; --streak:#FFB300;
+    --ink:#EAF2FF; --dim:#7d88a6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0}
+  html,body{height:100%; background:var(--bg); overflow:hidden; overscroll-behavior:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Segoe UI",sans-serif;
+    color:var(--ink); user-select:none; -webkit-user-select:none; touch-action:none;}
+  #wrap{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000;}
+  #stage{position:relative; width:100%; height:100%; max-width:56.25vh; max-height:177.78vw; background:var(--bg);
+    overflow:hidden; box-shadow:0 0 60px rgba(0,229,255,.06) inset;}
+  canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+
+  /* HUD */
+  #hud{position:absolute; top:0; left:0; right:0; padding:14px 16px; display:flex; justify-content:space-between;
+    align-items:flex-start; pointer-events:none; z-index:6; font-variant-numeric:tabular-nums;}
+  .pill{background:rgba(8,12,24,.55); border:1px solid rgba(125,136,166,.25); border-radius:11px; padding:6px 11px;
+    backdrop-filter:blur(6px);}
+  .lbl{font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase;}
+  .val{font-size:21px; font-weight:800; line-height:1; margin-top:2px;}
+  #lives{display:flex; gap:5px; margin-top:5px;}
+  .heart{width:11px; height:11px; border-radius:3px; background:var(--save); box-shadow:0 0 8px var(--save);}
+  .heart.out{background:#23304a; box-shadow:none;}
+  #streakWrap .val{color:var(--streak)}
+  #modeTag{position:absolute; top:62px; left:50%; transform:translateX(-50%); font-size:10px; letter-spacing:.22em;
+    color:var(--dim); z-index:6; pointer-events:none; text-transform:uppercase;}
+
+  /* center flash text */
+  #flash{position:absolute; top:38%; left:0; right:0; text-align:center; z-index:7; pointer-events:none;}
+  #flash .big{font-size:54px; font-weight:900; letter-spacing:.02em; opacity:0; transform:scale(.7);}
+  #flash .sub{font-size:13px; letter-spacing:.3em; color:var(--dim); margin-top:6px; opacity:0; text-transform:uppercase;}
+
+  /* hint to player */
+  #hintBar{position:absolute; bottom:96px; left:0; right:0; text-align:center; z-index:6; pointer-events:none;
+    font-size:12px; letter-spacing:.12em; color:var(--dim);}
+
+  /* overlays */
+  .screen{position:absolute; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:30px; gap:16px;
+    background:radial-gradient(120% 90% at 50% 20%, rgba(0,40,60,.35), rgba(5,6,14,.94) 70%);
+    backdrop-filter:blur(3px);}
+  .screen.hidden{display:none;}
+  .logo{font-size:46px; font-weight:900; letter-spacing:.04em;
+    background:linear-gradient(180deg,#bfeeff,var(--save)); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(0,229,255,.35); line-height:1;}
+  .jp{font-size:14px; letter-spacing:.5em; color:var(--dim); margin-top:-6px;}
+  .tag{font-size:13px; color:#aab6d4; max-width:300px; line-height:1.7;}
+  .btn{margin-top:6px; pointer-events:auto; cursor:pointer; border:none; border-radius:14px; padding:15px 30px;
+    font-size:17px; font-weight:800; letter-spacing:.04em; color:#021018;
+    background:linear-gradient(180deg,#7af0ff,var(--save)); box-shadow:0 8px 26px rgba(0,229,255,.35);}
+  .btn.alt{color:var(--ink);
+    background:linear-gradient(180deg,#33405e,#202c44); box-shadow:none; border:1px solid rgba(125,136,166,.3); font-size:14px; padding:12px 22px;}
+  .how{font-size:11.5px; color:var(--dim); line-height:1.9; max-width:300px;}
+  .how b{color:var(--save); font-weight:700;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
+
+  /* result card */
+  #cardHolder{position:relative; width:min(74vw,300px); aspect-ratio:9/16; border-radius:16px; overflow:hidden;
+    box-shadow:0 14px 50px rgba(0,0,0,.6), 0 0 0 1px rgba(0,229,255,.2);}
+  #cardCanvas{position:absolute; inset:0; width:100%; height:100%;}
+  .credit{position:absolute; bottom:8px; left:0; right:0; text-align:center; font-size:9px; color:#46506b; z-index:11;}
+  a.home{color:var(--dim); text-decoration:none; font-size:11px;}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="pill" id="scoreWrap"><div class="lbl">SAVES</div><div class="val" id="saves">0</div></div>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+      <div class="pill" id="streakWrap"><div class="lbl">STREAK</div><div class="val" id="streak">0</div></div>
+      <div id="lives"></div>
+    </div>
+  </div>
+  <div id="modeTag"></div>
+
+  <div id="flash"><div class="big" id="flashBig"></div><div class="sub" id="flashSub"></div></div>
+  <div id="hintBar"></div>
+
+  <!-- START -->
+  <div class="screen" id="startScreen">
+    <div class="logo">TOBIKOMI</div>
+    <div class="jp">飛 び 込 み</div>
+    <div class="tag">飛んでくるシュートを読み切れ。<br>キーパーになって、刹那に弾く。</div>
+    <div class="how">ボールが迫ったら、飛びたい方向へ<b>スワイプ</b>。<br><b>左/右/上</b>へ弾く・<b>タップ＝正面キャッチ</b>。<br>キッカーの<b>軸足の向き</b>がコースのヒント。</div>
+    <div class="row">
+      <button class="btn" id="startEndless">エンドレス</button>
+      <button class="btn alt" id="startPK">PK戦（5本）</button>
+    </div>
+    <a class="home" href="../">← Idea Radar ギャラリー</a>
+  </div>
+
+  <!-- RESULT -->
+  <div class="screen hidden" id="resultScreen">
+    <div id="cardHolder"><canvas id="cardCanvas"></canvas></div>
+    <div class="row">
+      <button class="btn" id="shareBtn">結果をシェア</button>
+      <button class="btn alt" id="againBtn">もう一度</button>
+    </div>
+    <a class="home" href="../">← ギャラリー</a>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+/* ===================== Tobikomi — single-file GK save game ===================== */
+
+const stage = document.getElementById('stage');
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  W = r.width; H = r.height;
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- WebAudio (procedural, no files) ---------- */
+let AC=null;
+function ac(){ if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)(); } return AC; }
+function resumeAudio(){ try{ const a=ac(); if(a.state==='suspended') a.resume(); }catch(e){} }
+
+function tone(freq, t0, dur, type, gain, slideTo){
+  const a=ac(); const o=a.createOscillator(); const g=a.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq, t0);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo), t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g).connect(a.destination); o.start(t0); o.stop(t0+dur+0.04);
+}
+function noiseBurst(t0, dur, gain, lp){
+  const a=ac(); const n=Math.floor(a.sampleRate*dur);
+  const buf=a.createBuffer(1,n,a.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*(1-i/n); }
+  const s=a.createBufferSource(); s.buffer=buf;
+  const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1800;
+  const g=a.createGain(); g.gain.setValueAtTime(gain,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  s.connect(f).connect(g).connect(a.destination); s.start(t0); s.stop(t0+dur+0.02);
+}
+// thunderous "DON" with missing-fundamental flavor (55Hz + harmonics)
+function sndSave(){
+  resumeAudio(); const a=ac(); const t=a.currentTime;
+  tone(55, t, 0.55, 'sine', 0.9, 40);
+  tone(110, t, 0.42, 'sine', 0.5, 70);
+  tone(165, t, 0.30, 'triangle', 0.28, 120);
+  noiseBurst(t, 0.16, 0.5, 2600);
+  tone(720, t+0.005, 0.10, 'square', 0.10, 300);
+}
+function sndPerfect(){
+  resumeAudio(); const a=ac(); const t=a.currentTime;
+  sndSave();
+  tone(880, t+0.02, 0.18, 'triangle', 0.18, 1320);
+  tone(1320, t+0.10, 0.16, 'sine', 0.12, 1760);
+}
+function sndGoal(){
+  resumeAudio(); const a=ac(); const t=a.currentTime;
+  tone(70, t, 0.5, 'sawtooth', 0.35, 38);
+  tone(104, t, 0.42, 'sine', 0.2, 55);
+  noiseBurst(t, 0.28, 0.25, 900);
+}
+function sndWhistle(){
+  resumeAudio(); const a=ac(); const t=a.currentTime;
+  tone(1700, t, 0.16, 'triangle', 0.16, 2100);
+  tone(2050, t+0.04, 0.14, 'triangle', 0.14, 1700);
+}
+function vib(p){ try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} }
+
+/* ---------- geometry: 7 logical courses (3 cols x 2 rows + center catch) ---------- */
+// course id -> target normalized position (cx,cy) in stage coords & required input
+// rows: bottom(low) y~0.50, top y~0.34 ; cols: L/C/R
+const COURSES = [
+  {id:'TL', col:-1, row:1, dir:'upleft'},   {id:'TC', col:0, row:1, dir:'up'},    {id:'TR', col:1, row:1, dir:'upright'},
+  {id:'BL', col:-1, row:0, dir:'left'},      {id:'BC', col:0, row:0, dir:'catch'}, {id:'BR', col:1, row:0, dir:'right'},
+];
+// map swipe -> set of courses it saves
+function inputSaves(input, course){
+  const d = course.dir;
+  if(input==='catch') return (d==='catch');             // tap = center catch only
+  if(input==='up')    return (d==='up'||d==='upleft'||d==='upright'); // high dive covers top band
+  if(input==='left')  return (d==='left'||d==='upleft');
+  if(input==='right') return (d==='right'||d==='upright');
+  return false;
+}
+
+/* goal frame in stage coords */
+function goal(){
+  const gw = W*0.78, gh = H*0.30;
+  const gx = (W-gw)/2, gy = H*0.20;
+  return {gx,gy,gw,gh, postR:Math.max(3,W*0.012)};
+}
+function courseTarget(c){
+  const g=goal();
+  const cx = g.gx + g.gw*(0.5 + c.col*0.33);
+  const cy = c.row===1 ? g.gy+g.gh*0.30 : g.gy+g.gh*0.74;
+  return {x:cx, y:cy};
+}
+
+/* ---------- game state ---------- */
+const S = {mode:'endless', running:false, lives:3, saves:0, streak:0, bestStreak:0,
+  shots:0, savedCount:0, wave:1, pkShot:0, pkTotal:5, pkSaves:0,
+  ball:null, kicker:null, awaiting:false, resultPending:false, shake:0, particles:[], nets:0};
+
+function newKicker(course, feint){
+  // kicker silhouette aims a "plant foot" — true course unless feint
+  const shown = feint ? randCourseDifferent(course) : course;
+  return {course, shownCourse:shown, feint, t:0};
+}
+function randCourseDifferent(c){ let o; do{ o=COURSES[(Math.random()*COURSES.length)|0]; }while(o.id===c.id); return o; }
+
+function diffParams(){
+  // returns flight time, curve, hint duration, feint chance
+  const w = S.wave;
+  const flight = Math.max(0.52, 0.92 - (w-1)*0.035);
+  const curve  = Math.min(0.30, 0.05 + (w-1)*0.022);
+  const feint  = w>=5 ? Math.min(0.42, 0.12+(w-5)*0.05) : 0;
+  return {flight, curve, feint};
+}
+
+function spawnShot(){
+  const c = COURSES[(Math.random()*COURSES.length)|0];
+  const dp = diffParams();
+  const feint = Math.random() < dp.feint;
+  const tgt = courseTarget(c);
+  // origin near far kicker (center, deep)
+  const ox = W*0.5 + (Math.random()*2-1)*W*0.06;
+  const oy = H*0.30;
+  S.ball = {
+    course:c, ox, oy, tx:tgt.x, ty:tgt.y,
+    t:0, flight:dp.flight, curve:(Math.random()*2-1)*dp.curve,
+    scale:0.05, judged:false, windowOpen:false, x:ox, y:oy
+  };
+  S.kicker = newKicker(c, feint);
+  S.awaiting = true;
+  S.resultPending = false;
+  setHint('読め…');
+  sndWhistle();
+}
+
+/* ---------- input ---------- */
+let ptr=null;
+function onDown(e){
+  resumeAudio();
+  const p = pt(e);
+  ptr = {x0:p.x, y0:p.y, t:performance.now()};
+}
+function onUp(e){
+  if(!ptr) return;
+  const p = pt(e, ptr);
+  const dx = p.x-ptr.x0, dy = p.y-ptr.y0;
+  const dist = Math.hypot(dx,dy);
+  let input;
+  if(dist < 24){ input='catch'; }
+  else if(Math.abs(dy) > Math.abs(dx) && dy<0){ input='up'; }
+  else if(dx<0){ input='left'; }
+  else { input='right'; }
+  ptr=null;
+  handleInput(input);
+}
+function pt(e, fallback){
+  const r = cv.getBoundingClientRect();
+  const t = (e.touches&&e.touches[0]) || (e.changedTouches&&e.changedTouches[0]) || e;
+  if(t && t.clientX!=null) return {x:t.clientX-r.left, y:t.clientY-r.top};
+  return fallback?{x:fallback.x0,y:fallback.y0}:{x:0,y:0};
+}
+cv.addEventListener('touchstart', e=>{e.preventDefault(); onDown(e);}, {passive:false});
+cv.addEventListener('touchend',   e=>{e.preventDefault(); onUp(e);}, {passive:false});
+cv.addEventListener('mousedown', onDown);
+window.addEventListener('mouseup', onUp);
+
+function handleInput(input){
+  const b=S.ball;
+  if(!b || b.judged || !S.awaiting) return;
+  // window opens in last portion of flight; too-early = feint loss
+  if(!b.windowOpen){
+    // early input — count as a committed dive that misses (anti-mash)
+    judge(b, input, true);
+    return;
+  }
+  judge(b, input, false);
+}
+
+function judge(b, input, early){
+  b.judged = true; S.awaiting=false; S.shots++;
+  const saved = !early && inputSaves(input, b.course);
+  // timing quality: how centered within window
+  const q = b.windowQ || 0;
+  diveAnim(input, saved);
+  if(saved){
+    const perfect = q>0.55 && !early;
+    S.saves++; S.savedCount++; S.streak++; S.bestStreak=Math.max(S.bestStreak,S.streak);
+    if(S.mode==='pk') S.pkSaves++;
+    if(perfect){ sndPerfect(); flash('PERFECT!', 'reflex save', '#00E5FF'); burst(courseTarget(b.course),28,'#00E5FF'); }
+    else { sndSave(); flash('SAVE!', 'streak x'+S.streak, '#00E5FF'); burst(courseTarget(b.course),18,'#7af0ff'); }
+    vib(perfect?[18,30,18]:40);
+    S.shake = perfect?16:11;
+    if(S.saves % 6 === 0){ S.wave++; }
+  } else {
+    sndGoal(); flash('GOAL', early?'飛び出し早すぎ':'抜かれた…', '#FF2D6F');
+    vib([30,40,30]); S.shake=9; S.nets=1.0; S.streak=0;
+    S.lives--;
+    if(S.mode==='pk'){ /* pk uses shot count not lives */ }
+  }
+  updateHUD();
+  // schedule next or end
+  setTimeout(()=>{
+    if(S.mode==='pk'){
+      S.pkShot++;
+      if(S.pkShot>=S.pkTotal){ endGame(); return; }
+      nextDelay();
+    } else {
+      if(S.lives<=0){ endGame(); return; }
+      nextDelay();
+    }
+  }, saved?780:1000);
+}
+function nextDelay(){ setHint(''); setTimeout(spawnShot, 380); }
+
+/* ---------- dive + particles ---------- */
+let dive={active:false, dir:'catch', t:0, save:false};
+function diveAnim(dir,save){ dive={active:true, dir, t:0, save}; }
+function burst(p,n,col){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, sp=2+Math.random()*6;
+    S.particles.push({x:p.x,y:p.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,life:1,col});
+  }
+}
+
+/* ---------- flash / hint / HUD ---------- */
+const fBig=document.getElementById('flashBig'), fSub=document.getElementById('flashSub');
+let flashT=0;
+function flash(big,sub,col){
+  fBig.textContent=big; fSub.textContent=sub||''; fBig.style.color=col||'#fff';
+  fBig.style.textShadow='0 0 30px '+(col||'#fff');
+  flashT=1;
+}
+function setHint(t){ document.getElementById('hintBar').textContent=t; }
+function updateHUD(){
+  document.getElementById('saves').textContent = S.mode==='pk' ? (S.pkSaves+'/'+S.pkTotal) : S.saves;
+  document.getElementById('streak').textContent = S.streak;
+  const lc=document.getElementById('lives');
+  if(S.mode==='pk'){ lc.innerHTML=''; for(let i=0;i<S.pkTotal;i++){ const d=document.createElement('div'); d.className='heart'+(i<S.pkShot?' out':''); lc.appendChild(d);} }
+  else { lc.innerHTML=''; for(let i=0;i<3;i++){ const d=document.createElement('div'); d.className='heart'+(i>=S.lives?' out':''); lc.appendChild(d);} }
+  document.getElementById('modeTag').textContent = S.mode==='pk' ? 'PK SHOOTOUT' : ('WAVE '+S.wave);
+}
+
+/* ---------- main loop ---------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  update(dt); render();
+  requestAnimationFrame(loop);
+}
+function update(dt){
+  // flash decay
+  if(flashT>0){ flashT-=dt*1.6; }
+  fBig.style.opacity = Math.max(0, Math.min(1, flashT*1.4)).toFixed(2);
+  fBig.style.transform = 'scale('+(0.7+0.3*Math.min(1,(1-flashT)*2.2)).toFixed(3)+')';
+  fSub.style.opacity = Math.max(0, Math.min(1,(flashT-0.2)*1.6)).toFixed(2);
+  // shake decay
+  S.shake *= Math.pow(0.001, dt);
+  if(S.shake<0.2) S.shake=0;
+  S.nets = Math.max(0, S.nets - dt*1.6);
+  // ball flight
+  const b=S.ball;
+  if(b && !b.judged){
+    b.t += dt / b.flight;
+    if(b.t>=1){ // reached line without input -> goal if not caught
+      if(S.awaiting){ judge(b,'none',false); }
+    } else {
+      const e = b.t; // 0..1
+      // ease-in scale
+      b.scale = 0.05 + Math.pow(e,1.7)*1.45;
+      // position interp with lateral curve (bezier-ish)
+      const curveOff = Math.sin(e*Math.PI)*b.curve*W;
+      b.x = b.ox + (b.tx-b.ox)*e + curveOff;
+      b.y = b.oy + (b.ty-b.oy)*Math.pow(e,1.3);
+      // judge window: last ~16% of flight
+      const winStart = 0.82;
+      b.windowOpen = e>=winStart;
+      if(b.windowOpen){ b.windowQ = 1 - (e-winStart)/(1-winStart); } // 1 at open -> 0 at line
+    }
+  }
+  // kicker anim
+  if(S.kicker){ S.kicker.t = Math.min(1, S.kicker.t + dt*2.2); }
+  // dive anim
+  if(dive.active){ dive.t += dt*2.6; if(dive.t>=1) dive.active=false; }
+  // particles
+  for(const p of S.particles){ p.vy+=12*dt; p.x+=p.vx; p.y+=p.vy; p.life-=dt*1.4; }
+  S.particles = S.particles.filter(p=>p.life>0);
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  let sx=0,sy=0;
+  if(S.shake>0){ sx=(Math.random()*2-1)*S.shake; sy=(Math.random()*2-1)*S.shake; }
+  ctx.save(); ctx.translate(sx,sy);
+
+  drawPitch();
+  drawGoal();
+  drawKicker();
+  drawBall();
+  drawGloves();
+  drawParticles();
+
+  ctx.restore();
+}
+
+function drawPitch(){
+  // sky/dark gradient
+  let g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#070b18'); g.addColorStop(0.55,'#0a1426'); g.addColorStop(1,'#06100a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // crowd noise band
+  ctx.save();
+  for(let i=0;i<60;i++){
+    const y = H*0.10 + (i%2)*3;
+    const x = (i/60)*W;
+  }
+  ctx.restore();
+  // pitch with perspective lines
+  const horizon=H*0.50;
+  let pg=ctx.createLinearGradient(0,horizon,0,H);
+  pg.addColorStop(0,'#0c2a1c'); pg.addColorStop(1,'#06140d');
+  ctx.fillStyle=pg; ctx.fillRect(0,horizon,W,H-horizon);
+  ctx.strokeStyle='rgba(120,200,160,.10)'; ctx.lineWidth=1.5;
+  const vpx=W*0.5;
+  for(let i=-3;i<=3;i++){
+    ctx.beginPath(); ctx.moveTo(vpx+i*W*0.06, horizon); ctx.lineTo(vpx+i*W*0.5, H); ctx.stroke();
+  }
+  for(let j=1;j<=4;j++){
+    const yy=horizon+(H-horizon)*Math.pow(j/5,1.7);
+    ctx.globalAlpha=0.10; ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(W,yy); ctx.stroke(); ctx.globalAlpha=1;
+  }
+}
+
+function drawGoal(){
+  const g=goal();
+  // net
+  ctx.save();
+  const wob = S.nets>0 ? S.nets : 0;
+  ctx.strokeStyle='rgba(150,170,210,'+(0.10+wob*0.18)+')'; ctx.lineWidth=1;
+  const step=g.gw/12;
+  for(let i=0;i<=12;i++){
+    const x=g.gx+i*step + Math.sin((i*0.7)+performance.now()*0.004)*wob*6;
+    ctx.beginPath(); ctx.moveTo(x,g.gy); ctx.lineTo(x,g.gy+g.gh); ctx.stroke();
+  }
+  const vstep=g.gh/7;
+  for(let j=0;j<=7;j++){
+    const y=g.gy+j*vstep;
+    ctx.beginPath(); ctx.moveTo(g.gx,y); ctx.lineTo(g.gx+g.gw,y); ctx.stroke();
+  }
+  ctx.restore();
+  // posts (neon)
+  ctx.save(); ctx.shadowColor='rgba(0,229,255,.5)'; ctx.shadowBlur=14;
+  ctx.strokeStyle='#cfeaff'; ctx.lineWidth=g.postR;
+  ctx.beginPath();
+  ctx.moveTo(g.gx,g.gy+g.gh); ctx.lineTo(g.gx,g.gy); ctx.lineTo(g.gx+g.gw,g.gy); ctx.lineTo(g.gx+g.gw,g.gy+g.gh);
+  ctx.stroke(); ctx.restore();
+}
+
+function drawKicker(){
+  const k=S.kicker; if(!k) return;
+  const b=S.ball; if(!b||b.judged) return;
+  // small silhouette near origin showing plant-foot toward shownCourse
+  const baseX=W*0.5, baseY=H*0.345, sc=Math.max(1, W*0.0009)* (1 - (b?b.t*0.4:0));
+  const tgt=courseTarget(k.shownCourse);
+  const aim = Math.sign(tgt.x - baseX); // -1 left, +1 right
+  const lean = k.t * 0.5;
+  ctx.save();
+  ctx.translate(baseX, baseY);
+  ctx.globalAlpha=0.9;
+  // body
+  ctx.fillStyle='#1b2742';
+  ctx.beginPath(); ctx.ellipse(0, -22*sc, 8*sc, 14*sc, aim*lean*0.4, 0, Math.PI*2); ctx.fill();
+  // head
+  ctx.beginPath(); ctx.arc(0,-40*sc,6*sc,0,Math.PI*2); ctx.fill();
+  // plant foot (the hint) — glows toward shown course direction
+  ctx.strokeStyle='rgba(255,179,0,'+(0.35+0.5*k.t)+')'; ctx.lineWidth=3*sc; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,-8*sc); ctx.lineTo(aim*14*sc, 2*sc); ctx.stroke();
+  // kicking leg
+  ctx.strokeStyle='#2a3a5c'; ctx.lineWidth=4*sc;
+  ctx.beginPath(); ctx.moveTo(0,-8*sc); ctx.lineTo(-aim*12*sc, -2*sc - k.t*8*sc); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBall(){
+  const b=S.ball; if(!b||b.judged) return;
+  const r = Math.max(6, W*0.05*b.scale*2);
+  ctx.save();
+  // glow when window open
+  if(b.windowOpen){ ctx.shadowColor='#00E5FF'; ctx.shadowBlur=24; }
+  // ball body
+  const g=ctx.createRadialGradient(b.x-r*0.3,b.y-r*0.3,r*0.2, b.x,b.y,r);
+  g.addColorStop(0,'#ffffff'); g.addColorStop(0.7,'#dfeefc'); g.addColorStop(1,'#9fb6d6');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,r,0,Math.PI*2); ctx.fill();
+  // pentagon hint
+  ctx.shadowBlur=0; ctx.fillStyle='rgba(20,30,60,.85)';
+  ctx.beginPath(); ctx.arc(b.x,b.y,r*0.32,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // window ring telegraph at target
+  if(b.windowOpen){
+    const t=courseTarget(b.course);
+    ctx.save(); ctx.globalAlpha=0.5*b.windowQ+0.2; ctx.strokeStyle='#00E5FF'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(t.x,t.y, r*1.4, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+}
+
+function drawGloves(){
+  // two blurred gloves bottom; dive shifts them
+  const baseY=H*0.86;
+  let lx=W*0.36, rx=W*0.64, gy=baseY;
+  if(dive.active){
+    const e=Math.sin(dive.t*Math.PI); // 0..1..0
+    const amt=e*W*0.34;
+    if(dive.dir==='left'){ lx-=amt; rx-=amt*0.5; gy-=e*H*0.10; }
+    else if(dive.dir==='right'){ rx+=amt; lx+=amt*0.5; gy-=e*H*0.10; }
+    else if(dive.dir==='up'){ gy-=e*H*0.30; lx-=amt*0.2; rx+=amt*0.2; }
+    else if(dive.dir==='catch'){ gy-=e*H*0.06; lx+=e*W*0.04; rx-=e*W*0.04; }
+  }
+  const col = dive.active && dive.save ? '#00E5FF' : '#0e7d8f';
+  for(const x of [lx,rx]){
+    ctx.save(); ctx.shadowColor=col; ctx.shadowBlur= dive.active?20:8;
+    ctx.fillStyle = dive.active&&dive.save?'#bff6ff':'#16384a';
+    ctx.beginPath(); ctx.ellipse(x,gy, W*0.075, W*0.09, 0,0,Math.PI*2); ctx.fill();
+    // fingers
+    ctx.fillStyle = dive.active&&dive.save?'#9fe9f7':'#0f2a38';
+    for(let k=-2;k<=2;k++){ ctx.beginPath(); ctx.ellipse(x+k*W*0.022, gy-W*0.07, W*0.012, W*0.03,0,0,Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  }
+}
+
+function drawParticles(){
+  for(const p of S.particles){
+    ctx.save(); ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.col;
+    ctx.shadowColor=p.col; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3.2*p.life+1,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
+}
+
+/* ---------- game flow ---------- */
+function startGame(mode){
+  resumeAudio();
+  S.mode=mode; S.running=true; S.lives=3; S.saves=0; S.streak=0; S.bestStreak=0;
+  S.shots=0; S.savedCount=0; S.wave=1; S.pkShot=0; S.pkSaves=0; S.particles=[]; S.shake=0; S.nets=0;
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  updateHUD();
+  setTimeout(spawnShot, 500);
+}
+function endGame(){
+  S.running=false; S.ball=null; S.kicker=null; setHint('');
+  drawCard();
+  document.getElementById('resultScreen').classList.remove('hidden');
+}
+
+/* ---------- result share card 9:16 ---------- */
+const cardCv=document.getElementById('cardCanvas'); const cctx=cardCv.getContext('2d');
+function titleFor(rate){
+  if(rate>=0.9) return ['鉄 壁','THE WALL'];
+  if(rate>=0.75) return ['守 護 神','GUARDIAN'];
+  if(rate>=0.55) return ['猫 足 GK','CAT REFLEX'];
+  if(rate>=0.35) return ['修 行 中','ROOKIE'];
+  return ['記録は次へ','KEEP DIVING'];
+}
+function drawCard(){
+  const w=720, h=1280; cardCv.width=w; cardCv.height=h;
+  const shots = S.mode==='pk' ? S.pkTotal : S.shots;
+  const saves = S.mode==='pk' ? S.pkSaves : S.savedCount;
+  const rate = shots? saves/shots : 0;
+  const [tj,te]=titleFor(rate);
+  // bg
+  let g=cctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#071427'); g.addColorStop(0.5,'#05101f'); g.addColorStop(1,'#04070f');
+  cctx.fillStyle=g; cctx.fillRect(0,0,w,h);
+  // frozen particle backdrop
+  for(let i=0;i<60;i++){
+    cctx.save(); cctx.globalAlpha=0.12+Math.random()*0.1;
+    cctx.fillStyle = Math.random()<0.5?'#00E5FF':'#FFB300';
+    const x=Math.random()*w, y=200+Math.random()*900, r=2+Math.random()*5;
+    cctx.shadowColor=cctx.fillStyle; cctx.shadowBlur=14;
+    cctx.beginPath(); cctx.arc(x,y,r,0,Math.PI*2); cctx.fill(); cctx.restore();
+  }
+  // neon frame
+  cctx.strokeStyle='rgba(0,229,255,.45)'; cctx.lineWidth=4;
+  cctx.strokeRect(30,30,w-60,h-60);
+  // header
+  cctx.textAlign='center'; cctx.fillStyle='#7d88a6';
+  cctx.font='600 30px -apple-system,sans-serif'; cctx.fillText('T O B I K O M I', w/2, 130);
+  cctx.fillStyle='#cdebff'; cctx.font='700 34px -apple-system,sans-serif';
+  cctx.fillText(S.mode==='pk'?'PK SHOOTOUT':'ENDLESS', w/2, 178);
+  // title
+  cctx.save(); cctx.shadowColor='#00E5FF'; cctx.shadowBlur=40;
+  cctx.fillStyle='#eafaff'; cctx.font='900 96px -apple-system,sans-serif';
+  cctx.fillText(tj, w/2, 360);
+  cctx.restore();
+  cctx.fillStyle='#7d88a6'; cctx.font='600 26px -apple-system,sans-serif';
+  cctx.fillText(te, w/2, 410);
+  // big save rate
+  cctx.save(); cctx.shadowColor='#00E5FF'; cctx.shadowBlur=30;
+  cctx.fillStyle='#00E5FF'; cctx.font='900 260px -apple-system,sans-serif';
+  cctx.fillText(Math.round(rate*100), w/2, 700);
+  cctx.restore();
+  cctx.fillStyle='#9fb6d6'; cctx.font='700 44px -apple-system,sans-serif';
+  cctx.fillText('% SAVE RATE', w/2, 770);
+  // stat row
+  cctx.fillStyle='#0a1426'; roundRect(cctx, 80, 860, w-160, 260, 24); cctx.fill();
+  cctx.strokeStyle='rgba(125,136,166,.25)'; cctx.lineWidth=2; roundRect(cctx,80,860,w-160,260,24); cctx.stroke();
+  stat(cctx, w*0.5, 940, saves+' / '+shots, 'SAVES');
+  stat(cctx, w*0.30, 1060, String(S.bestStreak), 'MAX STREAK');
+  stat(cctx, w*0.70, 1060, (S.mode==='pk'?'—':('W'+S.wave)), 'REACHED');
+  // footer
+  cctx.fillStyle='#FFB300'; cctx.font='700 26px -apple-system,sans-serif';
+  cctx.fillText('🧤 一人称GKセーブ体感ゲー', w/2, 1200);
+  cctx.fillStyle='#46506b'; cctx.font='500 22px -apple-system,sans-serif';
+  cctx.fillText('t-aka-h.github.io/idea-radar', w/2, 1240);
+}
+function stat(c,x,y,big,lbl){
+  c.textAlign='center'; c.fillStyle='#eafaff'; c.font='800 54px -apple-system,sans-serif'; c.fillText(big,x,y);
+  c.fillStyle='#7d88a6'; c.font='600 22px -apple-system,sans-serif'; c.fillText(lbl,x,y+34);
+}
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+/* ---------- share ---------- */
+async function share(){
+  try{
+    const shots = S.mode==='pk' ? S.pkTotal : S.shots;
+    const saves = S.mode==='pk' ? S.pkSaves : S.savedCount;
+    const rate = shots? Math.round(saves/shots*100):0;
+    const text = `セーブ率 ${rate}%・最大ストリーク ${S.bestStreak}！ #Tobikomi 一人称GKセーブ体感ゲー`;
+    const url='https://t-aka-h.github.io/idea-radar/tobikomi/';
+    const blob = await new Promise(r=>cardCv.toBlob(r,'image/png'));
+    if(blob && navigator.canShare){
+      const file=new File([blob],'tobikomi.png',{type:'image/png'});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,url}); return; }
+    }
+    if(navigator.share){ await navigator.share({text,url}); return; }
+    // fallback download
+    const a=document.createElement('a'); a.href=cardCv.toDataURL('image/png'); a.download='tobikomi.png'; a.click();
+  }catch(e){ /* user cancelled */ }
+}
+
+/* ---------- buttons ---------- */
+document.getElementById('startEndless').addEventListener('click',()=>startGame('endless'));
+document.getElementById('startPK').addEventListener('click',()=>startGame('pk'));
+document.getElementById('shareBtn').addEventListener('click',share);
+document.getElementById('againBtn').addEventListener('click',()=>{
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+});
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
