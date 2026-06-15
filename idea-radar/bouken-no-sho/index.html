@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06081c">
+<title>冒険の書 — BOUKEN-NO-SHO</title>
+<meta name="description" content="数問タップで、あなただけの架空レトロRPGの「冒険の書」を生成。プレイ時間も称号もセーブ場所も。最後は…きえてしまった！">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  :root{
+    --navy:#06081c; --navy2:#0a0e2a; --gold:#c9a227; --gold2:#fff3b0;
+    --cyan:#46e3ff; --pink:#ff4f96; --ink:#eaf0ff; --dim:#8a92c8;
+  }
+  html,body{height:100%}
+  body{
+    background:var(--navy);
+    color:var(--ink);
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN",-apple-system,"Yu Gothic",sans-serif;
+    overflow:hidden; position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    touch-action:manipulation;
+  }
+  #stage{
+    position:relative; width:100%; height:100%; max-width:520px; margin:0 auto;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    background:
+      radial-gradient(120% 80% at 50% -10%, #131a4a 0%, transparent 60%),
+      radial-gradient(100% 60% at 50% 115%, #1a0f33 0%, transparent 55%),
+      var(--navy);
+  }
+  .scanlines:after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:60;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply;opacity:.5;
+  }
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+  .screen.on{display:flex}
+  .pixel{font-weight:800;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+
+  /* TITLE */
+  #title .logo{
+    font-size:13vw;max-font-size:64px;line-height:1.05;text-align:center;font-weight:900;
+    color:var(--gold2);letter-spacing:.02em;
+    text-shadow:0 0 1px #000,3px 3px 0 #7a5e10,0 0 22px rgba(201,162,39,.55);
+  }
+  #title .logo small{display:block;font-size:.32em;letter-spacing:.45em;color:var(--cyan);
+    text-shadow:0 0 10px rgba(70,227,255,.6);margin-top:10px}
+  #title .sub{color:var(--dim);text-align:center;margin-top:18px;font-size:14px;line-height:1.7;max-width:300px}
+  .blink{animation:bk 1.05s steps(2,start) infinite}
+  @keyframes bk{50%{opacity:0}}
+
+  .btn{
+    appearance:none;border:none;cursor:pointer;font-family:inherit;
+    color:#0a0a14;background:linear-gradient(180deg,var(--gold2),var(--gold));
+    font-weight:900;letter-spacing:.06em;font-size:18px;
+    padding:16px 30px;border-radius:14px;margin-top:30px;
+    box-shadow:0 6px 0 #7a5e10,0 10px 26px rgba(201,162,39,.4);
+    transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #7a5e10,0 4px 14px rgba(201,162,39,.35)}
+  .btn.ghost{background:transparent;color:var(--cyan);box-shadow:none;border:2px solid rgba(70,227,255,.5);
+    text-shadow:0 0 8px rgba(70,227,255,.5);padding:13px 22px;font-size:15px}
+  .btn.danger{background:linear-gradient(180deg,#ff7aa9,#ff2f78);color:#1a0010;box-shadow:0 6px 0 #7a0f37,0 10px 26px rgba(255,79,150,.4)}
+  .btn.danger:active{box-shadow:0 2px 0 #7a0f37}
+
+  /* QUIZ */
+  #quiz{justify-content:flex-start;padding-top:8vh}
+  .qhead{color:var(--cyan);font-size:13px;letter-spacing:.3em;margin-bottom:6px}
+  .qprog{display:flex;gap:7px;margin-bottom:26px}
+  .qdot{width:11px;height:11px;border-radius:2px;background:#1d2350;transition:.2s}
+  .qdot.done{background:var(--gold);box-shadow:0 0 8px rgba(201,162,39,.7)}
+  .qdot.cur{background:var(--cyan);box-shadow:0 0 10px rgba(70,227,255,.8)}
+  .qtext{font-size:21px;font-weight:800;text-align:center;line-height:1.5;margin-bottom:24px;min-height:64px;max-width:330px}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:360px}
+  .opt{
+    background:linear-gradient(180deg,#141a44,#0d1230);border:2px solid #2a3270;border-radius:12px;
+    color:var(--ink);font-weight:800;font-size:16px;padding:18px 8px;cursor:pointer;text-align:center;
+    transition:transform .06s,border-color .1s,box-shadow .1s;
+  }
+  .opt:active{transform:scale(.95);border-color:var(--cyan);box-shadow:0 0 16px rgba(70,227,255,.45)}
+  #nameRow{width:100%;max-width:360px;margin-top:18px;display:none;flex-direction:column;gap:10px;align-items:center}
+  #nameRow label{color:var(--dim);font-size:13px;letter-spacing:.1em}
+  #nameInput{
+    width:100%;background:#0d1230;border:2px solid #2a3270;border-radius:12px;color:var(--gold2);
+    font-family:inherit;font-weight:800;font-size:20px;text-align:center;padding:14px;letter-spacing:.08em;
+    -webkit-user-select:text;user-select:text;
+  }
+  #nameInput:focus{outline:none;border-color:var(--cyan)}
+
+  /* GENERATING */
+  #gen .gtext{color:var(--gold2);font-size:20px;font-weight:800;text-align:center;letter-spacing:.08em}
+  #gen .gbar{width:62%;max-width:260px;height:14px;background:#0d1230;border:2px solid #2a3270;border-radius:8px;margin-top:24px;overflow:hidden}
+  #gen .gfill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2));box-shadow:0 0 12px rgba(201,162,39,.7)}
+
+  /* RESULT */
+  #result{justify-content:center;gap:0}
+  #cardWrap{position:relative;width:min(92vw,420px)}
+  #card{width:100%;height:auto;display:block;border-radius:10px;image-rendering:auto;
+    box-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 1px rgba(201,162,39,.25)}
+  .rbtns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px;width:min(92vw,420px)}
+  .rbtns .btn{margin-top:0;font-size:15px;padding:13px 18px}
+  #hint{color:var(--dim);font-size:11px;margin-top:12px;text-align:center;letter-spacing:.05em}
+  .credit{position:fixed;bottom:6px;left:0;right:0;text-align:center;color:#3a4170;font-size:10px;letter-spacing:.12em;z-index:5}
+</style>
+</head>
+<body class="scanlines">
+<div id="stage">
+
+  <!-- TITLE -->
+  <section id="title" class="screen on">
+    <div class="logo pixel">冒険の書<small>BOUKEN&nbsp;NO&nbsp;SHO</small></div>
+    <p class="sub">あなたの人生が、もしも<br>レトロRPGの セーブデータ だったら？<br><span style="color:var(--cyan)">数問タップ</span>で 冒険の書が ふっかつする。</p>
+    <button class="btn blink" id="startBtn">▶ ぼうけんを はじめる</button>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz" class="screen">
+    <div class="qhead pixel">＼ QUESTION ／</div>
+    <div class="qprog" id="qprog"></div>
+    <div class="qtext" id="qtext"></div>
+    <div class="opts" id="opts"></div>
+    <div id="nameRow">
+      <label>ゆうしゃの なまえ（へんこう できます）</label>
+      <input id="nameInput" maxlength="8" autocomplete="off" spellcheck="false">
+      <button class="btn" id="nameGo" style="margin-top:4px">この なまえで けってい ▶</button>
+    </div>
+  </section>
+
+  <!-- GENERATING -->
+  <section id="gen" class="screen">
+    <div class="gtext pixel">ぼうけんのしょを<br>つくっています…</div>
+    <div class="gbar"><div class="gfill" id="gfill"></div></div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="screen">
+    <div id="cardWrap"><canvas id="card" width="540" height="960"></canvas></div>
+    <div class="rbtns">
+      <button class="btn danger" id="eraseBtn">⚠ きえてしまった！</button>
+      <button class="btn" id="shareBtn">保存・シェア</button>
+      <button class="btn ghost" id="againBtn">もういちど</button>
+    </div>
+    <div id="hint">※ボタンを長押し→画像を保存も可。完全オンデバイス生成。</div>
+  </section>
+
+  <div class="credit pixel">IDEA RADAR ・ 冒険の書</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const $=s=>document.querySelector(s);
+  const screens={title:$('#title'),quiz:$('#quiz'),gen:$('#gen'),result:$('#result')};
+  function show(name){for(const k in screens)screens[k].classList.toggle('on',k===name);}
+  const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const comma=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+
+  /* ---------- AUDIO (WebAudio synth, no files) ---------- */
+  let AC=null;
+  function ac(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); } if(AC.state==='suspended')AC.resume(); return AC; }
+  function env(g,t,a,d,peak){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); }
+  function blip(freq=880,type='square',dur=0.09,peak=0.18){
+    const c=ac(),t=c.currentTime,o=c.createOscillator(),g=c.createGain();
+    o.type=type;o.frequency.setValueAtTime(freq,t);o.connect(g);g.connect(c.destination);
+    env(g,t,0.005,dur,peak);o.start(t);o.stop(t+dur+0.05);
+  }
+  function arpStart(){ // famicom power-on arpeggio
+    const c=ac();let t=c.currentTime;
+    [523,659,784,1046].forEach((f,i)=>{
+      const o=c.createOscillator(),g=c.createGain();o.type='square';
+      o.frequency.setValueAtTime(f,t+i*0.06);o.connect(g);g.connect(c.destination);
+      env(g,t+i*0.06,0.004,0.08,0.16);o.start(t+i*0.06);o.stop(t+i*0.06+0.12);
+    });
+  }
+  function boom(){ // missing-fundamental low "ドゥン"
+    const c=ac(),t=c.currentTime,g=c.createGain();
+    g.connect(c.destination);env(g,t,0.01,0.55,0.5);
+    [40,80,120,160,200].forEach((f,i)=>{
+      const o=c.createOscillator();o.type=i===0?'sine':'triangle';
+      o.frequency.setValueAtTime(f,t);
+      const og=c.createGain();og.gain.value=[0.5,0.4,0.3,0.2,0.14][i];
+      o.connect(og);og.connect(g);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function noiseBurst(dur=0.5){
+    const c=ac(),t=c.currentTime,n=c.createBufferSource();
+    const buf=c.createBuffer(1,c.sampleRate*dur,c.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+    n.buffer=buf;const f=c.createBiquadFilter();f.type='lowpass';
+    f.frequency.setValueAtTime(4000,t);f.frequency.exponentialRampToValueAtTime(180,t+dur);
+    const g=c.createGain();env(g,t,0.005,dur,0.4);
+    n.connect(f);f.connect(g);g.connect(c.destination);n.start(t);n.stop(t+dur);
+    // downward sweep tone
+    const o=c.createOscillator(),og=c.createGain();o.type='sawtooth';
+    o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(60,t+dur);
+    env(og,t,0.005,dur,0.18);o.connect(og);og.connect(c.destination);o.start(t);o.stop(t+dur);
+  }
+  function vib(p){ if(navigator.vibrate)navigator.vibrate(p); }
+
+  /* ---------- DATA ---------- */
+  const Q=[
+    {key:'job',q:'いまの しごとに ちかい クラスは？',opts:[
+      {label:'つくる人',cls:'ものづくりの まどうし'},
+      {label:'うる人',cls:'ことばの しょうにん'},
+      {label:'おしえる人',cls:'ちえの けんじゃ'},
+      {label:'まもる人',cls:'ふどうの まもりて'},
+      {label:'かんがえる人',cls:'ちんもくの せんりゃくか'},
+      {label:'はこぶ人',cls:'しっぷうの たびびと'}]},
+    {key:'mood',q:'きょうの きぶんは？',opts:[
+      {label:'げんき',tag:'ひかりの'},
+      {label:'つかれた',tag:'まんしんそういの'},
+      {label:'もやもや',tag:'まよえる'},
+      {label:'わくわく',tag:'ぼうけんずきな'},
+      {label:'ねむい',tag:'まどろみの'},
+      {label:'むてき',tag:'でんせつの'}]},
+    {key:'enemy',q:'いちばん たおしたい てきは？',opts:[
+      {label:'満員電車',enemy:'まんいんでんしゃ'},
+      {label:'二度寝',enemy:'にどねスライム'},
+      {label:'上司メール',enemy:'じょうしのメール'},
+      {label:'値上げ',enemy:'ねあげドラゴン'},
+      {label:'締め切り',enemy:'しめきりリッチ'},
+      {label:'通知の嵐',enemy:'つうちのむれ'}]},
+    {key:'place',q:'よく いく ばしょ＝セーブポイントは？',opts:[
+      {label:'コンビニ',place:'コンビニの さいはて'},
+      {label:'自宅',place:'わがやの ねどこ'},
+      {label:'カフェ',place:'カフェの すみっこ'},
+      {label:'会社',place:'かいしゃの ダンジョン'},
+      {label:'ジム',place:'ジムの しれんじょう'},
+      {label:'サウナ',place:'ととのいの ま'}]},
+    {key:'age',q:'あなたの ねんれいは？',opts:[
+      {label:'10だい',lv:[12,19]},
+      {label:'20だい',lv:[20,32]},
+      {label:'30だい',lv:[33,46]},
+      {label:'40だい',lv:[47,58]},
+      {label:'50だい',lv:[59,69]},
+      {label:'60だい+',lv:[70,88]}]}
+  ];
+  const NAME1=['アル','ティ','ロウ','ミ','カ','ゼ','ノ','リ','サ','フウ','ハル','クロ'];
+  const NAME2=['フィン','ガルド','リア','ンス','ベル','ドラ','ニクス','ハト','ゼル','トス','ミナ','ロン'];
+  function genName(){ return pick(NAME1)+pick(NAME2); }
+
+  const TITLES=[
+    a=>`${a.tag}${a.enemy}を せいした もの`,
+    a=>`${a.place.split(' ')[0]}の ぬし`,
+    a=>`${a.tag}さすらいの ${a.cls.split(' ')[1]||'ゆうしゃ'}`,
+    a=>`${a.enemy}キラー`,
+    a=>`${a.tag}まいにちを いきる もの`,
+    a=>`Lv${a.lv}の でんせつ`
+  ];
+
+  /* ---------- STATE ---------- */
+  let step=0; const ans={};
+  function startQuiz(){ step=0; show('quiz'); renderQ(); }
+  function renderQ(){
+    const prog=$('#qprog');prog.innerHTML='';
+    Q.forEach((_,i)=>{const d=document.createElement('div');d.className='qdot'+(i<step?' done':i===step?' cur':'');prog.appendChild(d);});
+    const q=Q[step];
+    $('#qtext').textContent=q.q;
+    const opts=$('#opts');opts.innerHTML='';opts.style.display='grid';
+    $('#nameRow').style.display='none';
+    q.opts.forEach(o=>{
+      const b=document.createElement('button');b.className='opt';b.textContent=o.label;
+      b.onclick=()=>chooseOpt(q,o);
+      opts.appendChild(b);
+    });
+  }
+  function chooseOpt(q,o){
+    blip(pick([784,880,988]),'square',0.07,0.16);vib(12);
+    Object.assign(ans,o);
+    step++;
+    if(step<Q.length){ setTimeout(renderQ,90); }
+    else { askName(); }
+  }
+  function askName(){
+    $('#qtext').textContent='さいごに…';
+    $('#opts').style.display='none';
+    Q.forEach((_,i)=>{}); // progress full
+    const prog=$('#qprog');[...prog.children].forEach(d=>{d.className='qdot done';});
+    const nr=$('#nameRow');nr.style.display='flex';
+    $('#nameInput').value=genName();
+  }
+
+  /* ---------- GENERATE RESULT ---------- */
+  let R=null;
+  function buildResult(){
+    const lv=rnd(ans.lv[0],ans.lv[1]);
+    const ph=lv*4+rnd(0,60), pm=rnd(0,59);
+    const tinyGold=Math.random()<0.18;
+    const gold=tinyGold?rnd(0,9):rnd(120,99999);
+    const kills=rnd(180,4200);
+    const a={tag:ans.tag,enemy:ans.enemy,place:ans.place,cls:ans.cls,lv:lv};
+    const title=pick(TITLES)(a);
+    let nm=($('#nameInput').value||'').trim(); if(!nm)nm=genName();
+    R={ name:nm, cls:ans.cls, lv:lv,
+        play:`${ph}:${String(pm).padStart(2,'0')}`,
+        gold:comma(gold), kills:`${ans.enemy} ×${comma(kills)}`,
+        place:ans.place, title:title, slot:rnd(1,3) };
+  }
+  function runGenerate(){
+    buildResult(); show('gen'); arpStart(); vib([15,40,15]);
+    const fill=$('#gfill');fill.style.width='0';
+    let p=0;const iv=setInterval(()=>{p+=rnd(8,20);if(p>100)p=100;fill.style.width=p+'%';
+      if(p<100)blip(1200+rnd(0,400),'square',0.03,0.06);
+      if(p>=100){clearInterval(iv);setTimeout(showResult,360);}
+    },120);
+  }
+
+  /* ---------- CARD RENDER ---------- */
+  const cv=$('#card'),cx=cv.getContext('2d');
+  const off=document.createElement('canvas');off.width=540;off.height=960;const ox=off.getContext('2d');
+  const URL_TXT='t-aka-h.github.io/idea-radar/bouken-no-sho';
+
+  function renderCard(g){
+    g.clearRect(0,0,540,960);
+    // bg
+    const bg=g.createLinearGradient(0,0,0,960);bg.addColorStop(0,'#0b1138');bg.addColorStop(1,'#070a22');
+    g.fillStyle=bg;g.fillRect(0,0,540,960);
+    // subtle starfield
+    g.fillStyle='rgba(120,150,255,0.18)';
+    for(let i=0;i<60;i++){const x=(i*97)%540,y=(i*173)%960;g.fillRect(x,y,2,2);}
+    // gold foil frame
+    function frame(x,y,w,h,lw){
+      const gr=g.createLinearGradient(x,y,x+w,y+h);
+      gr.addColorStop(0,'#7a5e10');gr.addColorStop(.5,'#fff3b0');gr.addColorStop(1,'#c9a227');
+      g.lineWidth=lw;g.strokeStyle=gr;g.strokeRect(x,y,w,h);
+    }
+    frame(20,20,500,920,8); frame(34,34,472,892,3);
+    // header
+    g.textAlign='center';g.fillStyle='#fff3b0';
+    g.font='900 58px "Hiragino Maru Gothic ProN",sans-serif';
+    g.shadowColor='rgba(201,162,39,.6)';g.shadowBlur=18;
+    g.fillText('冒険の書',270,118);g.shadowBlur=0;
+    g.fillStyle='#46e3ff';g.font='800 20px monospace';
+    g.fillText('— SAVE DATA  No.'+R.slot+' —',270,152);
+    // divider
+    g.strokeStyle='rgba(201,162,39,.5)';g.lineWidth=2;
+    g.beginPath();g.moveTo(60,178);g.lineTo(480,178);g.stroke();
+
+    // rows
+    let y=232;const lx=66, vx=474;
+    function row(label,value,opt){
+      opt=opt||{};
+      g.textAlign='left';g.fillStyle='#8fa0e8';g.font='800 22px "Hiragino Maru Gothic ProN",sans-serif';
+      g.fillText(label,lx,y);
+      g.textAlign='right';
+      g.fillStyle=opt.color||'#eaf0ff';
+      g.font=(opt.size?('900 '+opt.size+'px '):'900 30px ')+'"Hiragino Maru Gothic ProN",sans-serif';
+      if(opt.glow){g.shadowColor=opt.glow;g.shadowBlur=14;}
+      g.fillText(value,vx,y+2);g.shadowBlur=0;
+      y+=opt.gap||74;
+    }
+    function rowFit(label,value){
+      g.textAlign='left';g.fillStyle='#8fa0e8';g.font='800 22px "Hiragino Maru Gothic ProN",sans-serif';
+      g.fillText(label,lx,y);
+      g.textAlign='right';g.fillStyle='#eaf0ff';
+      let fs=30;g.font='900 '+fs+'px "Hiragino Maru Gothic ProN",sans-serif';
+      while(g.measureText(value).width>300&&fs>17){fs--;g.font='900 '+fs+'px "Hiragino Maru Gothic ProN",sans-serif';}
+      g.fillText(value,vx,y+2);y+=74;
+    }
+    rowFit('なまえ',R.name);
+    rowFit('クラス',R.cls);
+    row('レベル','Lv '+R.lv,{color:'#fff3b0'});
+    // playtime with subline
+    g.textAlign='left';g.fillStyle='#8fa0e8';g.font='800 22px "Hiragino Maru Gothic ProN",sans-serif';
+    g.fillText('プレイじかん',lx,y);
+    g.textAlign='right';g.fillStyle='#46e3ff';g.font='900 32px monospace';
+    g.shadowColor='rgba(70,227,255,.5)';g.shadowBlur=12;g.fillText(R.play,vx,y+2);g.shadowBlur=0;
+    g.fillStyle='#5b6498';g.font='700 15px "Hiragino Maru Gothic ProN",sans-serif';
+    g.fillText('この せかいで すごした じかん',vx,y+26);
+    y+=86;
+    row('しょじきん',R.gold+' G');
+    rowFit('とうばつ',R.kills);
+    rowFit('セーブばしょ',R.place);
+
+    // title plate (highlight)
+    y+=6;
+    const pg=g.createLinearGradient(60,y,480,y+62);
+    pg.addColorStop(0,'rgba(201,162,39,.10)');pg.addColorStop(.5,'rgba(255,243,176,.20)');pg.addColorStop(1,'rgba(201,162,39,.10)');
+    g.fillStyle=pg;g.fillRect(60,y,420,66);
+    g.strokeStyle='rgba(255,243,176,.6)';g.lineWidth=2;g.strokeRect(60,y,420,66);
+    g.textAlign='left';g.fillStyle='#c9a227';g.font='800 16px "Hiragino Maru Gothic ProN",sans-serif';
+    g.fillText('しょうごう',74,y+24);
+    g.fillStyle='#fff3b0';
+    let ts=27;g.font='900 '+ts+'px "Hiragino Maru Gothic ProN",sans-serif';
+    while(g.measureText(R.title).width>392&&ts>15){ts--;g.font='900 '+ts+'px "Hiragino Maru Gothic ProN",sans-serif';}
+    g.shadowColor='rgba(201,162,39,.6)';g.shadowBlur=12;
+    g.fillText(R.title,74,y+52);g.shadowBlur=0;
+
+    // footer barcode + url
+    g.fillStyle='#2a3270';
+    for(let i=0;i<46;i++){const bw=(i*53%5)+1;g.fillRect(66+i*8, 898, bw, 14);}
+    g.textAlign='center';g.fillStyle='#6b75ad';g.font='700 15px monospace';
+    g.fillText(URL_TXT,270,938);
+    // scanlines on card
+    g.globalAlpha=0.10;g.fillStyle='#000';
+    for(let yy=40;yy<926;yy+=4)g.fillRect(36,yy,468,1);
+    g.globalAlpha=1;
+  }
+
+  function showResult(){
+    renderCard(ox); cx.drawImage(off,0,0);
+    show('result'); boom(); vib([20,60,30]);
+    // entrance flash
+    cv.style.transform='scale(.92)';cv.style.opacity='0';
+    requestAnimationFrame(()=>{cv.style.transition='transform .28s cubic-bezier(.2,1.4,.4,1),opacity .28s';cv.style.transform='scale(1)';cv.style.opacity='1';});
+  }
+
+  /* ---------- ERASE / GLITCH ---------- */
+  let busy=false;
+  function erase(){
+    if(busy)return;busy=true;
+    noiseBurst(0.55);vib([0,40,30,40,30,80]);
+    const frames=34;let f=0;
+    const overText=()=>{cx.textAlign='center';cx.fillStyle='#ff4f96';
+      cx.font='900 40px "Hiragino Maru Gothic ProN",sans-serif';
+      cx.shadowColor='#ff4f96';cx.shadowBlur=18;
+      cx.fillText('ぼうけんのしょが',270,470);cx.fillText('きえてしまった！',270,520);cx.shadowBlur=0;};
+    const loop=()=>{
+      cx.clearRect(0,0,540,960);cx.fillStyle='#070a22';cx.fillRect(0,0,540,960);
+      // sliced displacement of stored card
+      for(let yy=0;yy<960;yy+=12){
+        const dx=(Math.random()-0.5)*60*(f/frames);
+        cx.drawImage(off,0,yy,540,12, dx,yy,540,12);
+      }
+      // noise bands
+      cx.fillStyle='rgba(70,227,255,'+(0.12).toFixed(2)+')';
+      for(let i=0;i<8;i++){const ny=rnd(0,950);cx.fillRect(0,ny,540,rnd(2,8));}
+      if(f>10)overText();
+      f++;
+      if(f<frames)requestAnimationFrame(loop);else dissolve();
+    };
+    loop();
+  }
+  function dissolve(){
+    let a=1;const step=()=>{
+      cx.clearRect(0,0,540,960);cx.fillStyle='#070a22';cx.fillRect(0,0,540,960);
+      cx.globalAlpha=a;cx.drawImage(off,0,0);cx.globalAlpha=1;
+      cx.fillStyle='rgba(7,10,34,'+(1-a).toFixed(2)+')';cx.fillRect(0,0,540,960);
+      // sand pixels
+      cx.fillStyle='rgba(201,162,39,'+(1-a).toFixed(2)+')';
+      for(let i=0;i<120;i++)cx.fillRect(rnd(40,500),rnd(40,920),2,2);
+      a-=0.06;
+      if(a>0)requestAnimationFrame(step);else nante();
+    };step();
+  }
+  function nante(){
+    cx.clearRect(0,0,540,960);cx.fillStyle='#070a22';cx.fillRect(0,0,540,960);
+    cx.textAlign='center';cx.fillStyle='#fff3b0';
+    cx.font='900 44px "Hiragino Maru Gothic ProN",sans-serif';
+    cx.shadowColor='rgba(201,162,39,.6)';cx.shadowBlur=16;
+    cx.fillText('…なんてね。',270,490);cx.shadowBlur=0;
+    blip(660,'triangle',0.2,0.18);
+    setTimeout(()=>{ // revive
+      renderCard(ox);cx.drawImage(off,0,0);boom();vib([20,50,20]);
+      cv.style.transition='transform .3s';cv.style.transform='scale(1.04)';
+      setTimeout(()=>cv.style.transform='scale(1)',180);
+      busy=false;
+    },820);
+  }
+
+  /* ---------- SHARE ---------- */
+  async function share(){
+    renderCard(ox);cx.drawImage(off,0,0);
+    const cap='あなたの冒険の書、できました。｜冒険の書 #IdeaRadar';
+    cv.toBlob(async (blob)=>{
+      const file=new File([blob],'bouken-no-sho.png',{type:'image/png'});
+      try{
+        if(navigator.canShare&&navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],text:cap,title:'冒険の書'});return;
+        }
+      }catch(e){}
+      // fallback: download
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');
+      a.href=url;a.download='bouken-no-sho.png';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+      try{await navigator.clipboard.writeText(cap+' '+location.href);}catch(e){}
+    },'image/png');
+    blip(990,'square',0.08,0.16);vib(15);
+  }
+
+  /* ---------- WIRING ---------- */
+  $('#startBtn').onclick=()=>{ac();arpStart();vib(20);startQuiz();};
+  $('#nameGo').onclick=()=>{blip(880,'square',0.08,0.18);vib(15);runGenerate();};
+  $('#eraseBtn').onclick=erase;
+  $('#shareBtn').onclick=share;
+  $('#againBtn').onclick=()=>{blip(700,'square',0.06,0.14);vib(12);for(const k in ans)delete ans[k];startQuiz();};
+})();
+</script>
+</body>
+</html>
