@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#080814">
+<title>はいチーズ — Hai-Chīzu</title>
+<style>
+  :root{
+    --bg:#080814; --bg2:#0d0d20;
+    --cyan:#00E5FF; --mag:#FF2D87; --gold:#FBBF24;
+    --ink:#f4f7ff; --sub:#8b93b8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(120% 80% at 50% 0%, #131333 0%, var(--bg) 60%, #04040c 100%);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Segoe UI",sans-serif;
+    overflow:hidden; touch-action:manipulation;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #wrap{
+    position:relative; width:100%; height:100%; max-width:480px; margin:0 auto;
+    display:flex; flex-direction:column;
+  }
+  canvas{display:block;}
+  #stage{flex:1; width:100%; position:relative;}
+  #gameCanvas{position:absolute; inset:0; width:100%; height:100%;}
+
+  /* HUD */
+  #hud{
+    position:absolute; top:0; left:0; right:0; padding:14px 16px 8px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none; z-index:5;
+  }
+  .hud-chip{
+    font-size:12px; letter-spacing:.08em; color:var(--sub);
+    background:rgba(10,12,28,.55); border:1px solid rgba(120,140,200,.18);
+    padding:6px 11px; border-radius:999px; backdrop-filter:blur(6px);
+  }
+  .hud-chip b{color:var(--ink); font-size:15px; margin-left:4px;}
+  #lives{color:var(--mag);}
+
+  /* shutter button */
+  #shutterWrap{
+    position:absolute; bottom:26px; left:0; right:0;
+    display:flex; flex-direction:column; align-items:center; gap:10px; z-index:6;
+  }
+  #hint{font-size:12.5px; color:var(--sub); letter-spacing:.04em; min-height:16px;}
+  #shutter{
+    width:84px; height:84px; border-radius:50%;
+    border:3px solid var(--cyan);
+    background:radial-gradient(circle at 50% 38%, #1a2740, #0a0f1f);
+    box-shadow:0 0 22px rgba(0,229,255,.5), inset 0 0 14px rgba(0,229,255,.25);
+    color:var(--ink); font-size:13px; font-weight:800; letter-spacing:.08em;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; user-select:none;
+    transition:transform .06s ease;
+  }
+  #shutter:active{transform:scale(.92);}
+  #shutter .ring{
+    position:absolute; width:84px; height:84px; border-radius:50%;
+    pointer-events:none;
+  }
+
+  /* overlays */
+  .screen{
+    position:absolute; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:30px; gap:16px;
+    background:radial-gradient(120% 80% at 50% 30%, rgba(19,19,51,.92), rgba(4,4,12,.96));
+    backdrop-filter:blur(3px);
+  }
+  .hidden{display:none !important;}
+  .logo{
+    font-size:40px; font-weight:900; letter-spacing:.02em; line-height:1.05;
+    background:linear-gradient(92deg,var(--cyan),var(--mag));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(0,229,255,.25);
+  }
+  .logo small{display:block; font-size:13px; letter-spacing:.34em; color:var(--sub);
+    -webkit-text-fill-color:var(--sub); margin-top:8px; font-weight:700;}
+  .lede{font-size:14.5px; color:#c7cdec; line-height:1.7; max-width:330px;}
+  .lede b{color:var(--gold);}
+  .btn{
+    margin-top:6px; padding:15px 40px; border-radius:999px; border:none;
+    font-size:17px; font-weight:800; letter-spacing:.06em; cursor:pointer;
+    color:#06121e; background:linear-gradient(92deg,var(--cyan),#7fe9ff);
+    box-shadow:0 8px 30px rgba(0,229,255,.4);
+  }
+  .btn.mag{background:linear-gradient(92deg,var(--mag),#ff7ab0); color:#2a0a18;
+    box-shadow:0 8px 30px rgba(255,45,135,.4);}
+  .btn:active{transform:translateY(2px);}
+  .mini{font-size:11.5px; color:var(--sub); letter-spacing:.03em; line-height:1.7;}
+
+  /* result card */
+  #resultCard{width:min(82%,300px); border-radius:18px; overflow:hidden;
+    box-shadow:0 16px 50px rgba(0,0,0,.6); border:1px solid rgba(120,140,200,.22);}
+  #resultCard canvas{width:100%; height:auto; display:block;}
+  .resultBtns{display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
+  .btn.small{padding:12px 24px; font-size:14px;}
+
+  .bigTitle{font-size:30px; font-weight:900; letter-spacing:.03em;}
+  .scoreNum{font-size:54px; font-weight:900; color:var(--gold); line-height:1;
+    text-shadow:0 0 26px rgba(251,191,36,.45);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div class="hud-chip">人数<b id="peopleN">3</b></div>
+      <div class="hud-chip">SCORE<b id="score">0</b></div>
+      <div class="hud-chip" id="lives">♥♥♥</div>
+    </div>
+    <div id="shutterWrap">
+      <div id="hint">全員カメラ目線で笑った瞬間にシャッター！</div>
+      <div id="shutter">📸<canvas class="ring" id="ringCanvas" width="84" height="84"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TITLE -->
+  <div class="screen" id="titleScreen">
+    <div class="logo">はいチーズ<small>HAI-CHĪZU</small></div>
+    <div class="lede">集合写真で全員がカメラを向いて笑う一瞬は<b>奇跡</b>。<br>
+      よそ見・まばたき・半笑いが入り乱れる中、<br><b>全員ジャスト</b>の刹那にシャッターを切れ。</div>
+    <button class="btn" id="startBtn">撮影スタート</button>
+    <div class="mini">人数が増えるほど「全員そろう窓」は一瞬に。<br>3回スカると撮影終了。音が出ます🔊</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="screen hidden" id="resultScreen">
+    <div class="bigTitle" id="resultTitle">撮影終了</div>
+    <div id="resultCard"><canvas id="cardCanvas" width="540" height="960"></canvas></div>
+    <div class="resultBtns">
+      <button class="btn mag small" id="shareBtn">シェア / 保存</button>
+      <button class="btn small" id="retryBtn">もう一枚</button>
+    </div>
+    <div class="mini">Idea Radar 🏆 本日の優勝作 — はいチーズ</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   はいチーズ (Hai-Chīzu) — single-file Canvas game
+   全員カメラ目線＋笑顔の刹那にシャッターを切る体感ゲー
+   ============================================================ */
+
+// ---------- Canvas / DPI ----------
+const stage = document.getElementById('stage');
+const cv = document.getElementById('gameCanvas');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){
+  const r=stage.getBoundingClientRect();
+  W=r.width; H=r.height;
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);
+
+// ---------- Audio (WebAudio synth, no files) ----------
+let AC=null;
+function ensureAudio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); }
+function tone(freq,dur,type='sine',gain=0.3,glideTo=null){
+  if(!AC) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t);
+  if(glideTo) o.frequency.exponentialRampToValueAtTime(glideTo,t+dur);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(gain,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function noiseBurst(dur=0.12,gain=0.25,hp=600){
+  if(!AC) return;
+  const t=AC.currentTime, n=Math.floor(AC.sampleRate*dur);
+  const buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*(1-i/n); }
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=hp;
+  const g=AC.createGain(); g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start(t); src.stop(t+dur);
+}
+// missing-fundamental bass (55Hz + harmonics) for the "ズドン"
+function bassHit(){
+  if(!AC) return;
+  const t=AC.currentTime;
+  [55,110,165,220,275].forEach((f,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(f,t);
+    const amp=0.34/(i*0.6+1);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(amp,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.7);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.75);
+  });
+}
+function shutterSnd(){ noiseBurst(0.06,0.34,1800); tone(1400,0.05,'square',0.18); }
+function cheer(){ // crude crowd via filtered noise swell
+  if(!AC) return;
+  const t=AC.currentTime, n=Math.floor(AC.sampleRate*0.6), buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++){ const e=Math.sin(Math.PI*i/n); d[i]=(Math.random()*2-1)*e*0.5; }
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1100; f.Q.value=0.7;
+  const g=AC.createGain(); g.gain.value=0.22;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start(t); src.stop(t+0.6);
+}
+function dudSnd(){ tone(180,0.18,'sawtooth',0.22,90); }
+function vib(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+// ---------- Game state ----------
+const G={ phase:'title', people:[], n:3, score:0, lives:3, round:1,
+  flash:0, particles:[], shotResult:null, t0:0, windowOpen:false,
+  best:0, lastJust:0, totalShots:0, bestPercent:0 };
+
+// each person:
+// pos{x,y}, r, hue, gaze[0..1 toward cam], eyeOpen, smile, plus phase wobble
+// independent driver: targets that ease; with a "預兆"(tell) 0.2s before going "ready"
+function makePerson(x,y,r,idx){
+  return {
+    x,y,r, idx,
+    skin: idx%3, // facial palette variant
+    gaze:Math.random(), eyeOpen:0.5+Math.random()*0.5, smile:Math.random()*0.6,
+    // drivers
+    gazeT:Math.random(), eyeT:1, smileT:Math.random()*0.6,
+    nextChange: 0.4+Math.random()*1.4,
+    timer: Math.random()*1.2,
+    blinkTimer: 1+Math.random()*2.5,
+    tell:0,            // tell glow when about to become ready
+    period: 0.9+Math.random()*1.1
+  };
+}
+
+function layoutPeople(n){
+  const arr=[];
+  const topPad=84, botPad=150;
+  const availH=H-topPad-botPad;
+  // arrange in rows: 1->1, up to 3 per row
+  const perRow = n<=3?n:(n<=6?3:4);
+  const rows = Math.ceil(n/perRow);
+  let placed=0;
+  for(let row=0; row<rows; row++){
+    const inThis = Math.min(perRow, n-placed);
+    const ry = topPad + availH*( (row+0.5)/rows );
+    for(let c=0;c<inThis;c++){
+      const rx = W*((c+0.5)/inThis);
+      placed++;
+      const r = Math.max(26, Math.min(54, (W/perRow)*0.30, (availH/rows)*0.30));
+      arr.push(makePerson(rx,ry,r,placed-1));
+    }
+  }
+  return arr;
+}
+
+function startGame(){
+  ensureAudio();
+  G.phase='play'; G.score=0; G.lives=3; G.round=1; G.n=3;
+  G.particles=[]; G.flash=0; G.totalShots=0; G.bestPercent=0;
+  G.people=layoutPeople(G.n);
+  updateHUD();
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  setHint('全員カメラ目線で笑った瞬間に📸！');
+  last=performance.now();
+}
+
+function updateHUD(){
+  document.getElementById('peopleN').textContent=G.n;
+  document.getElementById('score').textContent=G.score;
+  document.getElementById('lives').textContent='♥'.repeat(Math.max(0,G.lives))+'·'.repeat(3-Math.max(0,G.lives));
+}
+function setHint(t){ document.getElementById('hint').textContent=t; }
+
+// thresholds for "just" (looking + smiling + eyes open)
+const READY={gaze:0.84, eye:0.62, smile:0.78};
+function isReady(p){ return p.gaze>READY.gaze && p.eyeOpen>READY.eye && p.smile>READY.smile; }
+
+// ---------- Update ----------
+let last=0;
+function update(dt){
+  let allReady=true, readyCount=0;
+  for(const p of G.people){
+    p.timer-=dt; p.blinkTimer-=dt;
+    // schedule new random target for gaze/smile
+    if(p.timer<=0){
+      p.timer = p.nextChange*(0.6+Math.random()*0.9);
+      // bias toward sometimes-ready so windows happen
+      const wantReady = Math.random()<0.5;
+      p.gazeT = wantReady? 0.9+Math.random()*0.1 : Math.random()*0.7;
+      p.smileT= wantReady? 0.85+Math.random()*0.15 : Math.random()*0.6;
+      // TELL: if about to become ready, flash a tell now (口角ピクッ / 視線が泳ぐ)
+      if(wantReady && p.gaze<READY.gaze) p.tell=0.22;
+    }
+    // blink: brief close then open
+    if(p.blinkTimer<=0){ p.eyeT=0.04; p.blinkTimer=1.2+Math.random()*2.6;
+      setTimeout(()=>{p.eyeT=0.9+Math.random()*0.1;},120); }
+    // tell decay
+    if(p.tell>0) p.tell-=dt;
+    // ease toward targets (faces are "alive")
+    const k=Math.min(1, dt*7);
+    p.gaze += (p.gazeT-p.gaze)*k;
+    p.smile+= (p.smileT-p.smile)*k;
+    p.eyeOpen += (p.eyeT-p.eyeOpen)*Math.min(1,dt*16);
+    // micro wobble on gaze so it never freezes
+    p.gaze += Math.sin(performance.now()/1000*p.period+p.idx)*0.0025;
+
+    if(isReady(p)) readyCount++; else allReady=false;
+  }
+  G.windowOpen = allReady;
+  if(allReady) G.flash=Math.min(1, G.flash+dt*6); else G.flash=Math.max(0, G.flash-dt*5);
+
+  // particles
+  for(const pa of G.particles){ pa.x+=pa.vx*dt; pa.y+=pa.vy*dt; pa.vy+=380*dt; pa.life-=dt; }
+  G.particles=G.particles.filter(p=>p.life>0);
+}
+
+// ---------- Draw ----------
+function drawFace(p, t){
+  ctx.save();
+  ctx.translate(p.x,p.y);
+  const r=p.r;
+  const pal=[['#00E5FF','#7fe9ff'],['#FF2D87','#ffa6cc'],['#FBBF24','#ffe19a']][p.skin];
+  const ready=isReady(p);
+  const glow = ready? 18 : (p.tell>0? 10 : 5);
+  // head
+  ctx.shadowColor=pal[0]; ctx.shadowBlur=glow;
+  ctx.lineWidth=Math.max(2,r*0.07);
+  ctx.strokeStyle = ready? pal[1] : pal[0];
+  ctx.fillStyle='rgba(12,16,34,0.85)';
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // tell ring (subtle "about to be ready" cue → skill axis)
+  if(p.tell>0 && !ready){
+    ctx.strokeStyle='rgba(255,255,255,'+(p.tell*1.6)+')';
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,r+5,0,Math.PI*2); ctx.stroke();
+  }
+
+  // eyes: gaze shifts pupil horizontally; gaze≈1 = centered (camera)
+  const off = (0.5-p.gaze)* r*0.9; // away from camera -> pupils drift
+  const ex=r*0.42, ey=-r*0.12, er=r*0.20;
+  const lid=Math.max(0.05,p.eyeOpen);
+  ctx.fillStyle='#eef3ff';
+  for(const sx of [-1,1]){
+    ctx.save(); ctx.translate(sx*ex,ey); ctx.scale(1,lid);
+    ctx.beginPath(); ctx.arc(0,0,er,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // pupil
+    if(lid>0.25){
+      ctx.fillStyle= ready? pal[0] : '#1a2236';
+      ctx.beginPath(); ctx.arc(sx*ex+off, ey, er*0.5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#eef3ff';
+    }
+  }
+  // mouth: smile bends the bezier
+  ctx.strokeStyle = ready? pal[1] : '#aeb6d8';
+  ctx.lineWidth=Math.max(2.2,r*0.08); ctx.lineCap='round';
+  ctx.shadowColor=pal[0]; ctx.shadowBlur=ready?12:0;
+  const mw=r*0.55, my=r*0.34, curve=(p.smile-0.5)*r*0.95;
+  ctx.beginPath();
+  ctx.moveTo(-mw,my);
+  ctx.quadraticCurveTo(0, my+curve, mw, my);
+  ctx.stroke();
+  ctx.shadowBlur=0;
+  // cheeks when full smile
+  if(ready){
+    ctx.fillStyle='rgba(255,120,170,.28)';
+    for(const sx of[-1,1]){ ctx.beginPath(); ctx.arc(sx*r*0.62,r*0.14,r*0.16,0,Math.PI*2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+
+function draw(t){
+  ctx.clearRect(0,0,W,H);
+  // bg subtle grid
+  ctx.fillStyle='rgba(8,8,20,1)'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(80,100,170,0.06)'; ctx.lineWidth=1;
+  const gs=46;
+  for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // window-open ambient flash
+  if(G.flash>0){
+    const g=ctx.createRadialGradient(W/2,H*0.42,0,W/2,H*0.42,Math.max(W,H)*0.7);
+    g.addColorStop(0,'rgba(0,229,255,'+(G.flash*0.16)+')');
+    g.addColorStop(1,'rgba(0,229,255,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+
+  for(const p of G.people) drawFace(p,t);
+
+  // particles
+  for(const pa of G.particles){
+    ctx.globalAlpha=Math.max(0,pa.life/pa.max);
+    ctx.fillStyle=pa.c; ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // shutter ring pulse when window open
+  drawRing();
+}
+
+const ringCv=document.getElementById('ringCanvas'), rctx=ringCv.getContext('2d');
+function drawRing(){
+  rctx.clearRect(0,0,84,84);
+  if(G.windowOpen){
+    const a=0.5+0.5*Math.sin(performance.now()/90);
+    rctx.strokeStyle='rgba(0,229,255,'+a+')'; rctx.lineWidth=4;
+    rctx.beginPath(); rctx.arc(42,42,40,0,Math.PI*2); rctx.stroke();
+  }
+}
+
+function burst(x,y,colors,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, sp=80+Math.random()*340;
+    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-120,
+      r:2+Math.random()*4, life:0.5+Math.random()*0.7, max:1.1,
+      c:colors[i%colors.length]});
+  }
+}
+
+// ---------- Shutter action ----------
+function shoot(){
+  if(G.phase!=='play') return;
+  ensureAudio();
+  let ready=0; const tot=G.people.length;
+  for(const p of G.people) if(isReady(p)) ready++;
+  shutterSnd(); G.totalShots++;
+  const pct=Math.round(ready/tot*100);
+  G.bestPercent=Math.max(G.bestPercent,pct);
+
+  if(ready===tot){
+    // 奇跡の一枚
+    const gain = 100*tot + G.round*20;
+    G.score+=gain;
+    burst(W/2,H*0.4,['#00E5FF','#FF2D87','#FBBF24','#ffffff'],60);
+    bassHit(); cheer(); vib([0,200,60,120]);
+    flashScreen();
+    setHint('✨ 奇跡の一枚！ +'+gain);
+    // advance: add a person, harder
+    G.round++; G.n=Math.min(8,G.n+1);
+    setTimeout(()=>{ G.people=layoutPeople(G.n); updateHUD(); }, 420);
+    updateHUD();
+  } else if(ready>=Math.ceil(tot*0.6)){
+    // partial: small points, mark missers, no life lost? (lenient mid)
+    const gain=ready*8;
+    G.score+=gain;
+    burst(W/2,H*0.45,['#FBBF24','#ffffff'],18);
+    tone(660,0.12,'triangle',0.22); vib(30);
+    setHint('おしい！ '+ready+'/'+tot+'人ジャスト +'+gain);
+    markMissers();
+    updateHUD();
+  } else {
+    // miss
+    G.lives--; dudSnd(); vib([0,90]);
+    setHint('スカ… '+ready+'/'+tot+'人だけ');
+    markMissers();
+    updateHUD();
+    if(G.lives<=0){ setTimeout(endGame,500); }
+  }
+}
+function markMissers(){
+  for(const p of G.people){ if(!isReady(p)) p.tell=0; }
+}
+function flashScreen(){
+  const f=document.createElement('div');
+  f.style.cssText='position:absolute;inset:0;background:#fff;z-index:15;pointer-events:none;opacity:.85;transition:opacity .4s;';
+  stage.appendChild(f);
+  requestAnimationFrame(()=>{f.style.opacity='0';});
+  setTimeout(()=>f.remove(),450);
+}
+
+// ---------- End / Result ----------
+function endGame(){
+  G.phase='result';
+  drawCard();
+  document.getElementById('resultTitle').textContent='撮影終了';
+  document.getElementById('resultScreen').classList.remove('hidden');
+}
+
+function rankLabel(score){
+  if(score>=900) return ['伝説のカメラマン','LEGENDARY'];
+  if(score>=550) return ['一瞬を逃さない達人','MASTER'];
+  if(score>=300) return ['なかなかの腕前','GOOD EYE'];
+  if(score>=120) return ['まずまずの一枚','NICE'];
+  return ['みんな半笑い','KEEP TRY'];
+}
+
+// draw 9:16 share card
+const cardCv=document.getElementById('cardCanvas'), cc=cardCv.getContext('2d');
+function drawCard(){
+  const w=540,h=960; cardCv.width=w; cardCv.height=h;
+  // bg
+  const g=cc.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#131333'); g.addColorStop(1,'#05050e');
+  cc.fillStyle=g; cc.fillRect(0,0,w,h);
+  // neon frame
+  cc.strokeStyle='#00E5FF'; cc.lineWidth=4; cc.shadowColor='#00E5FF'; cc.shadowBlur=20;
+  cc.strokeRect(20,20,w-40,h-40); cc.shadowBlur=0;
+  // title
+  cc.textAlign='center';
+  cc.fillStyle='#fff'; cc.font='900 56px -apple-system,sans-serif';
+  cc.shadowColor='#FF2D87'; cc.shadowBlur=18;
+  cc.fillText('はいチーズ',w/2,108); cc.shadowBlur=0;
+  cc.fillStyle='#8b93b8'; cc.font='700 18px sans-serif';
+  cc.fillText('H A I - C H Ī Z U',w/2,138);
+
+  // "photo" of faces (snapshot of final crew, all smiling on success vibe)
+  const cy=300, fr=46;
+  const crew=Math.min(6,G.n);
+  const perRow=crew<=3?crew:3, rows=Math.ceil(crew/perRow);
+  let idx=0;
+  cc.save();
+  for(let row=0;row<rows;row++){
+    const inThis=Math.min(perRow,crew-idx);
+    const ry=cy+row*120;
+    for(let c=0;c<inThis;c++){
+      const rx= w/2 + (c-(inThis-1)/2)*120;
+      idx++;
+      const pal=[['#00E5FF','#7fe9ff'],['#FF2D87','#ffa6cc'],['#FBBF24','#ffe19a']][idx%3];
+      // happy face
+      cc.shadowColor=pal[0]; cc.shadowBlur=14;
+      cc.strokeStyle=pal[1]; cc.lineWidth=4; cc.fillStyle='rgba(12,16,34,.9)';
+      cc.beginPath(); cc.arc(rx,ry,fr,0,Math.PI*2); cc.fill(); cc.stroke(); cc.shadowBlur=0;
+      cc.fillStyle='#eef3ff';
+      for(const sx of[-1,1]){ cc.beginPath(); cc.arc(rx+sx*fr*0.4,ry-fr*0.12,fr*0.18,0,Math.PI*2); cc.fill();
+        cc.fillStyle=pal[0]; cc.beginPath(); cc.arc(rx+sx*fr*0.4,ry-fr*0.12,fr*0.09,0,Math.PI*2); cc.fill(); cc.fillStyle='#eef3ff';}
+      cc.strokeStyle=pal[1]; cc.lineWidth=4; cc.lineCap='round';
+      cc.beginPath(); cc.moveTo(rx-fr*0.5,ry+fr*0.28); cc.quadraticCurveTo(rx,ry+fr*0.7,rx+fr*0.5,ry+fr*0.28); cc.stroke();
+    }
+  }
+  cc.restore();
+
+  // rank + score
+  const [jp,en]=rankLabel(G.score);
+  cc.fillStyle='#FBBF24'; cc.font='900 30px sans-serif';
+  cc.shadowColor='rgba(251,191,36,.5)'; cc.shadowBlur=16;
+  cc.fillText(jp, w/2, 640); cc.shadowBlur=0;
+  cc.fillStyle='#8b93b8'; cc.font='700 16px sans-serif'; cc.fillText(en,w/2,668);
+
+  cc.fillStyle='#fff'; cc.font='900 96px sans-serif';
+  cc.shadowColor='#00E5FF'; cc.shadowBlur=22;
+  cc.fillText(G.score, w/2, 780); cc.shadowBlur=0;
+  cc.fillStyle='#8b93b8'; cc.font='700 18px sans-serif';
+  cc.fillText('SCORE',w/2,812);
+
+  cc.fillStyle='#c7cdec'; cc.font='600 18px sans-serif';
+  cc.fillText('ベスト一致率 '+G.bestPercent+'%  /  最大 '+G.n+'人', w/2, 858);
+
+  // footer
+  cc.fillStyle='#5b6373'; cc.font='600 15px sans-serif';
+  cc.fillText('Idea Radar 🏆 はいチーズ  #全員ジャスト', w/2, 916);
+}
+
+async function share(){
+  cardCv.toBlob(async(blob)=>{
+    const file=new File([blob],'hai-chiizu.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text:'集合写真で全員ジャストの刹那を撮る #はいチーズ'}); return; }catch(e){}
+    }
+    // fallback download
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download='hai-chiizu.png'; a.click(); URL.revokeObjectURL(url);
+  },'image/png');
+}
+
+// ---------- Loop ----------
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(G.phase==='play') update(dt);
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+// ---------- Input ----------
+const shutterEl=document.getElementById('shutter');
+function tapShoot(e){ e.preventDefault(); shoot(); }
+shutterEl.addEventListener('touchstart',tapShoot,{passive:false});
+shutterEl.addEventListener('mousedown',tapShoot);
+
+document.getElementById('startBtn').addEventListener('click',()=>{ensureAudio();startGame();});
+document.getElementById('retryBtn').addEventListener('click',()=>{ensureAudio();startGame();});
+document.getElementById('shareBtn').addEventListener('click',share);
+
+// init
+resize();
+G.people=layoutPeople(3);
+last=performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
