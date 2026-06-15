@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Aiso（愛想）— AIの愛想に溺れるな</title>
+<style>
+  :root{ --mag:#ff2d9b; --cyan:#22e0ff; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:#06060d; overflow:hidden;
+    font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif; }
+  #stage{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas#game{ display:block; touch-action:none; transition:filter .55s cubic-bezier(.2,.7,.2,1); }
+  /* overlays */
+  .panel{ position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color:#eef0f8; padding:30px; z-index:5; }
+  .hidden{ display:none !important; }
+  h1{ font-size:clamp(42px,15vw,76px); font-weight:900; margin:0; letter-spacing:2px;
+    background:linear-gradient(135deg,var(--mag),var(--cyan)); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(255,45,155,.35); }
+  .jp{ font-size:15px; letter-spacing:8px; color:#9aa0bf; margin:6px 0 0; }
+  .lead{ font-size:14px; line-height:1.9; color:#b9bdd4; max-width:340px; margin:22px 0 0; }
+  .lead b{ color:#fff; font-weight:700; }
+  .btn{ margin-top:30px; padding:16px 44px; border:none; border-radius:40px; font-size:18px; font-weight:800;
+    color:#06060d; background:linear-gradient(135deg,var(--mag),var(--cyan)); letter-spacing:2px;
+    box-shadow:0 0 28px rgba(34,224,255,.4); cursor:pointer; }
+  .btn:active{ transform:scale(.96); }
+  .btn.ghost{ background:transparent; color:#cfd3ea; border:1px solid #34384f; box-shadow:none; font-size:15px; padding:13px 30px; }
+  .tip{ font-size:12px; color:#6b7090; margin-top:26px; line-height:1.8; }
+  /* HUD */
+  #hud{ position:fixed; top:0; left:0; right:0; z-index:4; padding:14px 16px 0; pointer-events:none;
+    display:flex; flex-direction:column; gap:8px; }
+  .row{ display:flex; justify-content:space-between; align-items:center; }
+  .stat{ font-size:12px; color:#aab0d0; letter-spacing:1px; }
+  .stat b{ font-size:20px; color:#fff; font-weight:900; font-variant-numeric:tabular-nums; }
+  .combo{ color:var(--cyan); }
+  #barWrap{ height:9px; border-radius:6px; background:rgba(255,255,255,.07); overflow:hidden; }
+  #bar{ height:100%; width:0%; border-radius:6px;
+    background:linear-gradient(90deg,#5a6cff,var(--mag)); transition:width .12s linear; }
+  #barLbl{ font-size:10px; letter-spacing:2px; color:#8086a8; }
+  /* card */
+  #cardWrap{ z-index:6; background:rgba(4,4,10,.82); backdrop-filter:blur(4px); }
+  #card{ width:min(78vw,300px); border-radius:18px; box-shadow:0 14px 50px rgba(0,0,0,.6); }
+  .cbtns{ display:flex; gap:12px; margin-top:18px; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game"></canvas></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="row">
+    <div class="stat">SCORE <b id="hScore">0</b></div>
+    <div class="stat combo">COMBO <b id="hCombo">×0</b></div>
+    <div class="stat" style="text-align:right">本物 <b id="hReal">0</b></div>
+  </div>
+  <div>
+    <div id="barWrap"><div id="bar"></div></div>
+    <div id="barLbl">空虚ゲージ — 満ちると世界はモノクロに沈む</div>
+  </div>
+</div>
+
+<!-- title -->
+<div id="title" class="panel">
+  <h1>Aiso</h1>
+  <div class="jp">愛 想</div>
+  <div class="lead">AIは24時間「いいね！」「最高だよ！」と<b>愛想</b>を振りまく。<br>
+  浴びるほど世界の<b>色が抜けて</b>いく。<br>
+  本物の人間からの<b>不器用なひと言</b>だけが、色を取り戻す。</div>
+  <button class="btn" id="startBtn">あそぶ</button>
+  <div class="tip">💗 のAI愛想をタップ＝コンボは増えるが空虚も増える<br>
+  灰色の「本物の言葉」をタップ＝色が戻り生き延びる</div>
+</div>
+
+<!-- gameover / card -->
+<div id="cardWrap" class="panel hidden">
+  <canvas id="card"></canvas>
+  <div class="cbtns">
+    <button class="btn" id="shareBtn">結果をシェア</button>
+    <button class="btn ghost" id="againBtn">もう一度</button>
+  </div>
+  <div class="tip"><a href="../" style="color:#7aa2ff;text-decoration:none">← Idea Radar ギャラリー</a></div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const game = document.getElementById('game');
+const ctx = game.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  // keep ~9:16 portrait but fill height
+  let cw = vw, ch = vh;
+  const targetRatio = 9/16;
+  if(cw/ch > targetRatio){ cw = Math.round(ch*targetRatio); }
+  game.style.width = cw+'px'; game.style.height = ch+'px';
+  W = cw; H = ch;
+  game.width = Math.round(cw*DPR); game.height = Math.round(ch*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- audio ----------
+let AC=null, master=null, drone=null, droneFilter=null, droneGain=null;
+function initAudio(){
+  if(AC) return;
+  try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  // ambient drone that gets muffled as emptiness rises
+  drone = AC.createOscillator(); drone.type='sawtooth'; drone.frequency.value=55;
+  const d2 = AC.createOscillator(); d2.type='sine'; d2.frequency.value=110;
+  droneFilter = AC.createBiquadFilter(); droneFilter.type='lowpass'; droneFilter.frequency.value=900; droneFilter.Q.value=0.6;
+  droneGain = AC.createGain(); droneGain.gain.value=0.05;
+  drone.connect(droneFilter); d2.connect(droneFilter); droneFilter.connect(droneGain); droneGain.connect(master);
+  drone.start(); d2.start();
+}
+function now(){ return AC?AC.currentTime:0; }
+function tone(freq,t0,dur,type,peak,fEnd){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+  if(fEnd) o.frequency.exponentialRampToValueAtTime(Math.max(1,fEnd),t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(peak,t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.05);
+}
+function sub(freq,t0,dur,peak){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='square'; o.frequency.setValueAtTime(freq,t0);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(peak,t0+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.05);
+}
+// sweet but hollow high chord
+function playSweet(){
+  if(!AC) return; const t=now();
+  tone(988,t,0.16,'sine',0.10);
+  tone(1318,t,0.14,'sine',0.07);
+  tone(1568,t+0.02,0.12,'sine',0.045);
+}
+// warm "color returns" — 55Hz missing fundamental + warm triangle
+function playRestore(){
+  if(!AC) return; const t=now();
+  sub(55,t,0.42,0.32); sub(110,t,0.40,0.16); sub(165,t,0.36,0.09);
+  tone(440,t,0.30,'triangle',0.12,660);
+  tone(660,t+0.04,0.26,'triangle',0.07);
+}
+function playOver(){
+  if(!AC) return; const t=now();
+  sub(48,t,0.9,0.30); tone(220,t,0.8,'sine',0.10,90);
+}
+function updateDrone(emp){
+  if(!droneFilter) return;
+  // more emptiness => muffled & a touch louder hum (oppressive)
+  const cut = 1100 - emp*900;
+  droneFilter.frequency.setTargetAtTime(Math.max(120,cut), now(), 0.2);
+  droneGain.gain.setTargetAtTime(0.04 + emp*0.05, now(), 0.2);
+}
+
+// ---------- vibrate ----------
+function vib(p){ if(navigator.vibrate){ try{ navigator.vibrate(p); }catch(e){} } }
+
+// ---------- content ----------
+const AI = ["いいね","最高だよ","天才！","その調子","わかるよ","君は悪くない","ナイス","さすが","尊い","神","100点","好き","完璧","えらい","最強","🫶"];
+const HUMAN = ["元気にしてた？","この前ごめんね","今度ごはん行こ","あれ、どうなった？","ひさしぶり！","ちゃんと寝てる？","話きくよ","会いたいな","無理してない？","ありがとうね"];
+
+// ---------- state ----------
+let state='title';
+let bubbles=[], reals=[], parts=[];
+let emptiness=0, displaySat=1;
+let score=0, combo=0, maxCombo=0, realCount=0, aiCount=0;
+let elapsed=0, lastT=0;
+let aiTimer=0, realTimer=0, comboDecay=0;
+let shake=0;
+let flash=0, flashCol='#22e0ff';
+
+function reset(){
+  bubbles=[]; reals=[]; parts=[];
+  emptiness=0; displaySat=1;
+  score=0; combo=0; maxCombo=0; realCount=0; aiCount=0;
+  elapsed=0; aiTimer=0; realTimer=1.0; comboDecay=0; shake=0; flash=0;
+}
+
+function rand(a,b){ return a+Math.random()*(b-a); }
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+function spawnAI(){
+  const x = rand(W*0.12, W*0.88);
+  const mag = Math.random()<0.5;
+  bubbles.push({ x, y:H+40, vx:rand(-12,12), vy:rand(-58,-86), txt:pick(AI),
+    col: mag? '#ff2d9b':'#22e0ff', r: rand(26,36), born:elapsed, phase:rand(0,6.28) });
+}
+function spawnReal(){
+  const fromLeft = Math.random()<0.5;
+  const y = rand(H*0.22, H*0.82);
+  const spd = (60 + emptiness*150) * (fromLeft?1:-1);
+  reals.push({ x: fromLeft? -120 : W+120, y, vx:spd, txt:pick(HUMAN), born:elapsed, w:0 });
+}
+function burst(x,y,col,n){
+  for(let i=0;i<n;i++){
+    const a=rand(0,6.283), s=rand(40,260);
+    parts.push({ x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s-rand(0,60), life:rand(.5,1.1), age:0,
+      col, r:rand(2,5) });
+  }
+}
+
+// ---------- input ----------
+function pointer(e){
+  if(state!=='playing') return;
+  const r=game.getBoundingClientRect();
+  const cx = (e.touches? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches? e.touches[0].clientY : e.clientY) - r.top;
+  // reals first (the goal)
+  for(let i=reals.length-1;i>=0;i--){
+    const m=reals[i];
+    const hw = m.w/2+22, hh=24;
+    if(cx>m.x-hw && cx<m.x+hw && cy>m.y-hh && cy<m.y+hh){
+      grabReal(m,i); return;
+    }
+  }
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+    const dx=cx-b.x, dy=cy-b.y;
+    if(dx*dx+dy*dy < (b.r+10)*(b.r+10)){ basqueAI(b,i); return; }
+  }
+}
+function basqueAI(b,i){
+  bubbles.splice(i,1);
+  aiCount++; combo++; if(combo>maxCombo) maxCombo=combo;
+  comboDecay=0;
+  emptiness = Math.min(1, emptiness+0.05);
+  // white "hollow sparkle"
+  for(let k=0;k<10;k++){ const a=rand(0,6.28),s=rand(20,90);
+    parts.push({x:b.x,y:b.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.5,age:0,col:'#ffffff',r:rand(1.5,3)}); }
+  playSweet(); vib(8);
+  if(emptiness>=1) endGame();
+}
+function grabReal(m,i){
+  reals.splice(i,1);
+  realCount++; score += combo*10 + 20;
+  emptiness = Math.max(0, emptiness-0.22);
+  burst(m.x, m.y, Math.random()<0.5?'#ff2d9b':'#22e0ff', 36);
+  burst(m.x, m.y, '#ffd36b', 10);
+  flash=1; flashCol='#22e0ff'; shake=Math.min(14, shake+10);
+  playRestore(); vib([40,30,80]);
+}
+game.addEventListener('pointerdown', pointer);
+
+// ---------- loop ----------
+function tick(t){
+  requestAnimationFrame(tick);
+  if(!lastT) lastT=t;
+  let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05;
+
+  if(state==='playing'){
+    elapsed+=dt;
+    // passive emptiness creep
+    emptiness = Math.min(1, emptiness + dt*0.02);
+    // combo slow decay if not feeding AI
+    comboDecay+=dt;
+    if(comboDecay>1.6 && combo>0){ combo--; comboDecay=0; }
+
+    // spawns
+    aiTimer-=dt;
+    if(aiTimer<=0){ spawnAI(); aiTimer = rand(0.45,0.85); }
+    realTimer-=dt;
+    if(realTimer<=0){ spawnReal(); realTimer = (2.7 - emptiness*1.9) * rand(0.8,1.2); }
+
+    // update bubbles
+    for(let i=bubbles.length-1;i>=0;i--){
+      const b=bubbles[i];
+      b.phase+=dt*3; b.x+=Math.sin(b.phase)*0.5 + b.vx*dt; b.y+=b.vy*dt;
+      if(b.y < -50) bubbles.splice(i,1);
+    }
+    // update reals
+    for(let i=reals.length-1;i>=0;i--){
+      const m=reals[i]; m.x+=m.vx*dt;
+      if(m.x<-200 || m.x>W+200) reals.splice(i,1);
+    }
+    if(emptiness>=1){ endGame(); }
+  }
+
+  // particles always
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i]; p.age+=dt;
+    if(p.age>p.life){ parts.splice(i,1); continue; }
+    p.vy+=240*dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+  }
+  if(flash>0) flash=Math.max(0, flash-dt*2.2);
+  if(shake>0) shake=Math.max(0, shake-dt*40);
+
+  // saturation toward target
+  const targetSat = 1 - emptiness*0.96;
+  displaySat += (targetSat-displaySat)*Math.min(1,dt*8);
+  const bri = 1 - emptiness*0.18;
+  game.style.filter = `saturate(${displaySat.toFixed(3)}) brightness(${bri.toFixed(3)})`;
+
+  updateDrone(emptiness);
+  draw();
+  if(state==='playing') updateHUD();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0b0b16'); g.addColorStop(1,'#06060d');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  if(shake>0){ ctx.translate(rand(-shake,shake),rand(-shake,shake)); }
+
+  // reals (grey, plain) — drawn behind bubbles so they hide in the flood
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const m of reals){
+    ctx.font='600 17px -apple-system,sans-serif';
+    const w=ctx.measureText(m.txt).width; m.w=w;
+    const pad=18, bw=w+pad*2, bh=38;
+    roundRect(m.x-bw/2, m.y-bh/2, bw, bh, 12);
+    ctx.fillStyle='rgba(150,156,180,0.16)'; ctx.fill();
+    ctx.lineWidth=1; ctx.strokeStyle='rgba(180,186,210,0.35)'; ctx.stroke();
+    ctx.fillStyle='#c4c8dc'; ctx.fillText(m.txt, m.x, m.y);
+  }
+
+  // AI bubbles (glowy)
+  for(const b of bubbles){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    const rad=ctx.createRadialGradient(b.x,b.y,1,b.x,b.y,b.r*1.8);
+    rad.addColorStop(0, b.col); rad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.globalAlpha=0.55; ctx.fillStyle=rad;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r*1.8,0,6.283); ctx.fill();
+    ctx.restore();
+    // pill
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.283);
+    ctx.fillStyle=b.col; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle='#0a0a14'; ctx.font='800 15px -apple-system,sans-serif';
+    ctx.fillText(b.txt, b.x, b.y+1);
+  }
+
+  // particles
+  ctx.globalCompositeOperation='lighter';
+  for(const p of parts){
+    const a=1-p.age/p.life;
+    ctx.globalAlpha=a; ctx.fillStyle=p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(0.6+a*0.8),0,6.283); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  ctx.restore();
+
+  // flash
+  if(flash>0){ ctx.fillStyle=flashCol; ctx.globalAlpha=flash*0.30; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+
+  // vignette deepens with emptiness
+  if(emptiness>0.05){
+    const v=ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.75);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,`rgba(0,0,0,${emptiness*0.55})`);
+    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  }
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ---------- HUD ----------
+const hud=document.getElementById('hud');
+const hScore=document.getElementById('hScore'), hCombo=document.getElementById('hCombo'),
+      hReal=document.getElementById('hReal'), bar=document.getElementById('bar');
+function updateHUD(){
+  hScore.textContent=score;
+  hCombo.textContent='×'+combo;
+  hReal.textContent=realCount;
+  bar.style.width=(emptiness*100).toFixed(0)+'%';
+}
+
+// ---------- flow ----------
+function startGame(){
+  initAudio(); if(AC && AC.state==='suspended') AC.resume();
+  reset(); state='playing';
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('cardWrap').classList.add('hidden');
+  hud.classList.remove('hidden');
+}
+function endGame(){
+  state='over'; playOver(); vib([60,40,120]);
+  hud.classList.add('hidden');
+  buildCard();
+  document.getElementById('cardWrap').classList.remove('hidden');
+}
+
+// ---------- result card 9:16 ----------
+const card=document.getElementById('card'), cctx=card.getContext('2d');
+function titleFor(){
+  // based on how many real grabbed vs ai bathed
+  if(realCount>=12 && aiCount<realCount*4) return ['本物を見抜いた人','愛想の洪水でも、本物を逃さなかった'];
+  if(realCount>=7) return ['踏みとどまった人','溺れかけても、色を取り戻した'];
+  if(aiCount>=25 && realCount<4) return ['愛想に溺れた人','甘い言葉に、世界が白く沈んだ'];
+  if(realCount>=3) return ['まだ間に合う人','本物の声に、もっと耳を'];
+  return ['色を失った人','AIの愛想だけでは、孤独は癒えない'];
+}
+function buildCard(){
+  const cw=1080, ch=1920; card.width=cw; card.height=ch;
+  card.style.width='min(78vw,300px)'; card.style.height='auto';
+  // bg
+  const g=cctx.createLinearGradient(0,0,0,ch);
+  g.addColorStop(0,'#0c0c1a'); g.addColorStop(1,'#06060d');
+  cctx.fillStyle=g; cctx.fillRect(0,0,cw,ch);
+  // neon frame
+  cctx.lineWidth=6; cctx.strokeStyle='rgba(34,224,255,.5)';
+  cctx.strokeRect(40,40,cw-80,ch-80);
+  cctx.lineWidth=2; cctx.strokeStyle='rgba(255,45,155,.5)';
+  cctx.strokeRect(58,58,cw-116,ch-116);
+
+  cctx.textAlign='center';
+  cctx.fillStyle='#7f86b0'; cctx.font='600 34px -apple-system,sans-serif';
+  cctx.fillText('AISO ・ 愛想', cw/2, 170);
+
+  const emp=Math.round(emptiness*100);
+  const [tt,sub2]=titleFor();
+  // big title with gradient
+  const tg=cctx.createLinearGradient(0,0,cw,0);
+  tg.addColorStop(0,'#ff2d9b'); tg.addColorStop(1,'#22e0ff');
+  cctx.fillStyle=tg; cctx.font='900 86px -apple-system,sans-serif';
+  cctx.fillText(tt, cw/2, 470);
+  cctx.fillStyle='#b9bdd4'; cctx.font='400 36px -apple-system,sans-serif';
+  cctx.fillText(sub2, cw/2, 555);
+
+  // central emblem ring (color = how much color remained)
+  const rx=cw/2, ry=900, R=210;
+  cctx.lineWidth=26; cctx.strokeStyle='rgba(255,255,255,.08)';
+  cctx.beginPath(); cctx.arc(rx,ry,R,0,6.283); cctx.stroke();
+  const frac=1-emptiness;
+  const rg=cctx.createLinearGradient(rx-R,ry-R,rx+R,ry+R);
+  rg.addColorStop(0,'#ff2d9b'); rg.addColorStop(1,'#22e0ff');
+  cctx.strokeStyle=rg; cctx.lineCap='round';
+  cctx.beginPath(); cctx.arc(rx,ry,R,-Math.PI/2,-Math.PI/2+6.283*Math.max(0.02,frac)); cctx.stroke();
+  cctx.fillStyle='#fff'; cctx.font='900 130px -apple-system,sans-serif';
+  cctx.fillText(score, rx, ry+18);
+  cctx.fillStyle='#8086a8'; cctx.font='600 30px -apple-system,sans-serif';
+  cctx.fillText('SCORE', rx, ry+80);
+
+  // stats row
+  const stats=[['本物を掴んだ', realCount, '#22e0ff'],['浴びたAI愛想', aiCount, '#ff2d9b'],['到達コンボ','×'+maxCombo,'#ffd36b']];
+  const y0=1320, colW=cw/3;
+  stats.forEach((s,i)=>{
+    const x=colW*i+colW/2;
+    cctx.fillStyle=s[2]; cctx.font='900 70px -apple-system,sans-serif';
+    cctx.fillText(s[1], x, y0);
+    cctx.fillStyle='#9097ba'; cctx.font='500 27px -apple-system,sans-serif';
+    cctx.fillText(s[0], x, y0+52);
+  });
+
+  //残った色メーター文言
+  cctx.fillStyle='#cfd3ea'; cctx.font='600 33px -apple-system,sans-serif';
+  cctx.fillText(`残った色 ${100-emp}％`, cw/2, 1520);
+
+  cctx.fillStyle='#5b6188'; cctx.font='500 26px -apple-system,sans-serif';
+  cctx.fillText('AIの愛想に溺れるな  #Aiso', cw/2, ch-120);
+  cctx.fillText('idea-radar', cw/2, ch-78);
+}
+
+// share / download
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  card.toBlob(async (blob)=>{
+    const file=new File([blob],'aiso.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text:'AIの愛想に溺れるな — Aiso #idearadar'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='aiso.png'; a.click();
+  },'image/png');
+});
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
