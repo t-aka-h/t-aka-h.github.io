@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05030d">
+<title>Hagashi（剥がし）— 剥離ASMR</title>
+<style>
+  :root{
+    --bg:#05030d; --ink:#eaf6ff; --sub:#8fa6c0;
+    --cyan:#38e8ff; --mag:#ff3aa6; --emer:#2fffb0; --amber:#ffc04d; --red:#ff4d63;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Helvetica Neue",sans-serif;
+    color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;}
+  #wrap{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;gap:18px;transition:opacity .35s;}
+  .hidden{opacity:0;pointer-events:none;}
+  h1{font-size:clamp(40px,15vw,72px);font-weight:900;letter-spacing:.06em;
+    background:linear-gradient(180deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 30px rgba(56,232,255,.35);line-height:1;}
+  .jp{font-size:clamp(15px,5vw,20px);letter-spacing:.5em;color:var(--cyan);margin-top:-8px;text-shadow:0 0 12px rgba(56,232,255,.5);}
+  .tag{font-size:13px;color:var(--sub);letter-spacing:.12em;}
+  p.lead{font-size:15px;line-height:1.85;color:#cfe0f2;max-width:340px;}
+  .hint{font-size:13px;color:var(--sub);line-height:1.7;max-width:330px;}
+  .btn{margin-top:6px;padding:16px 40px;border:none;border-radius:999px;font-size:18px;font-weight:800;letter-spacing:.08em;
+    color:#06121a;background:linear-gradient(135deg,var(--cyan),#7cf);box-shadow:0 0 30px rgba(56,232,255,.5),0 8px 24px rgba(0,0,0,.5);
+    cursor:pointer;transition:transform .12s;}
+  .btn:active{transform:scale(.94);}
+  .btn.ghost{background:rgba(255,255,255,.06);color:var(--ink);box-shadow:inset 0 0 0 1.5px rgba(143,166,192,.5);}
+  .btn.mag{background:linear-gradient(135deg,var(--mag),#ff7ac2);color:#1a0512;box-shadow:0 0 30px rgba(255,58,166,.5),0 8px 24px rgba(0,0,0,.5);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .best{font-size:12px;color:var(--sub);letter-spacing:.1em;}
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;
+    pointer-events:none;font-variant-numeric:tabular-nums;}
+  #hud .l,#hud .r{display:flex;flex-direction:column;gap:2px;}
+  #hud .r{align-items:flex-end;}
+  .k{font-size:10px;letter-spacing:.18em;color:var(--sub);}
+  .v{font-size:20px;font-weight:800;color:#fff;}
+  .lives{font-size:18px;letter-spacing:2px;}
+  #stagecap{position:absolute;top:54px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.25em;color:var(--cyan);
+    pointer-events:none;text-shadow:0 0 10px rgba(56,232,255,.5);}
+  /* result card */
+  #card{max-width:330px;width:86%;border-radius:22px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.65);}
+  .rtitle{font-size:30px;font-weight:900;letter-spacing:.04em;line-height:1.15;}
+  .rsub{font-size:14px;color:var(--sub);margin-top:2px;}
+  .flash{position:absolute;left:0;right:0;top:42%;text-align:center;font-size:34px;font-weight:900;letter-spacing:.05em;
+    pointer-events:none;opacity:0;transition:opacity .15s, transform .3s; text-shadow:0 0 24px currentColor;}
+  .footer{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:10px;color:#46566c;letter-spacing:.15em;}
+  .credit{position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:11px;color:var(--sub);letter-spacing:.08em;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- HUD (visible while peeling) -->
+  <div id="hud" class="hidden">
+    <div class="l"><span class="k">SMOOTH</span><span class="v" id="hudSmooth">100%</span></div>
+    <div class="r"><span class="k">PEELED</span><span class="v" id="hudCount">0</span><span class="lives" id="hudLives">❤︎❤︎❤︎</span></div>
+  </div>
+  <div id="stagecap" class="hidden"></div>
+  <div class="flash" id="flash"></div>
+
+  <!-- TITLE -->
+  <div class="layer" id="title">
+    <div class="tag">IDEA RADAR · 剥離ASMR</div>
+    <h1>HAGASHI</h1>
+    <div class="jp">剥がし</div>
+    <p class="lead">新品スマホの保護フィルムを、<b>破かず一枚で</b>剥がし切る。<br>速度と角度を“スイートゾーン”に保て。</p>
+    <div class="hint">画面を下へ <b>ゆっくり一定の速さ</b>でドラッグ。<br>速すぎ・斜めすぎは <b>ビリッ</b>と裂ける。</div>
+    <button class="btn" id="startBtn">剥がす</button>
+    <div class="best" id="bestLine"></div>
+    <div class="credit">スマホ縦持ち・音あり推奨 🎧</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="layer hidden" id="result">
+    <canvas id="card" width="660" height="1173"></canvas>
+    <div class="row">
+      <button class="btn mag" id="shareBtn">シェア / 保存</button>
+      <button class="btn ghost" id="retryBtn">もう一枚</button>
+    </div>
+    <div class="best" id="bestLine2"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(()=>{
+/* ============================= setup ============================= */
+const cv=document.getElementById("game"), ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2.5);
+  W=innerWidth; H=innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener("resize",resize); resize();
+
+const $=id=>document.getElementById(id);
+const titleEl=$("title"), resultEl=$("result"), hudEl=$("hud"), stagecapEl=$("stagecap"), flashEl=$("flash");
+
+/* ============================= audio (procedural) ============================= */
+let AC=null, master=null, crackBus=null, crackGain=null;
+function audioInit(){
+  if(AC) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  }catch(e){AC=null;}
+}
+function now(){return AC?AC.currentTime:0;}
+// missing-fundamental low rumble: 55Hz fund implied by 110/165/220/275
+function lowRumble(t,dur,amp){
+  if(!AC)return;
+  [110,165,220,275,330].forEach((f,i)=>{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type="sine"; o.frequency.value=f;
+    const a=amp*(1-i*0.16);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(a,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+  });
+}
+function sweep(t,f0,f1,dur,amp,type){
+  if(!AC)return;
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type||"sawtooth"; o.frequency.setValueAtTime(f0,t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40,f1),t+dur);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+function tone(t,f,dur,amp,type){
+  if(!AC)return;
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type||"triangle"; o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+// continuous static-electricity crackle bus (band-limited noise, gated by gain)
+function crackleStart(){
+  if(!AC||crackBus) return;
+  const buf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){ d[i]=(Math.random()*2-1); }
+  crackBus=AC.createBufferSource(); crackBus.buffer=buf; crackBus.loop=true;
+  const bp=AC.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=2600; bp.Q.value=0.8;
+  const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=900;
+  crackGain=AC.createGain(); crackGain.gain.value=0.0001;
+  crackBus.connect(bp); bp.connect(hp); hp.connect(crackGain); crackGain.connect(master);
+  crackBus.start();
+}
+function crackleSet(level){ // 0..1
+  if(!crackGain||!AC) return;
+  const g=Math.max(0.0001, level*0.5);
+  crackGain.gain.setTargetAtTime(g, AC.currentTime, 0.03);
+}
+function crackleStop(){ if(crackGain&&AC) crackGain.gain.setTargetAtTime(0.0001,AC.currentTime,0.05); }
+
+/* ============================= haptics ============================= */
+let lastVib=0;
+function buzz(ms){ if(navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+function buzzPeel(speed){ const t=performance.now(); if(t-lastVib>55){ lastVib=t; buzz(8+Math.min(14,speed*30)); } }
+
+/* ============================= stages ============================= */
+// peel completes when front passes filmH; speeds are in fraction-of-filmH per second
+const STAGES=[
+  {name:"フィルム ①",  vmin:0.16, vmax:0.62, ang:0.62, tear:42,  bubbles:0,  sticky:0,   tint:"normal"},
+  {name:"気泡入り ②",  vmin:0.16, vmax:0.55, ang:0.55, tear:50,  bubbles:4,  sticky:0,   tint:"normal"},
+  {name:"静電フィルム ③",vmin:0.22, vmax:0.58, ang:0.50, tear:58,  bubbles:2,  sticky:0.6, tint:"static"},
+  {name:"曲面エッジ ④", vmin:0.18, vmax:0.50, ang:0.42, tear:66,  bubbles:3,  sticky:0.3, tint:"normal"},
+  {name:"ガラス ⑤",    vmin:0.20, vmax:0.46, ang:0.36, tear:80,  bubbles:1,  sticky:0.2, tint:"glass"},
+];
+function stageFor(i){ // loops, getting harder past 5
+  if(i<STAGES.length) return STAGES[i];
+  const base=STAGES[STAGES.length-1];
+  const k=i-STAGES.length+1;
+  return {name:"ガラス+"+ "★".repeat(Math.min(5,k)),
+    vmin:base.vmin+0.01*k, vmax:Math.max(base.vmin+0.12,base.vmax-0.02*k),
+    ang:Math.max(0.22,base.ang-0.02*k), tear:Math.min(96,base.tear+4*k),
+    bubbles:1+(k%4), sticky:0.2, tint:"glass"};
+}
+
+/* ============================= state ============================= */
+let state="title"; // title | play | result
+let film=null, lives=3, peeledCount=0, stageIdx=0, smoothAcc=[], bestStreak=0, curStreak=0;
+let runStart=0;
+let particles=[];
+
+function filmRect(){
+  // device screen region (portrait phone)
+  const margin=Math.min(W,H)*0.07;
+  const fw=Math.min(W-margin*2, H*0.50);
+  const fh=Math.min(H-margin*2.2, fw*1.92);
+  const x=(W-fw)/2, y=(H-fh)/2 - 6;
+  return {x,y,w:fw,h:fh};
+}
+
+function newFilm(){
+  const st=stageFor(stageIdx);
+  const r=filmRect();
+  const bubbles=[];
+  for(let i=0;i<st.bubbles;i++){
+    bubbles.push({fx:0.18+Math.random()*0.64, fy:0.18+Math.random()*0.64, r:6+Math.random()*9});
+  }
+  film={
+    st, r, bubbles,
+    grabbed:false, started:false,
+    front:0,            // 0..1 progress (fraction of filmH peeled from top)
+    lastY:0, lastX:0, lastT:0,
+    tearMeter:0, torn:false, done:false,
+    smoothFrames:0, totalFrames:0,
+    sparkPhase:0,
+  };
+}
+
+/* ============================= input ============================= */
+function pt(e){
+  const t=e.touches?e.touches[0]:e;
+  return {x:t.clientX, y:t.clientY};
+}
+function inTab(p){
+  if(!film) return false;
+  const r=film.r;
+  // grab zone: top strip of the film
+  return p.x>r.x-20 && p.x<r.x+r.w+20 && p.y>r.y-30 && p.y<r.y+r.h*0.30;
+}
+function onDown(e){
+  audioInit(); if(AC&&AC.state==="suspended") AC.resume();
+  if(state!=="play") return;
+  const p=pt(e);
+  if(!film.started && inTab(p)){
+    film.grabbed=true; film.started=true;
+    film.lastY=p.y; film.lastX=p.x; film.lastT=performance.now();
+    crackleStart();
+    buzz(10);
+  } else if(film.started && !film.done){
+    film.grabbed=true; film.lastY=p.y; film.lastX=p.x; film.lastT=performance.now();
+  }
+  e.preventDefault();
+}
+function onMove(e){
+  if(state!=="play"||!film||!film.grabbed||film.done) return;
+  const p=pt(e);
+  const t=performance.now();
+  let dt=(t-film.lastT)/1000; if(dt<=0) dt=1/60; if(dt>0.1) dt=0.1;
+  const r=film.r;
+  const dyPix=(p.y-film.lastY);             // downward positive
+  const dxPix=(p.x-film.lastX);
+  const dyFrac=dyPix/r.h;
+  // progress only advances on downward motion
+  if(dyFrac>0){ film.front=Math.min(1, film.front+dyFrac); }
+  // speed in filmH/sec (use abs downward)
+  const speed=Math.max(0,dyFrac)/dt;
+  const st=film.st;
+  // sticky: requires a minimum speed to keep peeling; below stalls (counts as out)
+  let inZone=true, sev=0;
+  if(speed>0.001){
+    if(speed<st.vmin){ inZone=false; sev=(st.vmin-speed)/st.vmin; }
+    else if(speed>st.vmax){ inZone=false; sev=Math.min(1,(speed-st.vmax)/st.vmax); }
+    // angle error: horizontal drift relative to downward progress
+    const ang=Math.abs(dxPix)/(Math.abs(dyPix)+4);
+    if(ang>st.ang){ inZone=false; sev=Math.max(sev,Math.min(1,(ang-st.ang)/st.ang)); }
+    // bubbles: if front near a bubble and moving fast -> extra fragile
+    for(const b of film.bubbles){
+      if(Math.abs(film.front-b.fy)<0.05 && speed>st.vmax*0.7){ inZone=false; sev=Math.max(sev,0.5); }
+    }
+  }
+  // tear meter
+  if(speed>0.001){
+    film.totalFrames++;
+    if(inZone){ film.smoothFrames++; film.tearMeter=Math.max(0,film.tearMeter-50*dt); }
+    else { film.tearMeter += (60+ st.sticky*30)*sev*dt*3.2; }
+  }
+  // sound + haptics
+  crackleSet(Math.min(1, speed*1.6 + (inZone?0:0.4)));
+  if(speed>0.02) buzzPeel(speed);
+  if(speed>0.04 && Math.random()<0.4){ // tiny pops
+    spawnSpark(r.x+r.w*(0.2+Math.random()*0.6), r.y+r.h*film.front, inZone?1:0);
+    if(AC) tone(now(), 1800+Math.random()*1400, 0.04, 0.05,"square");
+  }
+  if(!inZone && AC && Math.random()<0.25) tone(now(), 240+Math.random()*120, 0.05,0.06,"sawtooth");
+
+  film.lastY=p.y; film.lastX=p.x; film.lastT=t;
+
+  if(film.tearMeter>=100 && !film.torn){ tearFilm(); }
+  if(film.front>=1 && !film.done){ completeFilm(); }
+  e.preventDefault();
+}
+function onUp(e){ if(film) film.grabbed=false; crackleSet(0); }
+
+cv.addEventListener("touchstart",onDown,{passive:false});
+cv.addEventListener("touchmove",onMove,{passive:false});
+cv.addEventListener("touchend",onUp,{passive:false});
+cv.addEventListener("mousedown",onDown);
+addEventListener("mousemove",onMove);
+addEventListener("mouseup",onUp);
+
+/* ============================= outcomes ============================= */
+function tearFilm(){
+  film.torn=true; film.done=true; film.grabbed=false;
+  crackleStop();
+  if(AC){ sweep(now(),300,70,0.5,0.5,"sawtooth"); lowRumble(now(),0.4,0.2); }
+  buzz([40,40,90]);
+  screenShake=18;
+  // crack burst
+  for(let i=0;i<26;i++) spawnSpark(film.r.x+film.r.w*(0.1+Math.random()*0.8), film.r.y+film.r.h*film.front, 0);
+  flash("ビリッ…",getCss("--red"));
+  lives--;
+  updateHUD();
+  setTimeout(()=>{ if(lives<=0){ endRun(); } else { nextFilm(true); } }, 900);
+}
+function completeFilm(){
+  film.done=true; film.grabbed=false; crackleStop();
+  const sm=film.totalFrames>0?Math.round(100*film.smoothFrames/film.totalFrames):100;
+  film.smooth=sm;
+  smoothAcc.push(sm);
+  peeledCount++; curStreak++; bestStreak=Math.max(bestStreak,curStreak);
+  if(AC){ // ascending arpeggio + bell + rumble
+    const t=now();
+    [392,523,659,784].forEach((f,i)=> tone(t+i*0.05,f,0.18,0.18,"triangle"));
+    tone(t+0.24,1568,0.5,0.12,"sine");
+    lowRumble(t,0.4,0.22);
+  }
+  buzz(sm>=92?[20,30,60]:30);
+  for(let i=0;i<34;i++) spawnSpark(film.r.x+film.r.w*Math.random(), film.r.y+film.r.h*(0.3+Math.random()*0.6), 1);
+  flash(sm>=92?"PERFECT PEEL ✦":(sm>=78?"SMOOTH "+sm+"%":"剥がし切った "+sm+"%"),
+        sm>=92?getCss("--emer"):getCss("--cyan"));
+  updateHUD();
+  setTimeout(()=>{ stageIdx++; nextFilm(false); }, 950);
+}
+function nextFilm(retry){
+  if(lives<=0){ endRun(); return; }
+  newFilm(); updateStageCap();
+}
+
+/* ============================= particles & fx ============================= */
+let screenShake=0;
+function spawnSpark(x,y,good){
+  const c=good?(Math.random()<0.5?getCss("--cyan"):getCss("--emer")):getCss("--red");
+  particles.push({x,y,vx:(Math.random()*2-1)*2.4,vy:(Math.random()*-1.6-0.4),life:1,c,sz:1+Math.random()*2.5});
+}
+function stepParticles(dt){
+  for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=dt*1.7; }
+  particles=particles.filter(p=>p.life>0);
+}
+
+/* ============================= rendering ============================= */
+function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawBG(){
+  ctx.fillStyle="#05030d"; ctx.fillRect(0,0,W,H);
+  const g=ctx.createRadialGradient(W/2,H*0.42,40,W/2,H*0.5,Math.max(W,H)*0.75);
+  g.addColorStop(0,"rgba(30,40,80,0.5)"); g.addColorStop(1,"rgba(5,3,13,0)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+function drawDeviceAndFilm(){
+  const r=film.r, st=film.st;
+  ctx.save();
+  let sx=0,sy=0;
+  if(screenShake>0){ sx=(Math.random()*2-1)*screenShake; sy=(Math.random()*2-1)*screenShake; ctx.translate(sx,sy); screenShake*=0.85; if(screenShake<0.5)screenShake=0; }
+
+  // device frame
+  const pad=Math.max(10,r.w*0.05);
+  ctx.save();
+  ctx.shadowColor="rgba(56,232,255,0.35)"; ctx.shadowBlur=24;
+  ctx.fillStyle="#0a0f1e";
+  rr(r.x-pad,r.y-pad,r.w+pad*2,r.h+pad*2,pad*1.4); ctx.fill();
+  ctx.restore();
+  // cyan LED edge
+  ctx.lineWidth=2; ctx.strokeStyle="rgba(56,232,255,0.55)";
+  rr(r.x-pad,r.y-pad,r.w+pad*2,r.h+pad*2,pad*1.4); ctx.stroke();
+
+  // clean glossy screen beneath (revealed area looks like this)
+  rr(r.x,r.y,r.w,r.h,r.w*0.06); ctx.save(); ctx.clip();
+  const sg=ctx.createLinearGradient(r.x,r.y,r.x+r.w*0.6,r.y+r.h);
+  sg.addColorStop(0,"#0c1424"); sg.addColorStop(0.5,"#060a14"); sg.addColorStop(1,"#0a1120");
+  ctx.fillStyle=sg; ctx.fillRect(r.x,r.y,r.w,r.h);
+  // faint reflection streak on revealed glass
+  ctx.globalCompositeOperation="lighter";
+  const rg=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h*0.5);
+  rg.addColorStop(0,"rgba(120,180,255,0.05)"); rg.addColorStop(0.5,"rgba(120,180,255,0.13)"); rg.addColorStop(1,"rgba(120,180,255,0.0)");
+  ctx.fillStyle=rg; ctx.beginPath(); ctx.moveTo(r.x,r.y); ctx.lineTo(r.x+r.w,r.y); ctx.lineTo(r.x+r.w*0.5,r.y+r.h); ctx.closePath(); ctx.fill();
+  ctx.globalCompositeOperation="source-over";
+  ctx.restore();
+
+  // attached film region (below front line)
+  const frontY=r.y + r.h*film.front;
+  rr(r.x,r.y,r.w,r.h,r.w*0.06); ctx.save(); ctx.clip();
+  ctx.beginPath(); ctx.rect(r.x-2, frontY, r.w+4, r.h); ctx.clip();
+  // base film tint
+  if(st.tint==="glass"){ ctx.fillStyle="rgba(180,210,235,0.16)"; }
+  else if(st.tint==="static"){ ctx.fillStyle="rgba(150,170,200,0.18)"; }
+  else ctx.fillStyle="rgba(150,165,190,0.16)";
+  ctx.fillRect(r.x,frontY,r.w,r.h);
+  // rainbow interference stripes
+  ctx.globalCompositeOperation="lighter";
+  for(let i=-2;i<14;i++){
+    const off=i*36 + (film.sparkPhase*8)%36;
+    const lg=ctx.createLinearGradient(r.x+off,frontY,r.x+off+30,frontY+30);
+    lg.addColorStop(0,"rgba(56,232,255,0.0)"); lg.addColorStop(0.5,"rgba(56,232,255,0.10)"); lg.addColorStop(1,"rgba(255,58,166,0.0)");
+    ctx.fillStyle=lg; ctx.save(); ctx.translate(0,0);
+    ctx.beginPath(); ctx.moveTo(r.x+off,r.y); ctx.lineTo(r.x+off+16,r.y); ctx.lineTo(r.x+off-r.h*0.3+16,r.y+r.h); ctx.lineTo(r.x+off-r.h*0.3,r.y+r.h); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation="source-over";
+  // bubbles (unpeeled ones)
+  for(const b of film.bubbles){
+    if(b.fy<=film.front) continue;
+    const bx=r.x+r.w*b.fx, by=r.y+r.h*b.fy;
+    const bg=ctx.createRadialGradient(bx-b.r*0.3,by-b.r*0.3,1,bx,by,b.r);
+    bg.addColorStop(0,"rgba(255,255,255,0.5)"); bg.addColorStop(0.6,"rgba(180,210,255,0.12)"); bg.addColorStop(1,"rgba(120,150,200,0.0)");
+    ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(bx,by,b.r,0,7); ctx.fill();
+  }
+  ctx.restore();
+
+  // peel curl + highlight at front
+  if(film.started){
+    ctx.save();
+    rr(r.x,r.y,r.w,r.h,r.w*0.06); ctx.clip();
+    const curlH=Math.min(34, r.h*0.06);
+    // curl shadow on revealed area just above front
+    const shg=ctx.createLinearGradient(0,frontY-curlH,0,frontY);
+    shg.addColorStop(0,"rgba(0,0,0,0)"); shg.addColorStop(1,"rgba(0,0,0,0.45)");
+    ctx.fillStyle=shg; ctx.fillRect(r.x,frontY-curlH,r.w,curlH);
+    // curl body (lifted film) just below front: bright roll
+    const cg=ctx.createLinearGradient(0,frontY,0,frontY+curlH);
+    cg.addColorStop(0,"rgba(235,246,255,0.9)"); cg.addColorStop(0.35,"rgba(150,200,235,0.5)"); cg.addColorStop(1,"rgba(120,150,200,0.0)");
+    ctx.fillStyle=cg; ctx.fillRect(r.x,frontY,r.w,curlH);
+    // specular line
+    ctx.globalCompositeOperation="lighter";
+    ctx.strokeStyle="rgba(255,255,255,0.95)"; ctx.lineWidth=2.5;
+    ctx.shadowColor=(film.tearMeter>60)?getCss("--red"):getCss("--cyan");
+    ctx.shadowBlur=16;
+    ctx.beginPath(); ctx.moveTo(r.x,frontY); ctx.lineTo(r.x+r.w,frontY); ctx.stroke();
+    ctx.globalCompositeOperation="source-over";
+    ctx.restore();
+  }
+
+  // crack lines if torn
+  if(film.torn){
+    ctx.save(); rr(r.x,r.y,r.w,r.h,r.w*0.06); ctx.clip();
+    ctx.strokeStyle="rgba(255,77,99,0.9)"; ctx.lineWidth=2; ctx.shadowColor=getCss("--red"); ctx.shadowBlur=10;
+    const cx=r.x+r.w*0.5, cy=frontY;
+    for(let k=0;k<5;k++){
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      let x=cx,y=cy; const dir=(k-2)*0.5;
+      for(let s=0;s<6;s++){ x+=Math.cos(dir+ (Math.random()-0.5))*r.w*0.12; y+=r.h*0.06*(0.5+Math.random()); ctx.lineTo(x,y); }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // tear meter bar (right side of device)
+  if(film.started && !film.done){
+    const bx=r.x+r.w+pad+6, by=r.y, bh=r.h, bw=6;
+    ctx.fillStyle="rgba(255,255,255,0.08)"; rr(bx,by,bw,bh,3); ctx.fill();
+    const tm=film.tearMeter/100;
+    const col=tm<0.5?getCss("--emer"):(tm<0.8?getCss("--amber"):getCss("--red"));
+    ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=10;
+    rr(bx,by+bh*(1-tm),bw,bh*tm,3); ctx.fill(); ctx.shadowBlur=0;
+  }
+
+  // grab hint arrow at top before start
+  if(!film.started){
+    ctx.save();
+    ctx.globalAlpha=0.6+0.4*Math.sin(performance.now()/300);
+    ctx.fillStyle=getCss("--cyan"); ctx.font="700 14px -apple-system,sans-serif"; ctx.textAlign="center";
+    ctx.fillText("ここから下へ ↓",r.x+r.w/2, r.y+24);
+    ctx.beginPath(); ctx.moveTo(r.x+r.w/2-10,r.y+r.h*0.16); ctx.lineTo(r.x+r.w/2+10,r.y+r.h*0.16); ctx.lineTo(r.x+r.w/2,r.y+r.h*0.16+14); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawParticles(){
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  for(const p of particles){
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.c; ctx.shadowColor=p.c; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,7); ctx.fill();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+/* ============================= loop ============================= */
+let lastT=performance.now();
+function loop(){
+  const t=performance.now(); let dt=(t-lastT)/1000; if(dt>0.05)dt=0.05; lastT=t;
+  drawBG();
+  if(state==="play" && film){
+    film.sparkPhase+=dt;
+    drawDeviceAndFilm();
+  }
+  stepParticles(dt); drawParticles();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ============================= HUD / flash ============================= */
+function updateHUD(){
+  $("hudSmooth").textContent=(film&&film.totalFrames>0?Math.round(100*film.smoothFrames/film.totalFrames):100)+"%";
+  $("hudCount").textContent=peeledCount;
+  $("hudLives").textContent="❤︎".repeat(Math.max(0,lives))+"·".repeat(Math.max(0,3-lives));
+}
+function updateStageCap(){ if(film){ stagecapEl.textContent=film.st.name; } }
+let flashTimer=null;
+function flash(txt,col){
+  flashEl.textContent=txt; flashEl.style.color=col;
+  flashEl.style.opacity="1"; flashEl.style.transform="scale(1.0)";
+  clearTimeout(flashTimer);
+  flashTimer=setTimeout(()=>{ flashEl.style.opacity="0"; flashEl.style.transform="scale(1.3)"; },650);
+}
+
+/* live HUD smooth update */
+setInterval(()=>{ if(state==="play"&&film&&film.started&&!film.done) updateHUD(); },120);
+
+/* ============================= flow ============================= */
+function startRun(){
+  audioInit(); if(AC&&AC.state==="suspended") AC.resume();
+  state="play"; lives=3; peeledCount=0; stageIdx=0; smoothAcc=[]; curStreak=0; bestStreak=0;
+  runStart=performance.now();
+  titleEl.classList.add("hidden"); resultEl.classList.add("hidden");
+  hudEl.classList.remove("hidden"); stagecapEl.classList.remove("hidden");
+  newFilm(); updateHUD(); updateStageCap();
+}
+function endRun(){
+  state="result"; crackleStop();
+  hudEl.classList.add("hidden"); stagecapEl.classList.add("hidden");
+  const avg=smoothAcc.length?Math.round(smoothAcc.reduce((a,b)=>a+b,0)/smoothAcc.length):0;
+  // best save
+  let best=loadBest();
+  if(peeledCount>best.peeled || (peeledCount===best.peeled && avg>best.smooth)){ best.peeled=peeledCount; best.smooth=avg; }
+  if(bestStreak>best.streak) best.streak=bestStreak;
+  saveBest(best);
+  drawCard(avg);
+  resultEl.classList.remove("hidden");
+  refreshBestLines();
+}
+
+/* rank logic */
+function rankOf(peeled,avg){
+  if(peeled>=8 && avg>=92) return {t:"剥がし仙人",d:"無傷で剥がし切る達人",c:getCss("--emer")};
+  if(peeled>=6 && avg>=85) return {t:"剥がし職人",d:"指が音を聴いている",c:getCss("--cyan")};
+  if(peeled>=4 && avg>=75) return {t:"中級ピーラー",d:"あと一歩で達人",c:getCss("--cyan")};
+  if(peeled>=2) return {t:"見習い剥がし",d:"ビリッに気をつけて",c:getCss("--amber")};
+  return {t:"破きの民",d:"ゆっくり、まっすぐ",c:getCss("--red")};
+}
+
+/* ============================= share card ============================= */
+const cardCv=$("card"), cctx=cardCv.getContext("2d");
+function drawCard(avg){
+  const w=cardCv.width,h=cardCv.height;
+  cctx.fillStyle="#05030d"; cctx.fillRect(0,0,w,h);
+  const g=cctx.createRadialGradient(w/2,h*0.36,40,w/2,h*0.42,h*0.7);
+  g.addColorStop(0,"rgba(30,46,90,0.7)"); g.addColorStop(1,"rgba(5,3,13,0)");
+  cctx.fillStyle=g; cctx.fillRect(0,0,w,h);
+  // border
+  cctx.strokeStyle="rgba(56,232,255,0.5)"; cctx.lineWidth=3;
+  rrc(cctx,20,20,w-40,h-40,28); cctx.stroke();
+
+  const rk=rankOf(peeledCount,avg);
+  cctx.textAlign="center";
+  cctx.fillStyle="#8fa6c0"; cctx.font="600 26px -apple-system,sans-serif";
+  cctx.fillText("HAGASHI · 剥がし師の証", w/2, 96);
+
+  // big rank
+  cctx.fillStyle=rk.c; cctx.shadowColor=rk.c; cctx.shadowBlur=30;
+  cctx.font="900 78px -apple-system,sans-serif";
+  cctx.fillText(rk.t, w/2, 230); cctx.shadowBlur=0;
+  cctx.fillStyle="#cfe0f2"; cctx.font="500 26px -apple-system,sans-serif";
+  cctx.fillText(rk.d, w/2, 280);
+
+  // visual: a peeled film icon
+  drawFilmIcon(w/2,470,210);
+
+  // stats
+  const stats=[["剥がした枚数", peeledCount+" 枚"],["平均スムーズ度", avg+" %"],["無傷ストリーク", bestStreak+" 連"]];
+  let yy=740;
+  for(const [k,v] of stats){
+    cctx.textAlign="left"; cctx.fillStyle="#8fa6c0"; cctx.font="500 30px -apple-system,sans-serif";
+    cctx.fillText(k, 70, yy);
+    cctx.textAlign="right"; cctx.fillStyle="#fff"; cctx.font="800 40px -apple-system,sans-serif";
+    cctx.fillText(v, w-70, yy);
+    cctx.strokeStyle="rgba(143,166,192,0.18)"; cctx.lineWidth=1.5;
+    cctx.beginPath(); cctx.moveTo(70,yy+24); cctx.lineTo(w-70,yy+24); cctx.stroke();
+    yy+=92;
+  }
+  // footer
+  cctx.textAlign="center";
+  cctx.fillStyle="#ff3aa6"; cctx.shadowColor="#ff3aa6"; cctx.shadowBlur=16;
+  cctx.font="800 30px -apple-system,sans-serif";
+  cctx.fillText("#Hagashi で一枚剥がし", w/2, h-120); cctx.shadowBlur=0;
+  cctx.fillStyle="#46566c"; cctx.font="500 22px -apple-system,sans-serif";
+  cctx.fillText("IDEA RADAR — t-aka-h.github.io", w/2, h-72);
+}
+function rrc(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function drawFilmIcon(cx,cy,sz){
+  // a phone with film half-peeled
+  const w=sz*0.62,h=sz*1.2, x=cx-w/2,y=cy-h/2;
+  cctx.save();
+  cctx.shadowColor="rgba(56,232,255,0.4)"; cctx.shadowBlur=24;
+  cctx.fillStyle="#0a0f1e"; rrc(cctx,x-10,y-10,w+20,h+20,18); cctx.fill();
+  cctx.shadowBlur=0;
+  cctx.strokeStyle="rgba(56,232,255,0.55)"; cctx.lineWidth=2; rrc(cctx,x-10,y-10,w+20,h+20,18); cctx.stroke();
+  // revealed glossy upper
+  rrc(cctx,x,y,w,h,12); cctx.save(); cctx.clip();
+  const sg=cctx.createLinearGradient(x,y,x+w,y+h); sg.addColorStop(0,"#0c1424"); sg.addColorStop(1,"#0a1120");
+  cctx.fillStyle=sg; cctx.fillRect(x,y,w,h);
+  // attached film lower half with rainbow
+  const fy=y+h*0.5;
+  cctx.fillStyle="rgba(150,165,190,0.18)"; cctx.fillRect(x,fy,w,h*0.5);
+  cctx.globalCompositeOperation="lighter";
+  for(let i=0;i<6;i++){ const off=i*22; const lg=cctx.createLinearGradient(x+off,fy,x+off+18,fy+18);
+    lg.addColorStop(0,"rgba(56,232,255,0)"); lg.addColorStop(.5,"rgba(56,232,255,0.18)"); lg.addColorStop(1,"rgba(255,58,166,0)");
+    cctx.fillStyle=lg; cctx.fillRect(x+off,fy,12,h*0.5);}
+  cctx.globalCompositeOperation="source-over";
+  // curl + specular
+  const cg=cctx.createLinearGradient(0,fy,0,fy+22); cg.addColorStop(0,"rgba(235,246,255,0.95)"); cg.addColorStop(1,"rgba(120,150,200,0)");
+  cctx.fillStyle=cg; cctx.fillRect(x,fy,w,22);
+  cctx.globalCompositeOperation="lighter"; cctx.strokeStyle="#fff"; cctx.lineWidth=3; cctx.shadowColor="#38e8ff"; cctx.shadowBlur=14;
+  cctx.beginPath(); cctx.moveTo(x,fy); cctx.lineTo(x+w,fy); cctx.stroke();
+  cctx.restore();
+  cctx.restore();
+}
+
+/* ============================= storage ============================= */
+function loadBest(){ try{ return JSON.parse(localStorage.getItem("hagashi_best"))||{peeled:0,smooth:0,streak:0}; }catch(e){ return {peeled:0,smooth:0,streak:0}; } }
+function saveBest(b){ try{ localStorage.setItem("hagashi_best",JSON.stringify(b)); }catch(e){} }
+function refreshBestLines(){
+  const b=loadBest();
+  const txt=b.peeled>0?("自己ベスト："+b.peeled+"枚 / 平均"+b.smooth+"% / "+b.streak+"連無傷"):"";
+  $("bestLine").textContent=txt; $("bestLine2").textContent=txt;
+}
+refreshBestLines();
+
+/* ============================= share ============================= */
+async function share(){
+  cardCv.toBlob(async(blob)=>{
+    if(!blob) return;
+    const file=new File([blob],"hagashi.png",{type:"image/png"});
+    const cap="保護フィルムを"+peeledCount+"枚、一枚も破かず剥がし切った #Hagashi";
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:cap}); return; }catch(e){}
+    }
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="hagashi.png"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },"image/png");
+}
+
+/* ============================= buttons ============================= */
+$("startBtn").addEventListener("click",startRun);
+$("retryBtn").addEventListener("click",startRun);
+$("shareBtn").addEventListener("click",share);
+
+// expose minimal hooks for preview testing
+window.__hagashi={get state(){return state;}, get film(){return film;}, get peeled(){return peeledCount;},
+  start:startRun, forceComplete:()=>{ if(film){film.totalFrames=10;film.smoothFrames=10;film.front=1;completeFilm();} },
+  forceTear:()=>{ if(film){film.tearMeter=100;tearFilm();} }, end:endRun};
+})();
+</script>
+</body>
+</html>
