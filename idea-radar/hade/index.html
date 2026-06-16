@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<title>Hade（派手）— ちょうどいい派手で遊ぶ</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#08080d;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Helvetica Neue",sans-serif;color:#eef0f6}
+  #wrap{position:fixed;inset:0;overflow:hidden}
+  canvas#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* HUD */
+  #hud{position:absolute;inset:0;pointer-events:none;z-index:5}
+  .top{position:absolute;top:max(14px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:0 16px}
+  .score{font-weight:800;font-size:30px;letter-spacing:1px;text-shadow:0 0 16px rgba(0,229,255,.5)}
+  .score small{display:block;font-size:10px;letter-spacing:3px;color:#7c83a0;font-weight:700;margin-top:1px}
+  .mult{text-align:right;font-weight:900;font-size:26px;color:#FBBF24;text-shadow:0 0 18px rgba(251,191,36,.6)}
+  .mult small{display:block;font-size:10px;letter-spacing:2px;color:#7c83a0;font-weight:700}
+  .zonelabel{position:absolute;top:54px;left:0;right:0;text-align:center;font-size:13px;font-weight:800;letter-spacing:3px;opacity:0;transition:opacity .25s;text-shadow:0 0 14px currentColor}
+
+  /* gauge bar (right) */
+  #gaugeWrap{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:18px;height:54%;border-radius:12px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);overflow:hidden}
+  #sweet{position:absolute;left:0;right:0;border-radius:4px;background:linear-gradient(180deg,rgba(163,255,18,.28),rgba(0,229,255,.28));box-shadow:inset 0 0 0 1px rgba(163,255,18,.4)}
+  #gaugeFill{position:absolute;left:0;right:0;bottom:0;border-radius:12px;background:linear-gradient(180deg,#FF2D87,#9B5DE5);transition:height .06s linear}
+  #gaugeWrap.danger{box-shadow:inset 0 0 0 2px rgba(255,92,92,.9),0 0 22px rgba(255,92,92,.55)}
+
+  /* timer */
+  #timer{position:absolute;left:16px;right:16px;bottom:max(16px,env(safe-area-inset-bottom));height:6px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden}
+  #timerFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#00E5FF,#9B5DE5,#FF2D87);transition:width .1s linear}
+
+  .hint{position:absolute;left:0;right:0;bottom:64px;text-align:center;font-size:13px;color:#9aa0bd;letter-spacing:1px;font-weight:600}
+
+  /* overlays */
+  .ov{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px;background:radial-gradient(120% 80% at 50% 30%,rgba(20,16,34,.55),rgba(8,8,13,.92));backdrop-filter:blur(2px)}
+  .ov.hide{display:none}
+  .logo{font-size:74px;font-weight:900;letter-spacing:2px;line-height:.92;background:linear-gradient(92deg,#FF2D87,#FBBF24 38%,#A3FF12 60%,#00E5FF 82%,#9B5DE5);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 26px rgba(255,45,135,.35))}
+  .jp{font-size:20px;letter-spacing:14px;font-weight:800;color:#cfd4ea;margin:6px 0 2px;padding-left:14px}
+  .tag{font-size:13px;color:#9aa0bd;line-height:1.7;max-width:330px;margin-top:14px}
+  .tag b{color:#FBBF24}
+  .btn{pointer-events:auto;margin-top:26px;padding:16px 40px;border-radius:999px;border:0;font-size:18px;font-weight:900;letter-spacing:2px;color:#0a0a0f;background:linear-gradient(92deg,#00E5FF,#A3FF12);box-shadow:0 0 30px rgba(0,229,255,.45);cursor:pointer}
+  .btn.alt{background:linear-gradient(92deg,#FF2D87,#9B5DE5);color:#fff;box-shadow:0 0 30px rgba(255,45,135,.5)}
+  .btn:active{transform:scale(.96)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+
+  /* result */
+  #cardImg{width:min(70vw,300px);max-height:62vh;border-radius:18px;box-shadow:0 12px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.06)}
+  .saveHint{font-size:12px;color:#8088a6;margin-top:10px}
+  .rtitle{font-size:15px;letter-spacing:4px;color:#7c83a0;font-weight:800;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="stage"></canvas>
+
+  <div id="hud">
+    <div class="top">
+      <div class="score"><span id="scoreVal">0</span><small>SCORE</small></div>
+      <div class="mult">×<span id="multVal">1.0</span><small>MOOD MULT</small></div>
+    </div>
+    <div class="zonelabel" id="zoneLabel"></div>
+    <div id="gaugeWrap"><div id="sweet"></div><div id="gaugeFill"></div></div>
+    <div class="hint" id="hint">タップで色をブチまけろ</div>
+    <div id="timer"><div id="timerFill"></div></div>
+  </div>
+
+  <!-- START -->
+  <div class="ov" id="startOv">
+    <div class="logo">HADE</div>
+    <div class="jp">派 手</div>
+    <div class="tag">灰色の部屋に原色を<b>ブチまけて</b>気分を上げろ。<br>でも盛りすぎると<b>過剰刺激でグレー崩壊</b>。<br>“ちょうどいい派手”のスイートゾーンを攻めろ。</div>
+    <button class="btn" id="startBtn">タップして開始</button>
+    <div class="tag" style="margin-top:18px;font-size:11px;color:#5a6080">2026ブレイク住空間トレンド「ドーパミン・デコア」を体感に — Idea Radar</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="ov hide" id="resultOv">
+    <div class="rtitle">YOUR ROOM</div>
+    <img id="cardImg" alt="result">
+    <div class="saveHint" id="saveHint">画像を長押しで保存できます</div>
+    <div class="row" style="margin-top:20px">
+      <button class="btn alt" id="shareBtn">シェア</button>
+      <button class="btn" id="againBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){W=window.innerWidth;H=window.innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+window.addEventListener('resize',resize);resize();
+
+// ---------- palette ----------
+const COLORS=[
+  {n:'マゼンタ',hex:'#FF2D87',rgb:[255,45,135],hz:196},
+  {n:'コーラル',hex:'#FF5C5C',rgb:[255,92,92],hz:233},
+  {n:'アンバー',hex:'#FBBF24',rgb:[251,191,36],hz:262},
+  {n:'ライム',hex:'#A3FF12',rgb:[163,255,18],hz:311},
+  {n:'シアン',hex:'#00E5FF',rgb:[0,229,255],hz:349},
+  {n:'バイオレット',hex:'#9B5DE5',rgb:[155,93,229],hz:415},
+];
+
+// ---------- audio ----------
+let AC=null,master=null,padGain=null,padFilt=null,padOscs=[];
+function initAudio(){
+  if(AC) return;
+  const AcC=window.AudioContext||window.webkitAudioContext; if(!AcC) return;
+  AC=new AcC();
+  master=AC.createGain();master.gain.value=0.26;master.connect(AC.destination);
+  // sweet-zone pad: 55Hz root + fifth, lowpass that opens with gauge
+  padGain=AC.createGain();padGain.gain.value=0;
+  padFilt=AC.createBiquadFilter();padFilt.type='lowpass';padFilt.frequency.value=200;padFilt.Q.value=6;
+  padGain.connect(padFilt);padFilt.connect(master);
+  [55,82.5,110].forEach((f,i)=>{const o=AC.createOscillator();o.type=i===2?'triangle':'sine';o.frequency.value=f;const g=AC.createGain();g.gain.value=i===2?0.3:0.6;o.connect(g);g.connect(padGain);o.start();padOscs.push(o);});
+}
+function resumeAudio(){ if(AC&&AC.state==='suspended') AC.resume(); }
+function pop(hz,gainMul){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator();o.type='triangle';o.frequency.value=hz;o.detune.value=(Math.random()*24-12);
+  const g=AC.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.5*(gainMul||1),t+0.006);g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+}
+function perfectSound(){
+  if(!AC) return; const t=AC.currentTime;
+  // sub kick: pitch drop
+  const o=AC.createOscillator();o.type='sine';o.frequency.setValueAtTime(120,t);o.frequency.exponentialRampToValueAtTime(45,t+0.18);
+  const g=AC.createGain();g.gain.setValueAtTime(0.9,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+0.34);
+  // bright chime
+  [1320,1760].forEach((f,i)=>{const c=AC.createOscillator();c.type='sine';c.frequency.value=f;const cg=AC.createGain();cg.gain.setValueAtTime(0.0001,t);cg.gain.exponentialRampToValueAtTime(0.22,t+0.01+i*0.02);cg.gain.exponentialRampToValueAtTime(0.0001,t+0.5);c.connect(cg);cg.connect(master);c.start(t);c.stop(t+0.55);});
+}
+function crashSound(){
+  if(!AC) return; const t=AC.currentTime;
+  const len=Math.floor(AC.sampleRate*0.6);const buf=AC.createBuffer(1,len,AC.sampleRate);const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++){d[i]=(Math.random()*2-1)*(1-i/len);}
+  const src=AC.createBufferSource();src.buffer=buf;
+  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(3200,t);f.frequency.exponentialRampToValueAtTime(120,t+0.55);
+  const g=AC.createGain();g.gain.setValueAtTime(0.6,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+  src.connect(f);f.connect(g);g.connect(master);src.start(t);
+  // descending thud
+  const o=AC.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(180,t);o.frequency.exponentialRampToValueAtTime(40,t+0.5);
+  const og=AC.createGain();og.gain.setValueAtTime(0.0001,t);og.gain.exponentialRampToValueAtTime(0.5,t+0.02);og.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+  o.connect(og);og.connect(master);o.start(t);o.stop(t+0.6);
+}
+function vib(p){ if(navigator.vibrate){try{navigator.vibrate(p);}catch(e){}} }
+
+// ---------- particles ----------
+let parts=[];
+function spawn(x,y,col,count,burstRing){
+  for(let i=0;i<count;i++){
+    let ang,sp;
+    if(burstRing){ang=(i/count)*Math.PI*2;sp=180+Math.random()*120;}
+    else{ang=Math.random()*Math.PI*2;sp=40+Math.random()*220;}
+    parts.push({x,y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-40,life:1,decay:0.45+Math.random()*0.4,r:3+Math.random()*7,col,grey:0});
+  }
+  if(parts.length>1400) parts.splice(0,parts.length-1400);
+}
+
+// ---------- game state ----------
+const SWEET_LO=70,SWEET_HI=90;
+let G={running:false,gauge:30,score:0,mult:1,colIdx:0,
+  pulsePhase:0,pulseActive:false,
+  sweetTime:0,totalTime:0,perfect:0,crash:0,colCount:new Array(6).fill(0),
+  roundLen:45,roundLeft:45,shake:0,greyFlash:0,crashing:false,peakMult:1,bgHue:0};
+
+function startGame(){
+  G.running=true;G.gauge=30;G.score=0;G.mult=1;G.colIdx=0;G.pulsePhase=0;G.pulseActive=false;
+  G.sweetTime=0;G.totalTime=0;G.perfect=0;G.crash=0;G.colCount=new Array(6).fill(0);
+  G.roundLeft=G.roundLen;G.shake=0;G.greyFlash=0;G.crashing=false;G.peakMult=1;
+  parts=[];
+  document.getElementById('startOv').classList.add('hide');
+  document.getElementById('resultOv').classList.add('hide');
+  last=performance.now();
+}
+
+const gaugeFill=document.getElementById('gaugeFill'),sweetEl=document.getElementById('sweet'),
+  gaugeWrap=document.getElementById('gaugeWrap'),zoneLabel=document.getElementById('zoneLabel'),
+  scoreVal=document.getElementById('scoreVal'),multVal=document.getElementById('multVal'),
+  timerFill=document.getElementById('timerFill'),hintEl=document.getElementById('hint');
+// position sweet band once
+function layoutSweet(){const wr=gaugeWrap.getBoundingClientRect();sweetEl.style.bottom=(SWEET_LO)+'%';sweetEl.style.height=(SWEET_HI-SWEET_LO)+'%';}
+layoutSweet();window.addEventListener('resize',layoutSweet);
+
+function inSweet(){return G.gauge>=SWEET_LO&&G.gauge<=SWEET_HI;}
+
+function tap(x,y){
+  if(!G.running) return;
+  resumeAudio();
+  const col=COLORS[G.colIdx];
+  G.colCount[G.colIdx]++;
+  // PERFECT detection: in sweet zone & pulse near peak
+  let perfect=false;
+  if(inSweet()&&G.pulseActive&&G.pulsePhase>=0.82){perfect=true;}
+  if(perfect){
+    G.perfect++;G.score+=Math.round(120*G.mult);
+    spawn(x,y,col,70,true);
+    perfectSound();vib([0,18]);
+    G.shake=Math.max(G.shake,7);
+    G.gauge=Math.min(88,G.gauge+5);
+    flashZone('PERFECT!','#FBBF24');
+    G.pulsePhase=0;
+  }else{
+    G.score+=Math.round(14*G.mult);
+    const cnt=28+Math.floor(Math.random()*22);
+    spawn(x,y,col,cnt,false);
+    pop(col.hz,inSweet()?1.15:0.85);vib(8);
+    G.gauge+=9.5;
+  }
+  // advance color (palette becomes a chord progression)
+  G.colIdx=(G.colIdx+1)%COLORS.length;
+  if(G.gauge>=100){ triggerCrash(); }
+}
+
+let zoneTimer=0;
+function flashZone(t,c){zoneLabel.textContent=t;zoneLabel.style.color=c;zoneLabel.style.opacity=1;zoneTimer=0.7;}
+
+function triggerCrash(){
+  G.crash++;G.gauge=100;G.crashing=true;G.greyFlash=1;
+  G.mult=1;G.score=Math.max(0,G.score-80);
+  crashSound();vib([0,40,30,40,30,60]);
+  G.shake=Math.max(G.shake,16);
+  // grey all particles & collapse downward
+  for(const p of parts){p.grey=1;p.vy+=120;}
+  flashZone('OVER-STIMULATED','#FF5C5C');
+  setTimeout(()=>{if(G.running){G.gauge=32;G.crashing=false;}},420);
+}
+
+// ---------- loop ----------
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(G.running) update(dt);
+  render(dt);
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  // round timer
+  G.roundLeft-=dt;
+  if(G.roundLeft<=0){G.roundLeft=0;endRound();return;}
+  // gauge natural decay (always tapping pressure) — faster when high
+  if(!G.crashing){
+    const dec=8 + (G.gauge>SWEET_HI?14:0) + (G.gauge>SWEET_LO?2:0);
+    G.gauge=Math.max(0,G.gauge-dec*dt);
+  }
+  // sweet zone reward: multiplier ramps while staying in zone
+  G.totalTime+=dt;
+  if(inSweet()){
+    G.sweetTime+=dt;
+    G.mult=Math.min(8,G.mult+dt*0.85);
+    G.peakMult=Math.max(G.peakMult,G.mult);
+    G.score+=Math.round(dt*40*G.mult); // passive groove score
+    // pulse cycle
+    G.pulseActive=true;G.pulsePhase+=dt/0.8;if(G.pulsePhase>1)G.pulsePhase=0;
+  }else{
+    // slowly bleed multiplier when out of zone
+    G.mult=Math.max(1,G.mult-dt*0.6);
+    G.pulseActive=false;G.pulsePhase=0;
+  }
+  // zone label timeout
+  if(zoneTimer>0){zoneTimer-=dt;if(zoneTimer<=0)zoneLabel.style.opacity=0;}
+  // shake decay
+  G.shake*=Math.pow(0.001,dt);
+  if(G.greyFlash>0)G.greyFlash=Math.max(0,G.greyFlash-dt*2.4);
+  G.bgHue+=dt*20;
+  // particles
+  for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.life-=p.decay*dt;if(p.life<=0){parts.splice(i,1);continue;}p.vx*=Math.pow(0.12,dt);p.vy=p.vy*Math.pow(0.45,dt)+260*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;}
+  // HUD
+  gaugeFill.style.height=G.gauge+'%';
+  scoreVal.textContent=Math.floor(G.score).toLocaleString();
+  multVal.textContent=G.mult.toFixed(1);
+  timerFill.style.width=(G.roundLeft/G.roundLen*100)+'%';
+  gaugeWrap.classList.toggle('danger',G.gauge>SWEET_HI);
+  if(inSweet()&&zoneTimer<=0){zoneLabel.textContent='SWEET ZONE';zoneLabel.style.color='#A3FF12';zoneLabel.style.opacity=0.9;}
+  else if(!inSweet()&&zoneTimer<=0){zoneLabel.style.opacity=0;}
+  if(hintEl&&G.totalTime>2.2)hintEl.style.opacity=Math.max(0,0.85-(G.totalTime-2.2));
+  // pad audio
+  if(padGain&&padFilt){
+    const target=inSweet()?0.5:0.0;
+    padGain.gain.value+= (target-padGain.gain.value)*Math.min(1,dt*6);
+    padFilt.frequency.value+=((180+G.gauge*22)-padFilt.frequency.value)*Math.min(1,dt*5);
+  }
+}
+
+function render(dt){
+  // background
+  ctx.globalCompositeOperation='source-over';
+  const sweet=inSweet();
+  // base dark
+  ctx.fillStyle='#08080d';ctx.fillRect(0,0,W,H);
+  // breathing radial when in sweet zone
+  if(sweet){
+    const pulse=0.5+0.5*Math.sin(performance.now()*0.003);
+    const g=ctx.createRadialGradient(W/2,H*0.52,0,W/2,H*0.52,Math.max(W,H)*0.7);
+    g.addColorStop(0,`rgba(120,90,200,${0.10+0.10*pulse})`);
+    g.addColorStop(0.5,`rgba(20,40,60,${0.06+0.06*pulse})`);
+    g.addColorStop(1,'rgba(8,8,13,0)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  }
+  // shake transform
+  let sx=0,sy=0;
+  if(G.shake>0.3){sx=(Math.random()*2-1)*G.shake;sy=(Math.random()*2-1)*G.shake;}
+  ctx.save();ctx.translate(sx,sy);
+  // particles additive
+  ctx.globalCompositeOperation='lighter';
+  for(const p of parts){
+    const a=Math.max(0,p.life);
+    let r,g2,b;
+    if(p.grey>0){const lum=(p.col.rgb[0]+p.col.rgb[1]+p.col.rgb[2])/3;r=g2=b=lum;}
+    else{r=p.col.rgb[0];g2=p.col.rgb[1];b=p.col.rgb[2];}
+    ctx.fillStyle=`rgba(${r|0},${g2|0},${b|0},${a*0.9})`;
+    const rad=p.r*(0.5+a*0.8);
+    ctx.beginPath();ctx.arc(p.x,p.y,rad,0,Math.PI*2);ctx.fill();
+  }
+  // pulse ring (perfect timing cue)
+  if(G.running&&G.pulseActive){
+    const maxR=Math.min(W,H)*0.22;
+    const rr=G.pulsePhase*maxR;
+    const near=G.pulsePhase>=0.82;
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineWidth=near?6:3;
+    ctx.strokeStyle=near?'rgba(251,191,36,0.95)':'rgba(163,255,18,0.5)';
+    ctx.beginPath();ctx.arc(W/2,H*0.52,rr,0,Math.PI*2);ctx.stroke();
+    // target ring
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,0.18)';
+    ctx.beginPath();ctx.arc(W/2,H*0.52,maxR,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.restore();
+  // grey flash overlay (crash)
+  if(G.greyFlash>0){ctx.globalCompositeOperation='source-over';ctx.fillStyle=`rgba(150,150,160,${G.greyFlash*0.5})`;ctx.fillRect(0,0,W,H);}
+}
+requestAnimationFrame(frame);
+
+// ---------- input ----------
+function evtXY(e){const t=e.touches&&e.touches[0]?e.touches[0]:e;return{x:t.clientX,y:t.clientY};}
+function onDown(e){if(!G.running)return;const o=evtXY(e);
+  // ignore taps on the gauge column far right
+  if(o.x>W-44 && o.y>H*0.2 && o.y<H*0.8) return;
+  tap(o.x,o.y);e.preventDefault();
+}
+cv.addEventListener('touchstart',onDown,{passive:false});
+cv.addEventListener('mousedown',onDown);
+// drag spray
+let dragging=false,lastSpray=0;
+function onMove(e){if(!G.running||!dragging)return;const now=performance.now();if(now-lastSpray<55)return;lastSpray=now;const o=evtXY(e);if(o.x>W-44)return;
+  const col=COLORS[G.colIdx];spawn(o.x,o.y,col,12,false);pop(col.hz,0.6);G.gauge+=3.2;G.colCount[G.colIdx]++;G.colIdx=(G.colIdx+1)%COLORS.length;if(G.gauge>=100)triggerCrash();e.preventDefault();}
+cv.addEventListener('touchstart',()=>{dragging=true;});
+cv.addEventListener('touchend',()=>{dragging=false;});
+cv.addEventListener('touchmove',onMove,{passive:false});
+cv.addEventListener('mousedown',()=>{dragging=true;});
+window.addEventListener('mouseup',()=>{dragging=false;});
+cv.addEventListener('mousemove',onMove);
+
+// ---------- mood name ----------
+function moodName(){
+  const total=G.colCount.reduce((a,b)=>a+b,0)||1;
+  const idx=G.colCount.map((c,i)=>({i,c})).sort((a,b)=>b.c-a.c);
+  const top=idx[0].i,second=idx[1].i;
+  const topShare=G.colCount[top]/total;
+  const spread=1-topShare; // how even
+  const adjBy={0:'情熱的な',1:'あたたかい',2:'まばゆい',3:'みずみずしい',4:'澄んだ',5:'夢みる'};
+  const nounBy={0:'ネオン',1:'サンセット',2:'グロウ',3:'ジャングル',4:'ミッドナイト',5:'ヴェイパー'};
+  let name;
+  if(G.crash>=3) name='美しい暴走';
+  else if(G.sweetTime/Math.max(1,G.totalTime)>0.5 && G.perfect>=4) name='完璧なグルーヴ';
+  else if(spread>0.62) name='カオティック・ハーモニー';
+  else name=adjBy[top]+nounBy[second];
+  return name;
+}
+
+// ---------- result / share card ----------
+function endRound(){
+  G.running=false;
+  if(padGain)padGain.gain.value=0;
+  const card=buildCard();
+  const img=document.getElementById('cardImg');
+  img.src=card;
+  lastCardURL=card;
+  document.getElementById('resultOv').classList.remove('hide');
+}
+let lastCardURL=null;
+function buildCard(){
+  const c=document.createElement('canvas');c.width=1080;c.height=1920;const x=c.getContext('2d');
+  // bg
+  const bg=x.createLinearGradient(0,0,0,1920);bg.addColorStop(0,'#0c0a16');bg.addColorStop(1,'#070710');x.fillStyle=bg;x.fillRect(0,0,1080,1920);
+  // artwork: neon blooms from color usage
+  const total=G.colCount.reduce((a,b)=>a+b,0)||1;
+  x.globalCompositeOperation='lighter';
+  let seed=12345;function rnd(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
+  COLORS.forEach((col,i)=>{
+    const share=G.colCount[i]/total;const blobs=Math.round(share*46)+1;
+    for(let k=0;k<blobs;k++){
+      const cx=120+rnd()*840,cy=520+rnd()*900,rad=60+rnd()*220*(0.5+share);
+      const g=x.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0,`rgba(${col.rgb[0]},${col.rgb[1]},${col.rgb[2]},0.55)`);
+      g.addColorStop(1,`rgba(${col.rgb[0]},${col.rgb[1]},${col.rgb[2]},0)`);
+      x.fillStyle=g;x.beginPath();x.arc(cx,cy,rad,0,Math.PI*2);x.fill();
+    }
+  });
+  x.globalCompositeOperation='source-over';
+  // top mood
+  const name=moodName();
+  x.textAlign='center';
+  x.fillStyle='#8a90b0';x.font='700 34px -apple-system,sans-serif';x.fillText('今日の元気色ルーム',540,180);
+  x.fillStyle='#fff';x.font='900 96px -apple-system,sans-serif';
+  // gradient text
+  const tg=x.createLinearGradient(120,0,960,0);tg.addColorStop(0,'#FF2D87');tg.addColorStop(.5,'#FBBF24');tg.addColorStop(1,'#00E5FF');
+  x.fillStyle=tg;wrapText(x,'「'+name+'」',540,300,920,104);
+  // bottom stats panel
+  const py=1560;
+  x.fillStyle='rgba(255,255,255,0.05)';roundRect(x,80,py-70,920,360,28);x.fill();
+  x.fillStyle='#fff';x.textAlign='left';
+  x.font='900 120px -apple-system,sans-serif';x.fillText(Math.floor(G.score).toLocaleString(),120,py+60);
+  x.fillStyle='#7c83a0';x.font='700 30px -apple-system,sans-serif';x.fillText('SCORE',124,py+108);
+  // small stats row
+  const stayRate=Math.round(G.sweetTime/Math.max(1,G.totalTime)*100);
+  const stats=[['SWEET滞在',stayRate+'%','#A3FF12'],['PERFECT',G.perfect+'回','#FBBF24'],['崩壊',G.crash+'回','#FF5C5C'],['最高MULT','×'+G.peakMult.toFixed(1),'#00E5FF']];
+  x.textAlign='center';
+  stats.forEach((s,i)=>{const bx=180+i*230;x.fillStyle=s[2];x.font='900 46px -apple-system,sans-serif';x.fillText(s[1],bx,py+205);x.fillStyle='#7c83a0';x.font='700 24px -apple-system,sans-serif';x.fillText(s[0],bx,py+248);});
+  // watermark
+  x.fillStyle='#5a6080';x.font='700 28px -apple-system,sans-serif';x.textAlign='center';x.fillText('HADE 派手  ·  Idea Radar',540,1860);
+  return c.toDataURL('image/png');
+}
+function roundRect(x,a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();}
+function wrapText(x,t,cx,cy,maxw,lh){x.fillText(t,cx,cy);}
+
+// share
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  try{
+    const blob=await (await fetch(lastCardURL)).blob();
+    const file=new File([blob],'hade.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Hade 派手',text:'#Hade で部屋をブチ上げた → '+moodName()});
+      return;
+    }
+  }catch(e){}
+  // fallback: open image
+  document.getElementById('saveHint').textContent='共有未対応です。上の画像を長押しで保存してください';
+});
+document.getElementById('againBtn').addEventListener('click',()=>{startGame();});
+document.getElementById('startBtn').addEventListener('click',()=>{initAudio();resumeAudio();startGame();});
+
+// expose minimal state for verification
+window.__HADE={get state(){return {running:G.running,gauge:G.gauge,score:G.score,mult:G.mult,sweet:inSweet(),perfect:G.perfect,crash:G.crash,parts:parts.length};},tapAt:(x,y)=>tap(x,y),force:(g)=>{G.gauge=g;},end:()=>endRound(),mood:()=>moodName()};
+})();
+</script>
+</body>
+</html>
