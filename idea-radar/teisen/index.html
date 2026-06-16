@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060A">
+<title>停戦 TEISEN — Hold the Line</title>
+<meta name="description" content="撃ち返すな、宥めろ。East と West、2つの緊張を“ちょうどいい間合い”で鎮め続ける沈静化バランス体感ゲー。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05060A;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;}
+  canvas{display:block;touch-action:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script>
+(function(){
+"use strict";
+const VW=1080, VH=1920;            // virtual logical resolution (9:16)
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let scale=1, ox=0, oy=0, dpr=1;
+function resize(){
+  const W=window.innerWidth, H=window.innerHeight;
+  dpr=Math.min(window.devicePixelRatio||1, 2.5);
+  scale=Math.min(W/VW, H/VH);
+  const cw=Math.round(VW*scale), ch=Math.round(VH*scale);
+  cv.style.width=cw+'px'; cv.style.height=ch+'px';
+  cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
+  ox=0; oy=0;
+}
+window.addEventListener('resize',resize); resize();
+
+// ---------- Colors ----------
+const C={
+  bg:'#05060A', west:'#22E0FF', east:'#FF3DA6',
+  peaceA:'#2A6BFF', peaceB:'#9FE8FF', warn:'#FF3B30',
+  text:'#EAF2FF', dim:'#7C8AA8'
+};
+
+// ---------- Audio (WebAudio synth, missing-fundamental sub-bass) ----------
+let AC=null, master=null, drone=null, droneGain=null, droneFilter=null, droneOscs=[];
+let audioReady=false;
+function initAudio(){
+  if(audioReady) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    // sustained tension drone: 55Hz + harmonics -> brain hears the low fundamental on phone speakers
+    droneFilter=AC.createBiquadFilter(); droneFilter.type='lowpass';
+    droneFilter.frequency.value=300; droneFilter.Q.value=0.8;
+    droneGain=AC.createGain(); droneGain.gain.value=0.0;
+    droneFilter.connect(droneGain); droneGain.connect(master);
+    [55,110,165,220].forEach((f,i)=>{
+      const o=AC.createOscillator(); o.type=i===0?'sine':'triangle'; o.frequency.value=f;
+      const g=AC.createGain(); g.gain.value=[0.9,0.45,0.28,0.18][i];
+      o.connect(g); g.connect(droneFilter); o.start(); droneOscs.push(o);
+    });
+    audioReady=true;
+  }catch(e){ audioReady=false; }
+}
+function resumeAudio(){ if(AC&&AC.state==='suspended') AC.resume(); }
+function setDrone(tension){ // tension 0..1
+  if(!audioReady) return;
+  const t=AC.currentTime;
+  droneGain.gain.setTargetAtTime(0.04+tension*0.30, t, 0.15);
+  droneFilter.frequency.setTargetAtTime(180+tension*900, t, 0.2);
+}
+function pop(){ // de-escalate "pop"
+  if(!audioReady) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(640,t); o.frequency.exponentialRampToValueAtTime(280,t+0.12);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18);
+}
+function penalty(){ // over-reaction buzz
+  if(!audioReady) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='square'; o.frequency.setValueAtTime(150,t); o.frequency.linearRampToValueAtTime(90,t+0.14);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.28,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.2);
+}
+function provoke(){ // incoming provocation thud
+  if(!audioReady) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(70,t+0.18);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.4,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.24);
+}
+function chime(){ // peace day achieved
+  if(!audioReady) return; const t=AC.currentTime;
+  [523,659,784,1046].forEach((f,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=f;
+    const st=t+i*0.06;
+    g.gain.setValueAtTime(0.0001,st); g.gain.exponentialRampToValueAtTime(0.3,st+0.02); g.gain.exponentialRampToValueAtTime(0.0001,st+0.55);
+    o.connect(g); g.connect(master); o.start(st); o.stop(st+0.6);
+  });
+}
+function rupture(){ // game over
+  if(!audioReady) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(38,t+0.5);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.7,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.7);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.75);
+  // noise burst
+  const len=AC.sampleRate*0.4, buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);
+  const ns=AC.createBufferSource(); ns.buffer=buf;
+  const ng=AC.createGain(); ng.gain.value=0.35;
+  const nf=AC.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value=900;
+  ns.connect(nf); nf.connect(ng); ng.connect(master); ns.start(t);
+}
+function vib(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+// ---------- Game state ----------
+const STATE={TITLE:0,PLAY:1,OVER:2};
+let state=STATE.TITLE;
+let west, east, peace, days, best=0, elapsed, difficulty, provTimer, flashSide, flashT, redFlash, calmGlow, shakeT, gameStartT;
+let particles=[], doves=[], floatTexts=[];
+let bestThisRun=0; // peak peace progress visual
+let overReason='';
+
+try{ best=parseInt(localStorage.getItem('teisen_best')||'0',10)||0; }catch(e){}
+
+const BOIL=100, CALM_LINE=58, COOLDOWN=0.42;
+
+function reset(){
+  west={t:18, cd:0, pulse:0};
+  east={t:18, cd:0, pulse:0};
+  peace=22; days=0; elapsed=0; difficulty=1; provTimer=1.6;
+  flashSide=0; flashT=0; redFlash=0; calmGlow=0; shakeT=0;
+  particles=[]; doves=[]; floatTexts=[];
+  gameStartT=performance.now();
+}
+
+const PROVS=[
+  {label:'誤射',  en:'MISFIRE',      icon:'⚠', spike:[20,30]},
+  {label:'国境侵犯', en:'INCURSION', icon:'🚩', spike:[16,26]},
+  {label:'SNS煽り', en:'FLAME WAR',  icon:'📡', spike:[12,22]}
+];
+
+function spawnProvocation(){
+  // choose side; sometimes both as difficulty rises
+  const both = difficulty>2.2 && Math.random()<0.18;
+  const p=PROVS[(Math.random()*PROVS.length)|0];
+  const amt=()=> p.spike[0]+Math.random()*(p.spike[1]-p.spike[0]) + (difficulty-1)*2.4;
+  if(both){
+    west.t=Math.min(BOIL, west.t+amt()*0.8); east.t=Math.min(BOIL, east.t+amt()*0.8);
+    flashSide=3; flashT=0.5; pushFlashLabel(0,p); pushFlashLabel(1,p);
+  } else {
+    const s=Math.random()<0.5?0:1; const o=s===0?west:east;
+    o.t=Math.min(BOIL, o.t+amt()); o.pulse=1;
+    flashSide=s===0?1:2; flashT=0.5; pushFlashLabel(s,p);
+  }
+  provoke(); vib(18);
+}
+function pushFlashLabel(side,p){
+  floatTexts.push({x: side===0?VW*0.27:VW*0.73, y:VH*0.30, t:1.1, side, label:p.icon+' '+p.label});
+}
+
+function deescalate(side){
+  const o=side===0?west:east;
+  const col=side===0?C.west:C.east;
+  const bx=side===0?VW*0.27:VW*0.73;
+  if(o.cd>0){ // over-reaction: mashing
+    o.t=Math.min(BOIL, o.t+9); redFlash=0.6; penalty(); vib([30,40,30]);
+    floatTexts.push({x:bx, y:VH*0.5, t:0.9, side, label:'過剰反応'});
+    o.cd=COOLDOWN*0.7;
+    return;
+  }
+  if(o.t<12){ // poking a calm side
+    o.t=Math.min(BOIL, o.t+6); redFlash=0.4; penalty(); vib([20,30]);
+    floatTexts.push({x:bx, y:VH*0.5, t:0.8, side, label:'静かなのに…'});
+    o.cd=COOLDOWN;
+    return;
+  }
+  // proper de-escalation
+  o.t=Math.max(0, o.t-24); o.cd=COOLDOWN; pop(); vib(12);
+  for(let i=0;i<14;i++){
+    particles.push({x:bx+(Math.random()-0.5)*120, y:VH*0.34+Math.random()*VH*0.3,
+      vx:(Math.random()-0.5)*180, vy:-60-Math.random()*220, life:1, col});
+  }
+}
+
+function update(dt){
+  elapsed+=dt;
+  difficulty=1+elapsed*0.045+days*0.18;
+  // passive simmer
+  const rise=(2.6+ (difficulty-1)*1.7);
+  west.t=Math.min(BOIL, west.t+rise*dt);
+  east.t=Math.min(BOIL, east.t+rise*dt);
+  west.cd=Math.max(0,west.cd-dt); east.cd=Math.max(0,east.cd-dt);
+  west.pulse=Math.max(0,west.pulse-dt*2); east.pulse=Math.max(0,east.pulse-dt*2);
+  // provocations
+  provTimer-=dt;
+  if(provTimer<=0){ spawnProvocation(); provTimer=Math.max(0.9, 2.6-difficulty*0.22)+Math.random()*0.8; }
+  // peace gauge: grows when both calm, faster when both low
+  const hi=Math.max(west.t,east.t);
+  if(hi<CALM_LINE){
+    const calmness=(CALM_LINE-hi)/CALM_LINE; // 0..1
+    peace+=(12+calmness*22)*dt;
+    calmGlow=Math.min(1, calmGlow+dt*1.5);
+  } else {
+    peace-=8*dt; calmGlow=Math.max(0, calmGlow-dt*2);
+  }
+  peace=Math.max(0,peace);
+  if(peace>=100){ // a day held
+    peace=24; days++; bestThisRun=days; chime(); vib([20,60]);
+    floatTexts.push({x:VW*0.5, y:VH*0.62, t:1.4, side:3, label:'+1 DAY HELD'});
+    for(let i=0;i<3;i++) spawnDove();
+  }
+  // doves drift
+  if(calmGlow>0.6 && doves.length<6 && Math.random()<dt*1.4) spawnDove();
+  doves.forEach(d=>{ d.x+=d.vx*dt; d.y+=d.vy*dt; d.flap+=dt*9; d.life-=dt*0.12; });
+  doves=doves.filter(d=>d.life>0 && d.x>-80 && d.x<VW+80);
+  // particles
+  particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=420*dt; p.life-=dt*1.3; });
+  particles=particles.filter(p=>p.life>0);
+  floatTexts.forEach(f=>{ f.y-=40*dt; f.t-=dt; });
+  floatTexts=floatTexts.filter(f=>f.t>0);
+  // flashes
+  flashT=Math.max(0,flashT-dt); redFlash=Math.max(0,redFlash-dt*2.2); shakeT=Math.max(0,shakeT-dt);
+  // audio drone follows average tension
+  setDrone(Math.min(1,(west.t+east.t)/200 + (hi>88?0.2:0)));
+  // boiling => rupture
+  if(west.t>=BOIL || east.t>=BOIL){ endGame(west.t>=BOIL?'WEST':'EAST'); }
+}
+function spawnDove(){
+  const fromL=Math.random()<0.5;
+  doves.push({x:fromL?-40:VW+40, y:VH*0.30+Math.random()*VH*0.22,
+    vx:(fromL?1:-1)*(60+Math.random()*50), vy:-(10+Math.random()*30), flap:Math.random()*6, life:1.0});
+}
+
+function endGame(side){
+  if(state!==STATE.PLAY) return;
+  state=STATE.OVER; overReason=side; shakeT=0.6; redFlash=1; rupture(); vib(200);
+  if(days>best){ best=days; try{localStorage.setItem('teisen_best',String(best));}catch(e){} }
+}
+
+// ---------- Drawing ----------
+function tensionColor(t){
+  // 0=deep blue, 50=orange, 100=red-hot
+  const x=t/100;
+  let r,g,b;
+  if(x<0.5){ const k=x/0.5; r=20+k*235; g=70+k*120; b=180-k*150; }
+  else { const k=(x-0.5)/0.5; r=255; g=190-k*150; b=30-k*30; }
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawBar(side){
+  const o=side===0?west:east;
+  const col=side===0?C.west:C.east;
+  const cx=side===0?VW*0.27:VW*0.73;
+  const bw=150, bh=VH*0.40, bx=cx-bw/2, by=VH*0.16;
+  // frame
+  ctx.save();
+  rrect(bx-6,by-6,bw+12,bh+12,28); ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.stroke();
+  // boiling marker
+  ctx.strokeStyle='rgba(255,59,48,0.5)'; ctx.lineWidth=2; ctx.setLineDash([10,8]);
+  ctx.beginPath(); ctx.moveTo(bx-2,by+4); ctx.lineTo(bx+bw+2,by+4); ctx.stroke(); ctx.setLineDash([]);
+  // fill
+  const fh=bh*(o.t/100);
+  const tc=tensionColor(o.t);
+  rrect(bx,by+bh-fh,bw,fh,18);
+  const grd=ctx.createLinearGradient(0,by+bh-fh,0,by+bh);
+  grd.addColorStop(0,tc); grd.addColorStop(1, o.t>55?'rgba(255,80,40,0.9)':'rgba(20,90,200,0.85)');
+  ctx.fillStyle=grd; ctx.fill();
+  // glow / pulse near top when high
+  const heat=Math.max(0,(o.t-60)/40);
+  if(heat>0){ ctx.shadowColor=C.warn; ctx.shadowBlur=30+40*heat+Math.sin(performance.now()/70)*10*heat; rrect(bx,by+bh-fh,bw,Math.min(fh,40),18); ctx.fillStyle=`rgba(255,60,40,${0.25+0.4*heat})`; ctx.fill(); ctx.shadowBlur=0; }
+  // de-escalate pulse ring
+  if(o.cd>0){ ctx.globalAlpha=o.cd/COOLDOWN*0.5; rrect(bx-6,by-6,bw+12,bh+12,28); ctx.strokeStyle=col; ctx.lineWidth=4; ctx.stroke(); ctx.globalAlpha=1; }
+  ctx.restore();
+  // label
+  ctx.fillStyle=col; ctx.font='700 40px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.shadowColor=col; ctx.shadowBlur=18;
+  ctx.fillText(side===0?'WEST':'EAST', cx, by+bh+58); ctx.shadowBlur=0;
+  ctx.fillStyle=C.dim; ctx.font='600 26px -apple-system,sans-serif';
+  ctx.fillText(Math.round(o.t)+'%', cx, by+bh+92);
+}
+
+function drawPeace(){
+  const cx=VW*0.5, bw=92, bh=VH*0.40, bx=cx-bw/2, by=VH*0.16;
+  rrect(bx-5,by-5,bw+10,bh+10,22); ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fill();
+  ctx.lineWidth=2.5; ctx.strokeStyle='rgba(120,180,255,0.25)'; ctx.stroke();
+  const fh=bh*(peace/100);
+  rrect(bx,by+bh-fh,bw,fh,16);
+  const grd=ctx.createLinearGradient(0,by+bh-fh,0,by+bh);
+  grd.addColorStop(0,C.peaceB); grd.addColorStop(1,C.peaceA);
+  ctx.fillStyle=grd; ctx.shadowColor=C.peaceA; ctx.shadowBlur=20*calmGlow; ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(159,232,255,0.9)'; ctx.font='700 24px -apple-system,sans-serif'; ctx.textAlign='center';
+  ctx.fillText('PEACE', cx, by+bh+58);
+}
+
+function drawDove(d){
+  ctx.save(); ctx.translate(d.x,d.y); ctx.globalAlpha=Math.min(1,d.life)*0.9;
+  const w=22, fl=Math.sin(d.flap)*0.9;
+  ctx.strokeStyle='rgba(200,230,255,0.95)'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-w,-fl*w); ctx.quadraticCurveTo(0,6,w, -fl*w); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,4,4,0,7); ctx.fillStyle='rgba(220,240,255,0.95)'; ctx.fill();
+  ctx.restore();
+}
+
+function drawHUD(){
+  ctx.textAlign='center';
+  // days big
+  ctx.fillStyle=C.text; ctx.font='800 150px -apple-system,sans-serif';
+  ctx.shadowColor=C.peaceA; ctx.shadowBlur=24; ctx.fillText(String(days), VW*0.5, VH*0.745); ctx.shadowBlur=0;
+  ctx.fillStyle=C.dim; ctx.font='700 34px -apple-system,sans-serif';
+  ctx.fillText('DAYS HELD', VW*0.5, VH*0.785);
+  ctx.fillStyle='rgba(124,138,168,0.7)'; ctx.font='600 26px -apple-system,sans-serif';
+  ctx.fillText('BEST  '+best, VW*0.5, VH*0.825);
+  // hint
+  ctx.fillStyle='rgba(234,242,255,0.55)'; ctx.font='600 30px -apple-system,sans-serif';
+  ctx.fillText('画面の左で WEST / 右で EAST を鎮める', VW*0.5, VH*0.885);
+  ctx.fillStyle='rgba(255,59,48,0.6)'; ctx.font='600 26px -apple-system,sans-serif';
+  ctx.fillText('叩きすぎ＝過剰反応。撃ち返すな、宥めろ。', VW*0.5, VH*0.918);
+}
+
+function drawScene(){
+  // background
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,VW,VH);
+  // calm overlay
+  if(calmGlow>0){
+    const g=ctx.createRadialGradient(VW/2,VH*0.45,100,VW/2,VH*0.45,VH*0.6);
+    g.addColorStop(0,`rgba(42,107,255,${0.10*calmGlow})`); g.addColorStop(1,'rgba(42,107,255,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  }
+  // heat vignette
+  const hi=Math.max(west.t,east.t);
+  if(hi>70){ const k=(hi-70)/30; const g=ctx.createRadialGradient(VW/2,VH/2,VH*0.25,VW/2,VH/2,VH*0.62);
+    g.addColorStop(0,'rgba(255,40,30,0)'); g.addColorStop(1,`rgba(255,30,20,${0.30*k})`); ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH); }
+  // title
+  ctx.fillStyle='rgba(234,242,255,0.9)'; ctx.font='800 46px -apple-system,sans-serif'; ctx.textAlign='center';
+  ctx.fillText('停戦  TEISEN', VW*0.5, VH*0.085);
+  ctx.fillStyle='rgba(124,138,168,0.8)'; ctx.font='600 26px -apple-system,sans-serif';
+  ctx.fillText('HOLD THE LINE', VW*0.5, VH*0.115);
+
+  doves.forEach(drawDove);
+  drawBar(0); drawBar(1); drawPeace();
+  // particles
+  particles.forEach(p=>{ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,7); ctx.fill(); });
+  ctx.globalAlpha=1;
+  // float texts
+  floatTexts.forEach(f=>{ ctx.globalAlpha=Math.min(1,f.t); ctx.textAlign='center';
+    ctx.font='800 38px -apple-system,sans-serif';
+    ctx.fillStyle= f.side===3?'#9FE8FF':(f.label.indexOf('過剰')>=0||f.label.indexOf('静か')>=0?C.warn:(f.side===0?C.west:C.east));
+    ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=14; ctx.fillText(f.label, f.x, f.y); ctx.shadowBlur=0; });
+  ctx.globalAlpha=1;
+  drawHUD();
+  // red flash
+  if(redFlash>0){ ctx.fillStyle=`rgba(255,40,30,${redFlash*0.4})`; ctx.fillRect(0,0,VW,VH); }
+}
+
+// ---------- Title & Over screens ----------
+let titlePulse=0;
+function drawTitle(){
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,VW,VH);
+  const g=ctx.createRadialGradient(VW/2,VH*0.40,80,VW/2,VH*0.40,VH*0.55);
+  g.addColorStop(0,'rgba(42,107,255,0.18)'); g.addColorStop(1,'rgba(42,107,255,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  // two glowing orbs
+  titlePulse+=0.03;
+  const oy2=VH*0.34;
+  for(let s=0;s<2;s++){ const cx=s===0?VW*0.34:VW*0.66; const col=s===0?C.west:C.east;
+    ctx.shadowColor=col; ctx.shadowBlur=50+Math.sin(titlePulse+s)*16;
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cx,oy2,46,0,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle=col; ctx.font='700 32px -apple-system,sans-serif'; ctx.textAlign='center';
+    ctx.fillText(s===0?'WEST':'EAST', cx, oy2+110); }
+  // dove between
+  ctx.save(); ctx.translate(VW*0.5,oy2); ctx.globalAlpha=0.9; const fl=Math.sin(titlePulse*2)*0.5;
+  ctx.strokeStyle='rgba(200,230,255,0.95)'; ctx.lineWidth=6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-30,-fl*30); ctx.quadraticCurveTo(0,10,30,-fl*30); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,6,6,0,7); ctx.fillStyle='rgba(220,240,255,0.95)'; ctx.fill(); ctx.restore();
+
+  ctx.fillStyle=C.text; ctx.font='800 120px -apple-system,sans-serif'; ctx.textAlign='center';
+  ctx.shadowColor=C.peaceA; ctx.shadowBlur=24; ctx.fillText('停戦', VW*0.5, VH*0.585); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(234,242,255,0.85)'; ctx.font='700 40px -apple-system,sans-serif';
+  ctx.fillText('TEISEN — Hold the Line', VW*0.5, VH*0.635);
+  ctx.fillStyle=C.dim; ctx.font='600 30px -apple-system,sans-serif';
+  ctx.fillText('撃ち返すな、宥めろ。', VW*0.5, VH*0.69);
+  // rules
+  ctx.fillStyle='rgba(234,242,255,0.7)'; ctx.font='600 28px -apple-system,sans-serif';
+  ctx.fillText('左で WEST / 右で EAST の緊張を鎮める', VW*0.5, VH*0.745);
+  ctx.fillText('両方を沸点の下に保てば 和平が満ちる', VW*0.5, VH*0.785);
+  ctx.fillStyle='rgba(255,59,48,0.7)';
+  ctx.fillText('連打しすぎると“過剰反応”で逆効果', VW*0.5, VH*0.825);
+  // start button
+  const bw=520,bh=110,bx=VW/2-bw/2,by=VH*0.875;
+  const pulse=0.5+0.5*Math.sin(titlePulse*1.6);
+  rrect(bx,by,bw,bh,55); ctx.fillStyle='rgba(42,107,255,0.18)'; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle=`rgba(159,232,255,${0.5+0.4*pulse})`; ctx.shadowColor=C.peaceA; ctx.shadowBlur=20+18*pulse; ctx.stroke(); ctx.shadowBlur=0;
+  ctx.fillStyle=C.text; ctx.font='800 46px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('タップで停戦監視を開始', VW/2, by+bh/2); ctx.textBaseline='alphabetic';
+}
+
+function drawOver(){
+  drawScene(); // freeze last frame underneath
+  ctx.fillStyle='rgba(5,6,10,0.93)'; ctx.fillRect(0,0,VW,VH);
+  // crack lines
+  ctx.strokeStyle='rgba(255,59,48,0.5)'; ctx.lineWidth=3;
+  for(let i=0;i<5;i++){ ctx.beginPath(); let x=VW*(0.2+i*0.15), y=0; ctx.moveTo(x,y);
+    while(y<VH){ y+=80+Math.random()*60; x+=(Math.random()-0.5)*120; ctx.lineTo(x,y);} ctx.stroke(); }
+  ctx.textAlign='center';
+  ctx.fillStyle=C.warn; ctx.font='800 90px -apple-system,sans-serif'; ctx.shadowColor=C.warn; ctx.shadowBlur=24;
+  ctx.fillText('決裂', VW*0.5, VH*0.30); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(234,242,255,0.8)'; ctx.font='700 34px -apple-system,sans-serif';
+  ctx.fillText(overReason+' の緊張が沸点を超えた', VW*0.5, VH*0.355);
+  ctx.fillStyle=C.text; ctx.font='800 200px -apple-system,sans-serif'; ctx.shadowColor=C.peaceA; ctx.shadowBlur=20;
+  ctx.fillText(String(days), VW*0.5, VH*0.55); ctx.shadowBlur=0;
+  ctx.fillStyle=C.dim; ctx.font='700 40px -apple-system,sans-serif';
+  ctx.fillText('DAYS HELD', VW*0.5, VH*0.60);
+  ctx.fillStyle= days>=best?'#9FE8FF':'rgba(124,138,168,0.8)'; ctx.font='700 32px -apple-system,sans-serif';
+  ctx.fillText(days>=best&&days>0?'★ NEW BEST ★':'BEST  '+best, VW*0.5, VH*0.65);
+  // buttons
+  drawButton('結果をシェア', VH*0.74, C.peaceA);
+  drawButton('もう一度', VH*0.84, '#ffffff');
+}
+function drawButton(label,by,col){
+  const bw=520,bh=104,bx=VW/2-bw/2;
+  rrect(bx,by,bw,bh,52); ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle=col; ctx.shadowColor=col; ctx.shadowBlur=16; ctx.stroke(); ctx.shadowBlur=0;
+  ctx.fillStyle=C.text; ctx.font='800 44px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, VW/2, by+bh/2); ctx.textBaseline='alphabetic';
+  return {x:bx,y:by,w:bw,h:bh};
+}
+const SHARE_BTN={x:VW/2-260,y:VH*0.74,w:520,h:104};
+const RETRY_BTN={x:VW/2-260,y:VH*0.84,w:520,h:104};
+
+// ---------- Loop ----------
+let last=performance.now();
+function frame(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  ctx.setTransform(dpr*scale,0,0,dpr*scale,ox*dpr,oy*dpr);
+  // shake
+  if(shakeT>0){ ctx.translate((Math.random()-0.5)*22*shakeT/0.6,(Math.random()-0.5)*22*shakeT/0.6); }
+  if(state===STATE.TITLE) drawTitle();
+  else if(state===STATE.PLAY){ update(dt); drawScene(); }
+  else if(state===STATE.OVER){ shakeT=Math.max(0,shakeT-dt); drawOver(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- Input ----------
+function toVirtual(e){
+  const r=cv.getBoundingClientRect();
+  const px=(e.clientX-r.left)/r.width*VW;
+  const py=(e.clientY-r.top)/r.height*VH;
+  return {x:px,y:py};
+}
+function inBtn(p,b){ return p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h; }
+
+cv.addEventListener('pointerdown',function(e){
+  e.preventDefault();
+  initAudio(); resumeAudio();
+  const p=toVirtual(e);
+  if(state===STATE.TITLE){ reset(); state=STATE.PLAY; return; }
+  if(state===STATE.PLAY){
+    if(p.x<VW/2) deescalate(0); else deescalate(1);
+    return;
+  }
+  if(state===STATE.OVER){
+    if(inBtn(p,SHARE_BTN)){ share(); }
+    else if(inBtn(p,RETRY_BTN)){ reset(); state=STATE.PLAY; }
+  }
+},{passive:false});
+document.addEventListener('touchmove',function(e){ if(e.target===cv) e.preventDefault(); },{passive:false});
+
+// ---------- Share card ----------
+function buildCard(){
+  const cw=1080, ch=1920;
+  const oc=document.createElement('canvas'); oc.width=cw; oc.height=ch;
+  const x=oc.getContext('2d');
+  const held=days>0;
+  // bg
+  x.fillStyle='#05060A'; x.fillRect(0,0,cw,ch);
+  const g=x.createRadialGradient(cw/2,ch*0.42,80,cw/2,ch*0.42,ch*0.6);
+  if(held){ g.addColorStop(0,'rgba(42,107,255,0.32)'); g.addColorStop(1,'rgba(42,107,255,0)'); }
+  else { g.addColorStop(0,'rgba(255,40,30,0.22)'); g.addColorStop(1,'rgba(255,40,30,0)'); }
+  x.fillStyle=g; x.fillRect(0,0,cw,ch);
+  x.textAlign='center';
+  x.fillStyle='rgba(234,242,255,0.9)'; x.font='800 64px -apple-system,sans-serif';
+  x.fillText('停戦  TEISEN', cw/2, 200);
+  x.fillStyle='rgba(124,138,168,0.9)'; x.font='600 36px -apple-system,sans-serif';
+  x.fillText('HOLD THE LINE', cw/2, 252);
+  // dove
+  x.save(); x.translate(cw/2,ch*0.40); x.strokeStyle=held?'rgba(159,232,255,0.95)':'rgba(255,90,80,0.9)';
+  x.lineWidth=12; x.lineCap='round';
+  x.beginPath(); x.moveTo(-90,-20); x.quadraticCurveTo(0,30,90,-20); x.stroke();
+  x.beginPath(); x.arc(0,16,14,0,7); x.fillStyle=x.strokeStyle; x.fill(); x.restore();
+  // big number
+  x.fillStyle='#EAF2FF'; x.font='900 360px -apple-system,sans-serif';
+  x.shadowColor=held?'#2A6BFF':'#FF3B30'; x.shadowBlur=40;
+  x.fillText(String(days), cw/2, ch*0.66); x.shadowBlur=0;
+  x.fillStyle='rgba(124,138,168,0.95)'; x.font='800 64px -apple-system,sans-serif';
+  x.fillText('DAYS HELD', cw/2, ch*0.72);
+  x.fillStyle=held?'#9FE8FF':'rgba(255,90,80,0.95)'; x.font='700 48px -apple-system,sans-serif';
+  x.fillText(held?'撃ち返さず、停戦を保った':'緊張が沸点を超え、決裂した', cw/2, ch*0.80);
+  // footer
+  x.fillStyle='rgba(124,138,168,0.8)'; x.font='600 36px -apple-system,sans-serif';
+  x.fillText('あなたは何日 停戦を保てる？', cw/2, ch*0.90);
+  x.fillStyle='rgba(159,232,255,0.85)'; x.font='700 32px -apple-system,sans-serif';
+  x.fillText('t-aka-h.github.io/idea-radar/teisen/', cw/2, ch*0.935);
+  return oc;
+}
+function share(){
+  const oc=buildCard();
+  oc.toBlob(function(blob){
+    if(!blob) return;
+    const file=new File([blob],'teisen.png',{type:'image/png'});
+    const data={files:[file], title:'停戦 TEISEN', text:'停戦を '+days+' 日 保った。撃ち返すな、宥めろ。 #停戦 #TEISEN'};
+    if(navigator.canShare && navigator.canShare(data)){
+      navigator.share(data).catch(()=>{});
+    } else {
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='teisen.png'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+    }
+  },'image/png');
+}
+})();
+</script>
+</body>
+</html>
