@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<title>Tebanashi（手放し）— 引き算ウェルネス</title>
+<style>
+  :root{ --neon:#3fe7ff; --neon2:#7afcff; }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; background:#05070f; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; color:#eaf6ff; user-select:none; -webkit-user-select:none; touch-action:none; }
+  #wrap{ position:fixed; inset:0; }
+  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .overlay{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px 26px; z-index:10; background:radial-gradient(120% 90% at 50% 30%, rgba(10,16,34,.82), rgba(4,6,14,.96)); backdrop-filter:blur(2px); transition:opacity .5s ease; }
+  .hidden{ opacity:0; pointer-events:none; }
+
+  .logo{ font-size:13px; letter-spacing:.42em; color:var(--neon); text-transform:uppercase; opacity:.8; margin-bottom:10px; }
+  h1{ font-size:40px; font-weight:800; letter-spacing:.06em; margin-bottom:4px; text-shadow:0 0 24px rgba(63,231,255,.5); }
+  .sub{ font-size:14px; color:#9fb6d6; margin-bottom:26px; }
+  .lead{ font-size:15px; line-height:1.85; color:#cfe2f6; max-width:330px; margin-bottom:14px; }
+  .lead b{ color:var(--neon2); }
+  .tagchip{ display:inline-block; margin:18px 0 26px; padding:8px 16px; border:1px solid rgba(63,231,255,.35); border-radius:999px; font-size:12.5px; color:#bfe9ff; background:rgba(63,231,255,.06); }
+  .btn{ appearance:none; border:0; cursor:pointer; font-family:inherit; font-weight:800; letter-spacing:.08em; color:#04121a; background:linear-gradient(180deg,#7afcff,#27c8e6); padding:16px 40px; border-radius:999px; font-size:17px; box-shadow:0 0 30px rgba(63,231,255,.45), inset 0 1px 0 rgba(255,255,255,.6); transition:transform .12s; }
+  .btn:active{ transform:scale(.95); }
+  .btn.ghost{ background:transparent; color:#bfe9ff; border:1px solid rgba(127,200,255,.4); box-shadow:none; }
+  .mini{ font-size:11.5px; color:#6f86a8; margin-top:22px; letter-spacing:.04em; }
+
+  /* HUD */
+  #hud{ position:absolute; top:0; left:0; right:0; padding:14px 16px 0; z-index:6; pointer-events:none; }
+  .hudtop{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .otitle{ font-size:11px; letter-spacing:.3em; color:#88a2c6; }
+  .okeep{ font-size:15px; font-weight:700; color:#eaf6ff; margin-top:3px; }
+  .okeep b{ color:var(--neon2); }
+  .count{ text-align:right; }
+  .count .n{ font-size:30px; font-weight:800; line-height:1; }
+  .count .lbl{ font-size:10.5px; letter-spacing:.22em; color:#88a2c6; }
+  /* cortisol gauge */
+  #gauge{ position:absolute; right:14px; top:78px; bottom:120px; width:8px; border-radius:6px; background:rgba(255,255,255,.07); z-index:6; pointer-events:none; overflow:hidden; }
+  #gfill{ position:absolute; left:0; right:0; bottom:0; height:0%; border-radius:6px; background:linear-gradient(180deg,#ff5a47,#ff9d3a); transition:height .25s ease; }
+  #glabel{ position:absolute; right:24px; top:78px; font-size:9px; letter-spacing:.18em; color:#7d93b4; writing-mode:vertical-rl; z-index:6; pointer-events:none; }
+
+  #hint{ position:absolute; left:0; right:0; bottom:30px; text-align:center; font-size:13px; color:#9fb6d6; z-index:6; pointer-events:none; transition:opacity .4s; }
+
+  /* result */
+  #result .card-frame{ width:min(82vw,330px); }
+  #result h2{ font-size:30px; font-weight:800; letter-spacing:.04em; text-shadow:0 0 22px rgba(63,231,255,.5); margin-bottom:4px;}
+  #result .scoreline{ font-size:14px; color:#bcd2ec; margin:4px 0 18px; }
+  #result .scoreline b{ color:var(--neon2); font-size:17px; }
+  .row{ display:flex; gap:12px; margin-top:14px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hudtop">
+      <div><div class="otitle">今日のお題</div><div class="okeep" id="okeep">残せ：<b>—</b></div></div>
+      <div class="count"><div class="n" id="cnum">0</div><div class="lbl">習慣</div></div>
+    </div>
+  </div>
+  <div id="glabel" class="hidden">コルチゾール潮位</div>
+  <div id="gauge" class="hidden"><div id="gfill"></div></div>
+  <div id="hint" class="hidden">回しすぎた習慣を、指で外へ手放そう</div>
+
+  <!-- intro -->
+  <div class="overlay" id="intro">
+    <div class="logo">Idea Radar</div>
+    <h1>手放し</h1>
+    <div class="sub">Tebanashi — 引き算ウェルネス</div>
+    <div class="lead">睡眠も、歩数も、冷水浴も…<br><b>盛りすぎた習慣</b>が回るほど、画面は濁り、低い唸りが満ちていく。</div>
+    <div class="lead">本当に効く<b>3つ</b>だけに絞れたとき、世界は凪ぐ。</div>
+    <div class="tagchip">2026年、約45%が「ウェルネス疲れ」</div>
+    <button class="btn" id="startBtn">はじめる</button>
+    <div class="mini">音が出ます · スワイプで習慣を手放す</div>
+  </div>
+
+  <!-- result -->
+  <div class="overlay hidden" id="result">
+    <div class="logo">凪</div>
+    <h2 id="rtitle">凪いだ。</h2>
+    <div class="scoreline">澄み度 <b id="rpurity">0%</b>　·　手放した <b id="rreleased">0</b></div>
+    <div style="font-size:13px;color:#9fb6d6;margin-bottom:6px;">残した3つ</div>
+    <div id="rkept" style="font-size:16px;font-weight:700;color:var(--neon2);letter-spacing:.04em;margin-bottom:8px;">—</div>
+    <div class="row">
+      <button class="btn" id="againBtn">もう一度</button>
+      <button class="btn ghost" id="shareBtn">凪カードを保存</button>
+    </div>
+    <div class="mini">毎日お題が変わる · 完全オンデバイス</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W*DPR; cv.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- seeded RNG (daily) ----------
+  function makeRNG(seed){ let s = seed>>>0; return function(){ s = (s*1664525 + 1013904223)>>>0; return s/4294967296; }; }
+  function daySeed(){ const d=new Date(); return (d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate()); }
+  let runSalt = 0; // changes each replay so layout/efficacy reshuffle but お題 stays per-day
+
+  const HABITS = ["睡眠","歩数","水分","瞑想","食物繊維","冷水浴","日光浴","日記",
+                  "サプリ","筋トレ","ストレッチ","読書","断食","白湯","マウステープ",
+                  "腸活","深呼吸","散歩","プロテイン","姿勢"];
+  // habits that read as "over-optimization fads" → tend to be vanity
+  const FAD = new Set(["冷水浴","マウステープ","サプリ","断食","白湯","プロテイン"]);
+
+  // ---------- audio ----------
+  let AC=null, master=null, lp=null, oscA=null, oscB=null, oscC=null, gC=null, started=false;
+  const BASE=55;
+  function initAudio(){
+    if(started) return; started=true;
+    try{
+      AC = new (window.AudioContext||window.webkitAudioContext)();
+      master = AC.createGain(); master.gain.value=0.0;
+      lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+      master.connect(lp); lp.connect(AC.destination);
+      oscA = AC.createOscillator(); oscA.type='sine'; oscA.frequency.value=BASE;
+      oscB = AC.createOscillator(); oscB.type='triangle'; oscB.frequency.value=BASE;
+      gC = AC.createGain(); gC.gain.value=0.0;
+      oscC = AC.createOscillator(); oscC.type='sawtooth'; oscC.frequency.value=BASE*1.065; // dissonant, fades w/ chaos
+      const drone=AC.createGain(); drone.gain.value=0.5;
+      oscA.connect(drone); oscB.connect(drone); oscC.connect(gC); gC.connect(drone);
+      drone.connect(master);
+      oscA.start(); oscB.start(); oscC.start();
+      master.gain.linearRampToValueAtTime(0.16, AC.currentTime+0.8);
+    }catch(e){ AC=null; }
+  }
+  // overtone shimmer for calm
+  function calmChord(){
+    if(!AC) return;
+    const now=AC.currentTime;
+    [220,277.2,329.6,440,659.3].forEach((f,i)=>{
+      const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=AC.createGain(); g.gain.value=0;
+      o.connect(g); g.connect(master);
+      const t=now+i*0.10;
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(0.10,t+0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+1.6);
+      o.start(t); o.stop(t+1.7);
+    });
+  }
+  function releaseSound(){
+    if(!AC) return;
+    const now=AC.currentTime;
+    const o=AC.createOscillator(); o.type='triangle';
+    const g=AC.createGain();
+    o.connect(g); g.connect(master);
+    o.frequency.setValueAtTime(620,now);
+    o.frequency.exponentialRampToValueAtTime(120,now+0.13);
+    g.gain.setValueAtTime(0.0001,now);
+    g.gain.exponentialRampToValueAtTime(0.14,now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,now+0.16);
+    o.start(now); o.stop(now+0.18);
+  }
+  function setAudioChaos(c){
+    if(!AC) return;
+    // beating: push oscB up in absolute freq
+    try{
+      oscB.frequency.setTargetAtTime(BASE*(1+c*0.085), AC.currentTime, 0.15);
+      oscC.frequency.setTargetAtTime(BASE*1.065, AC.currentTime, 0.2);
+      gC.gain.setTargetAtTime(c*0.5, AC.currentTime, 0.2);          // dissonance in w/ chaos
+      lp.frequency.setTargetAtTime(220 + (1-c)*1100, AC.currentTime, 0.2); // clearer when calm
+    }catch(e){}
+  }
+  function vibe(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+  // ---------- orbs ----------
+  let orbs=[], particles=[], state='intro', chaos=0, calmT=0, startTime=0, keepTarget="", releasedCount=0;
+  const KEEP_TARGET_GOAL=3;
+
+  function spawnRound(){
+    orbs=[]; particles=[]; chaos=0; calmT=0; releasedCount=0;
+    const rng = makeRNG(daySeed()*131 + runSalt*97 + 7);
+    // pick names
+    const pool=[...HABITS];
+    // shuffle
+    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    const n = 7 + Math.floor(rng()*3); // 7..9
+    const chosen = pool.slice(0,n);
+    // daily keep target = a non-fad habit, decided by daySeed only (stable across replays)
+    const drng = makeRNG(daySeed()*977 + 3);
+    const nonFad = HABITS.filter(h=>!FAD.has(h));
+    keepTarget = nonFad[Math.floor(drng()*nonFad.length)];
+    // ensure keepTarget present
+    if(!chosen.includes(keepTarget)){ chosen[chosen.length-1]=keepTarget; }
+    document.getElementById('okeep').innerHTML = '残せ：<b>'+keepTarget+'</b>';
+
+    chosen.forEach((name,i)=>{
+      let eff;
+      if(name===keepTarget) eff = 0.9 + rng()*0.1;
+      else if(FAD.has(name)) eff = 0.08 + rng()*0.30;   // vanity-ish
+      else eff = 0.35 + rng()*0.55;
+      orbs.push({
+        name, eff,
+        x:W/2, y:H/2, tx:W/2, ty:H/2,
+        spin: rng()*Math.PI*2, spinSpd: 0.6+rng()*0.8,
+        wob: rng()*Math.PI*2,
+        r: 30 + eff*8,
+        born: performance.now()/1000 + i*0.12,
+        dragging:false, dx:0, dy:0, snap:false, alive:true, scale:0
+      });
+    });
+    layout();
+    startTime = performance.now()/1000;
+  }
+  function layout(){
+    const live = orbs.filter(o=>o.alive);
+    const n = live.length;
+    const cx=W/2, cy=H/2 - 6;
+    if(n===1){ live[0].tx=cx; live[0].ty=cy; return; }
+    const R = Math.min(W,H)*0.30 + (n>5? (n-5)*6 :0);
+    live.forEach((o,i)=>{
+      const a = -Math.PI/2 + i/n*Math.PI*2;
+      o.tx = cx + Math.cos(a)*R;
+      o.ty = cy + Math.sin(a)*R*0.92;
+    });
+  }
+  function liveCount(){ return orbs.filter(o=>o.alive).length; }
+
+  function releaseOrb(o, vx, vy){
+    if(!o.alive) return;
+    o.alive=false; releasedCount++;
+    const col = orbColor(o, 1);
+    for(let k=0;k<24;k++){
+      const a=Math.random()*Math.PI*2, sp=Math.random()*4+1;
+      particles.push({ x:o.x, y:o.y, vx:Math.cos(a)*sp + vx*0.4, vy:Math.sin(a)*sp + vy*0.4,
+        life:1, r:Math.random()*4+1.5, col });
+    }
+    releaseSound(); vibe(18);
+    layout(); updateHUD();
+    if(liveCount()<=KEEP_TARGET_GOAL && state==='play'){ goCalm(); }
+  }
+
+  function goCalm(){
+    state='calm'; calmT=0;
+    document.getElementById('hint').classList.add('hidden');
+    setAudioChaos(0);
+    calmChord(); vibe([30,40,90]);
+    setTimeout(showResult, 1500);
+  }
+
+  function showResult(){
+    const live=orbs.filter(o=>o.alive);
+    const avgEff = live.reduce((s,o)=>s+o.eff,0)/Math.max(1,live.length);
+    const keptTarget = live.some(o=>o.name===keepTarget);
+    const elapsed = (performance.now()/1000)-startTime;
+    const speedBonus = Math.max(0, 1 - elapsed/30); // faster within 30s
+    const purity = Math.round( (avgEff*0.85 + (keptTarget?0.15:0)) * 100 );
+    const score = Math.round( avgEff*60 + releasedCount*7 + speedBonus*25 + (keptTarget?15:0) );
+    lastResult = { purity, released:releasedCount, kept:live.map(o=>o.name), keptTarget, score };
+
+    document.getElementById('rpurity').textContent = purity+'%';
+    document.getElementById('rreleased').textContent = releasedCount;
+    document.getElementById('rkept').textContent = live.map(o=>o.name).join(' · ');
+    document.getElementById('rtitle').textContent = keptTarget? '凪いだ。' : 'ひと息。';
+    document.getElementById('result').classList.remove('hidden');
+  }
+  let lastResult=null;
+
+  function updateHUD(){
+    document.getElementById('cnum').textContent = liveCount();
+  }
+
+  // ---------- colors ----------
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function orbColor(o, alpha){
+    // essential -> cyan; vanity -> red-orange; blended by chaos & efficacy
+    const calm = state==='calm'? 1 : 0;
+    const vanity = 1-o.eff;
+    // hue: 190 (cyan) for essential, 14 (red-orange) for vanity, redshift with chaos
+    const hue = lerp(190, 14, Math.min(1, vanity*0.85 + chaos*0.25*(1-calm)));
+    const sat = lerp(60, 92, o.eff*0.4+0.4);
+    const light = lerp(46, 64, o.eff);
+    return `hsla(${hue},${sat}%,${light}%,${alpha})`;
+  }
+
+  // ---------- pointer ----------
+  let active=null, lastPX=0, lastPY=0, pvx=0, pvy=0;
+  function pos(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX, y:t.clientY}; }
+  function down(e){
+    if(state!=='play') return;
+    e.preventDefault();
+    const p=pos(e);
+    let best=null, bd=60*60;
+    orbs.forEach(o=>{ if(!o.alive) return; const dx=p.x-o.x, dy=p.y-o.y, d=dx*dx+dy*dy; if(d<bd && d< (o.r+22)*(o.r+22)){ bd=d; best=o; } });
+    if(best){ active=best; best.dragging=true; best.snap=false; lastPX=p.x; lastPY=p.y; pvx=0; pvy=0;
+      document.getElementById('hint').classList.add('hidden'); }
+  }
+  function move(e){
+    if(!active) return; e.preventDefault();
+    const p=pos(e);
+    pvx = p.x-lastPX; pvy = p.y-lastPY; lastPX=p.x; lastPY=p.y;
+    active.x=p.x; active.y=p.y;
+  }
+  function up(e){
+    if(!active) return; e.preventDefault();
+    const o=active; active=null; o.dragging=false;
+    const dx=o.x-o.tx, dy=o.y-o.ty;
+    const dist=Math.hypot(dx,dy);
+    const flick=Math.hypot(pvx,pvy);
+    if(dist>78 || flick>14){ releaseOrb(o, pvx, pvy); }
+    else { o.snap=true; }
+  }
+  cv.addEventListener('touchstart',down,{passive:false});
+  cv.addEventListener('touchmove',move,{passive:false});
+  cv.addEventListener('touchend',up,{passive:false});
+  cv.addEventListener('mousedown',down);
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',up);
+
+  // ---------- loop ----------
+  let last=performance.now();
+  function frame(now){
+    const dt=Math.min(0.05,(now-last)/1000); last=now; const t=now/1000;
+    // chaos
+    const live=orbs.filter(o=>o.alive);
+    const extra=Math.max(0, live.length-3);
+    const avgVanity = live.length? live.reduce((s,o)=>s+(1-o.eff),0)/live.length : 0;
+    let targetChaos = state==='calm'? 0 : Math.min(1, (extra/6)*0.72 + avgVanity*0.32);
+    chaos = lerp(chaos, targetChaos, dt*3.5);
+    if(state==='calm') calmT+=dt;
+    setAudioChaos(chaos);
+
+    // gauge
+    if(state==='play'||state==='calm'){
+      document.getElementById('gfill').style.height = Math.round(chaos*100)+'%';
+    }
+
+    draw(t,dt);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(t,dt){
+    // background color blend
+    const calmAmt = state==='calm'? Math.min(1,calmT/1.3) : 0;
+    const redness = chaos*(1-calmAmt);
+    // base deep blue -> dark red-black (RGB lerp avoids the green midpoint)
+    const br=Math.round(lerp(8,42,redness)), bg=Math.round(lerp(14,8,redness)), bb=Math.round(lerp(33,13,redness));
+    ctx.fillStyle=`rgb(${br},${bg},${bb})`;
+    ctx.fillRect(0,0,W,H);
+
+    // rising cortisol tide (bottom fill) — red-orange, only visible as chaos rises
+    const tideH = H*(0.12 + chaos*0.5)*(1-calmAmt);
+    const tg=ctx.createLinearGradient(0,H-tideH,0,H);
+    tg.addColorStop(0,`hsla(12,82%,42%,0)`);
+    tg.addColorStop(1,`hsla(12,82%,46%,${0.16+redness*0.30})`);
+    ctx.fillStyle=tg; ctx.fillRect(0,H-tideH,W,tideH);
+
+    // scan noise w/ chaos
+    if(redness>0.04){
+      ctx.globalAlpha=redness*0.06;
+      for(let i=0;i<60;i++){ const y=Math.random()*H; ctx.fillStyle= Math.random()<.5?'#ff5544':'#000'; ctx.fillRect(0,y,W,1); }
+      ctx.globalAlpha=1;
+    }
+
+    // calm radial ring expansion
+    if(state==='calm'){
+      const rr=(calmT*W*0.9);
+      ctx.strokeStyle=`hsla(190,90%,65%,${Math.max(0,0.5-calmT*0.4)})`;
+      ctx.lineWidth=3; ctx.beginPath(); ctx.arc(W/2,H/2-6,rr,0,Math.PI*2); ctx.stroke();
+    }
+
+    // orbs
+    orbs.forEach(o=>{
+      if(!o.alive){ return; }
+      // approach target / spring back
+      if(!o.dragging){
+        o.x=lerp(o.x,o.tx,dt*8); o.y=lerp(o.y,o.ty,dt*8);
+        o.snap=false;
+      }
+      o.scale=lerp(o.scale,1,dt*6);
+      o.spin += o.spinSpd*dt*(1+chaos*1.2);
+      o.wob += dt*(2+chaos*4);
+      // vanity orbs jitter more
+      const vanity=1-o.eff;
+      const jit = (vanity*0.5+0.05)*chaos;
+      const jx = Math.sin(o.wob*3.1)*jit*7;
+      const jy = Math.cos(o.wob*2.3)*jit*7;
+      const x=o.x+jx, y=o.y+jy;
+      const r=o.r*o.scale;
+      const col = orbColor(o, 1);
+
+      // aura
+      const ag=ctx.createRadialGradient(x,y,r*0.2,x,y,r*2.4);
+      ag.addColorStop(0, orbColor(o,0.55));
+      ag.addColorStop(1, orbColor(o,0));
+      ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(x,y,r*2.4,0,Math.PI*2); ctx.fill();
+
+      // body
+      ctx.save();
+      ctx.shadowColor=col; ctx.shadowBlur=18+ (o.eff)*14;
+      const bg=ctx.createRadialGradient(x-r*0.3,y-r*0.35,r*0.1,x,y,r);
+      bg.addColorStop(0, orbColor(o,0.98));
+      bg.addColorStop(1, orbColor(o,0.30));
+      ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // spinning plate highlight (皿回し)
+      ctx.strokeStyle=`hsla(190,100%,85%,${0.5+o.eff*0.3})`;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      const a0=o.spin, a1=o.spin+Math.PI*0.55;
+      ctx.arc(x,y,r*0.78,a0,a1); ctx.stroke();
+      // orbiting spec
+      const sx=x+Math.cos(o.spin)*r*0.78, sy=y+Math.sin(o.spin)*r*0.78;
+      ctx.fillStyle='#eafcff'; ctx.beginPath(); ctx.arc(sx,sy,2.4,0,Math.PI*2); ctx.fill();
+
+      // label
+      ctx.fillStyle='rgba(255,255,255,.96)';
+      ctx.font=`700 ${Math.round(r*0.42)}px -apple-system,"Hiragino Kaku Gothic ProN",sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=4;
+      ctx.fillText(o.name, x, y);
+      ctx.shadowBlur=0;
+
+      // keepTarget marker
+      if(o.name===keepTarget){
+        ctx.strokeStyle=`hsla(48,100%,70%,${0.6+0.3*Math.sin(t*4)})`;
+        ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(x,y,r+7,0,Math.PI*2); ctx.stroke();
+      }
+
+      // dragging release-ring cue
+      if(o.dragging){
+        const dist=Math.hypot(o.x-o.tx,o.y-o.ty);
+        const near=Math.min(1,dist/78);
+        ctx.strokeStyle=`hsla(${lerp(0,150,near)},90%,60%,${0.3+near*0.5})`;
+        ctx.setLineDash([6,6]); ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(o.tx,o.ty,78,0,Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]);
+        // tether
+        ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(o.tx,o.ty); ctx.lineTo(o.x,o.y); ctx.stroke();
+      }
+    });
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.06; p.vx*=0.98; p.vy*=0.98; p.life-=dt*1.4;
+      if(p.life<=0){ particles.splice(i,1); continue; }
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // vignette
+    const vg=ctx.createRadialGradient(W/2,H*0.42,H*0.2,W/2,H*0.5,H*0.78);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,`rgba(0,0,0,${0.45+redness*0.2})`);
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  }
+
+  // ---------- share card ----------
+  function buildCard(){
+    const cw=1080, ch=1920;
+    const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+    const x=c.getContext('2d');
+    // bg deep blue
+    const g=x.createLinearGradient(0,0,0,ch);
+    g.addColorStop(0,'#0a1430'); g.addColorStop(0.55,'#081026'); g.addColorStop(1,'#050a18');
+    x.fillStyle=g; x.fillRect(0,0,cw,ch);
+    // glow center
+    const rg=x.createRadialGradient(cw/2,ch*0.42,80,cw/2,ch*0.42,720);
+    rg.addColorStop(0,'rgba(63,231,255,.20)'); rg.addColorStop(1,'rgba(63,231,255,0)');
+    x.fillStyle=rg; x.fillRect(0,0,cw,ch);
+
+    x.textAlign='center';
+    x.fillStyle='#5fe9ff'; x.font='600 34px sans-serif';
+    x.fillText('T E B A N A S H I', cw/2, 150);
+    x.fillStyle='#dff3ff'; x.font='800 130px sans-serif';
+    x.shadowColor='rgba(63,231,255,.6)'; x.shadowBlur=40;
+    x.fillText('凪いだ', cw/2, 320); x.shadowBlur=0;
+    x.fillStyle='#9fb6d6'; x.font='400 30px sans-serif';
+    x.fillText('引き算ウェルネス', cw/2, 375);
+
+    // 3 kept orbs
+    const kept=(lastResult&&lastResult.kept)||[];
+    const cy=ch*0.50, R=240;
+    kept.slice(0,3).forEach((name,i)=>{
+      const a=-Math.PI/2 + i/Math.max(1,Math.min(3,kept.length))*Math.PI*2;
+      const ox=cw/2+Math.cos(a)*R, oy=cy+Math.sin(a)*R*0.8;
+      const isT = (lastResult&&lastResult.keptTarget && name===keepTarget);
+      const bg=x.createRadialGradient(ox-30,oy-30,10,ox,oy,120);
+      bg.addColorStop(0, isT?'#ffe27a':'#7afcff'); bg.addColorStop(1, isT?'#caa83a':'#1f9fb8');
+      x.shadowColor= isT?'rgba(255,210,90,.7)':'rgba(63,231,255,.7)'; x.shadowBlur=50;
+      x.fillStyle=bg; x.beginPath(); x.arc(ox,oy,118,0,Math.PI*2); x.fill(); x.shadowBlur=0;
+      x.fillStyle='#04121a'; x.font='800 40px sans-serif'; x.textBaseline='middle';
+      x.fillText(name, ox, oy);
+    });
+    x.textBaseline='alphabetic';
+
+    // stats
+    const pr=(lastResult&&lastResult.purity)||0;
+    const rel=(lastResult&&lastResult.released)||0;
+    x.fillStyle='#bcd2ec'; x.font='400 40px sans-serif';
+    x.fillText('澄み度', cw/2-170, ch*0.74);
+    x.fillText('手放した', cw/2+170, ch*0.74);
+    x.fillStyle='#7afcff'; x.font='800 100px sans-serif';
+    x.fillText(pr+'%', cw/2-170, ch*0.74+96);
+    x.fillText(rel+'', cw/2+170, ch*0.74+96);
+
+    x.fillStyle='#56708f'; x.font='400 28px sans-serif';
+    const d=new Date();
+    x.fillText(`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}  ·  本当に効く3つだけ`, cw/2, ch-110);
+    x.fillStyle='#3a4d68'; x.font='600 26px sans-serif';
+    x.fillText('Idea Radar · t-aka-h.github.io', cw/2, ch-64);
+    return c;
+  }
+  async function share(){
+    const c=buildCard();
+    c.toBlob(async(blob)=>{
+      if(!blob) return;
+      const file=new File([blob],'tebanashi.png',{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], text:'本当に効く3つだけ残した。#手放し #引き算ウェルネス'}); return; }catch(e){}
+      }
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='tebanashi.png'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+    },'image/png');
+  }
+
+  // ---------- flow ----------
+  function start(){
+    initAudio();
+    document.getElementById('intro').classList.add('hidden');
+    document.getElementById('result').classList.add('hidden');
+    ['hud','gauge','glabel','hint'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+    document.getElementById('hint').style.opacity='1';
+    state='play';
+    spawnRound(); updateHUD();
+    setTimeout(()=>{ const h=document.getElementById('hint'); if(state==='play') h.style.opacity='0.0'; }, 4200);
+  }
+  function again(){ runSalt++; document.getElementById('result').classList.add('hidden');
+    document.getElementById('hint').classList.remove('hidden'); document.getElementById('hint').style.opacity='1';
+    state='play'; spawnRound(); updateHUD();
+    setTimeout(()=>{ const h=document.getElementById('hint'); if(state==='play') h.style.opacity='0.0'; }, 3500);
+  }
+
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('againBtn').addEventListener('click', again);
+  document.getElementById('shareBtn').addEventListener('click', share);
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
