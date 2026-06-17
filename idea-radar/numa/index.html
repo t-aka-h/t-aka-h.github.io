@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04122e">
+<title>沼 Numa — 秒で沼れ、でも溺れるな</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#04122e; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Segoe UI",sans-serif; touch-action:none; overscroll-behavior:none; }
+  #stage { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; }
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:10; }
+  .hidden { display:none !important; }
+  .logo { font-size:clamp(56px,20vw,108px); font-weight:900; letter-spacing:.04em; color:#5ff0ff;
+    text-shadow:0 0 18px rgba(95,240,255,.7),0 0 44px rgba(60,180,255,.55),0 0 90px rgba(40,90,255,.4); }
+  .romaji { font-size:14px; letter-spacing:.55em; color:#7fb6d8; margin-top:6px; padding-left:.55em; }
+  .tag { margin-top:22px; font-size:clamp(15px,4.4vw,19px); color:#cfe9ff; line-height:1.7; font-weight:600; }
+  .sub { margin-top:14px; font-size:13px; color:#7a93ad; line-height:1.7; max-width:340px; }
+  .btn { margin-top:30px; padding:16px 40px; font-size:19px; font-weight:800; color:#04122e;
+    background:linear-gradient(180deg,#7ff4ff,#2bb6ff); border:none; border-radius:40px; cursor:pointer;
+    box-shadow:0 0 24px rgba(95,240,255,.6),0 6px 22px rgba(0,0,0,.45); letter-spacing:.06em; }
+  .btn:active { transform:scale(.96); }
+  .btn.ghost { background:rgba(255,255,255,.07); color:#cfe9ff; box-shadow:none; border:1px solid rgba(120,200,255,.35); margin-top:16px; padding:13px 30px; font-size:16px; }
+  .hint { position:fixed; bottom:max(26px,env(safe-area-inset-bottom)); left:0; right:0; text-align:center;
+    color:#9fd6ff; font-size:15px; font-weight:700; letter-spacing:.04em; z-index:6; pointer-events:none;
+    text-shadow:0 0 10px rgba(0,0,0,.7); }
+  .hud { position:fixed; top:max(16px,env(safe-area-inset-top)); left:0; right:0; z-index:6; pointer-events:none;
+    display:flex; justify-content:space-between; padding:0 20px; }
+  .hud .blk { text-align:left; }
+  .hud .blk.r { text-align:right; }
+  .hud .lab { font-size:10px; letter-spacing:.2em; color:#6f93b3; font-weight:700; }
+  .hud .val { font-size:24px; font-weight:900; color:#dff2ff; text-shadow:0 0 12px rgba(95,200,255,.6); margin-top:1px; }
+  .hud .val small { font-size:13px; opacity:.7; }
+  .lives { display:flex; gap:6px; justify-content:flex-end; margin-top:4px; }
+  .heart { width:13px; height:13px; border-radius:50%; background:#5ff0ff; box-shadow:0 0 8px #5ff0ff; }
+  .heart.dead { background:#33455c; box-shadow:none; }
+  /* result */
+  #result .card { width:min(86vw,330px); aspect-ratio:9/16; border-radius:22px; overflow:hidden; position:relative;
+    box-shadow:0 0 40px rgba(40,120,255,.4),0 14px 40px rgba(0,0,0,.6); }
+  #result canvas { width:100%; height:100%; }
+  .credit { position:fixed; bottom:8px; left:0; right:0; text-align:center; font-size:10px; color:#456; letter-spacing:.08em; z-index:6; }
+  .flick { position:fixed; left:50%; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font-size:clamp(34px,12vw,64px); font-weight:900; opacity:0; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game"></canvas></div>
+
+<!-- TITLE -->
+<div class="overlay" id="title">
+  <div class="logo">沼</div>
+  <div class="romaji">NUMA</div>
+  <div class="tag">押して沈め。深いほど高得点。<br>でも沈みすぎると溺れる。</div>
+  <div class="sub">画面を長押しで沼にダイブ。深く潜るほど ¥ が指数で伸びる。<br>赤い警報が満ちきる前に指を離して浮上せよ。深追いは死。</div>
+  <button class="btn" id="startBtn">ダイブする</button>
+</div>
+
+<!-- GAME HUD -->
+<div class="hud hidden" id="hud">
+  <div class="blk">
+    <div class="lab">総沈潜額</div>
+    <div class="val" id="scoreVal">¥0</div>
+  </div>
+  <div class="blk r">
+    <div class="lab">COMBO</div>
+    <div class="val" id="comboVal">×1.0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+</div>
+<div class="hint hidden" id="hint">長押しで沈む / 離して浮上</div>
+
+<!-- per-dive flick text -->
+<div class="flick" id="flick"></div>
+
+<!-- RESULT -->
+<div class="overlay hidden" id="result">
+  <div class="card"><canvas id="cardCanvas" width="540" height="960"></canvas></div>
+  <button class="btn" id="shareBtn">結果をシェア</button>
+  <button class="btn ghost" id="againBtn">もう一度沈む</button>
+</div>
+
+<div class="credit">Idea Radar 2026-06-18 · L05 文化・若者「沼る×タイパ」</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W*DPR; cv.height = H*DPR; cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ---------- Audio ----------
+  let AC=null, master=null;
+  const drone=[]; let warnOsc=null, warnGain=null;
+  function audioInit(){
+    if(AC) return;
+    try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    master = AC.createGain(); master.gain.value=0.0; master.connect(AC.destination);
+    // missing-fundamental bass stack (perceived 55Hz)
+    [110,165,220,275].forEach((f,i)=>{
+      const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=AC.createGain(); g.gain.value=[0.5,0.32,0.2,0.12][i];
+      o.connect(g); g.connect(master); o.start();
+      drone.push({o,g,base:f});
+    });
+    // warning beat oscillator
+    warnGain = AC.createGain(); warnGain.gain.value=0; warnGain.connect(AC.destination);
+    warnOsc = AC.createOscillator(); warnOsc.type='square'; warnOsc.frequency.value=88;
+    const wf = AC.createBiquadFilter(); wf.type='lowpass'; wf.frequency.value=600;
+    warnOsc.connect(wf); wf.connect(warnGain); warnOsc.start();
+  }
+  function setDrone(depthT){ // depthT 0..1+
+    if(!AC) return;
+    const tgt = Math.min(0.9, 0.12 + depthT*0.6);
+    master.gain.setTargetAtTime(tgt, AC.currentTime, 0.05);
+    drone.forEach(d=>{ d.o.frequency.setTargetAtTime(d.base*(1 - depthT*0.16), AC.currentTime, 0.08); });
+  }
+  function setWarn(w){
+    if(!AC) return;
+    const g = w>0.55 ? Math.min(0.16,(w-0.55)*0.4) : 0;
+    warnGain.gain.setTargetAtTime(g, AC.currentTime, 0.04);
+    warnOsc.frequency.setTargetAtTime(80 + w*120, AC.currentTime, 0.05);
+  }
+  function muteDrone(){ if(AC){ master.gain.setTargetAtTime(0.0,AC.currentTime,0.12); setWarn(0);} }
+  function blip(freq,dur,type='sine',vol=0.2){
+    if(!AC) return;
+    const o=AC.createOscillator(); o.type=type; o.frequency.value=freq;
+    const g=AC.createGain(); g.gain.value=0; o.connect(g); g.connect(AC.destination);
+    const t=AC.currentTime; g.gain.linearRampToValueAtTime(vol,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur+0.02);
+  }
+  function surfaceSound(big){ // upward sweep + sparkle
+    if(!AC) return; const t=AC.currentTime;
+    const o=AC.createOscillator(); o.type='sawtooth';
+    const g=AC.createGain(); g.gain.value=0; o.connect(g); g.connect(AC.destination);
+    o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(big?1400:900,t+0.35);
+    g.gain.linearRampToValueAtTime(0.22,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+    o.start(t); o.stop(t+0.42);
+    blip(big?2100:1500,0.18,'triangle',0.18);
+    if(big) setTimeout(()=>blip(2640,0.22,'triangle',0.16),60);
+  }
+  function drownSound(){
+    if(!AC) return; const t=AC.currentTime;
+    // noise burst -> lowpass collapse
+    const buf=AC.createBuffer(1,AC.sampleRate*0.5,AC.sampleRate); const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+    const src=AC.createBufferSource(); src.buffer=buf;
+    const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(900,t); f.frequency.exponentialRampToValueAtTime(80,t+0.5);
+    const g=AC.createGain(); g.gain.value=0.5; src.connect(f); f.connect(g); g.connect(AC.destination); src.start(t);
+    // descending sub
+    const o=AC.createOscillator(); o.type='sine'; const og=AC.createGain(); og.gain.value=0.5; o.connect(og); og.connect(AC.destination);
+    o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(40,t+0.6);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+0.7); o.start(t); o.stop(t+0.72);
+  }
+  function vib(p){ if(navigator.vibrate) navigator.vibrate(p); }
+
+  // ---------- Game state ----------
+  const ST={TITLE:0,PLAY:1,RESULT:2};
+  let state=ST.TITLE;
+  let score=0, combo=0, comboMult=1, dives=0, lives=3, maxDepth=0, drowns=0;
+  let diving=false, holdT=0, limit=2.6, depth=0, depthT=0, warn=0, lastStep=0;
+  let goldActive=false, goldStart=0, goldWin=0, goldUsedThisDive=false;
+  let bubbles=[], sway=0, swayPhase=0, flashT=0, shake=0;
+  let diverY=0, camPull=0;
+
+  const el = id=>document.getElementById(id);
+  const hud=el('hud'), hint=el('hint'), titleEl=el('title'), resultEl=el('result');
+  const scoreVal=el('scoreVal'), comboVal=el('comboVal'), livesEl=el('lives'), flick=el('flick');
+
+  function fmtYen(n){ return '¥'+Math.floor(n).toLocaleString('en-US'); }
+  function renderLives(){
+    livesEl.innerHTML='';
+    for(let i=0;i<3;i++){ const d=document.createElement('div'); d.className='heart'+(i<lives?'':' dead'); livesEl.appendChild(d); }
+  }
+  function updateHud(){ scoreVal.textContent=fmtYen(score); comboVal.textContent='×'+comboMult.toFixed(1); }
+
+  function rand(a,b){ return a+Math.random()*(b-a); }
+
+  function newDive(){
+    diving=false; holdT=0; depth=0; depthT=0; warn=0; lastStep=0;
+    goldActive=false; goldUsedThisDive=false;
+    // limit shrinks with progress + jitter (judge spec ±15%)
+    const base = Math.max(1.5, 2.7 - dives*0.05);
+    limit = base * rand(0.85,1.15);
+    // gold window appears mid-dive
+    goldStart = limit*rand(0.45,0.72); goldWin = limit*rand(0.10,0.16);
+  }
+
+  function startGame(){
+    audioInit(); if(AC && AC.state==='suspended') AC.resume();
+    score=0; combo=0; comboMult=1; dives=0; lives=3; maxDepth=0; drowns=0;
+    bubbles=[]; state=ST.PLAY;
+    titleEl.classList.add('hidden'); resultEl.classList.add('hidden');
+    hud.classList.remove('hidden'); hint.classList.remove('hidden');
+    renderLives(); updateHud();
+    newDive();
+  }
+
+  function spawnBubble(){
+    const cx=W*0.5+sway;
+    bubbles.push({
+      x:cx+rand(-W*0.32,W*0.32), y:H*rand(0.55,1.05),
+      r:rand(2,7)*(1+depthT*0.8), v:rand(0.5,1.6)*(1+depthT), life:1,
+      hue: Math.random()<0.12? 300 : 190+rand(-12,18)
+    });
+  }
+
+  // ---------- pointer ----------
+  function down(e){
+    if(state===ST.TITLE){ return; }
+    if(state===ST.PLAY && !diving && lives>0){
+      diving=true; holdT=0; depth=0; warn=0; lastStep=0; goldUsedThisDive=false;
+      if(AC && AC.state==='suspended') AC.resume();
+      vib(8);
+    }
+  }
+  function up(e){
+    if(state===ST.PLAY && diving){ surface(); }
+  }
+  function surface(){
+    diving=false;
+    muteDrone();
+    if(warn>=1){ // already drowned in tick; safety
+      return;
+    }
+    // success
+    const goldHit = goldActive;
+    let diveScore = depth * comboMult * (goldHit?2:1);
+    score += diveScore;
+    combo++; comboMult = 1 + combo*0.5;
+    dives++;
+    if(depth>maxDepth) maxDepth=depth;
+    // burst
+    burst();
+    flashT=1;
+    surfaceSound(goldHit||depth>900);
+    vib(goldHit?[12,40,12]:18);
+    showFlick(goldHit? 'GOLD ×2!' : (depth>1200?'DEEP!':'SURFACE'), goldHit?'#ffd24d':'#7ff4ff');
+    updateHud();
+    newDive();
+  }
+  function drown(){
+    diving=false; muteDrone(); drownSound();
+    combo=0; comboMult=1; drowns++; lives--; dives++;
+    renderLives();
+    shake=18; vib([40,60,120]);
+    showFlick('溺れた…', '#ff4d6a');
+    bubbles=[]; // sink everything
+    updateHud();
+    if(lives<=0){ setTimeout(endRun,650); }
+    else newDive();
+  }
+
+  let flickAnim=0;
+  function showFlick(txt,color){
+    flick.textContent=txt; flick.style.color=color;
+    flick.style.textShadow=`0 0 22px ${color}aa,0 0 50px ${color}66`;
+    flickAnim=1;
+  }
+
+  function burst(){
+    const cx=W*0.5+sway;
+    for(let i=0;i<70;i++){
+      bubbles.push({ x:cx+rand(-40,40), y:diverY, r:rand(2,6), v:rand(4,11), life:1, hue:190+rand(-20,40), up:true });
+    }
+  }
+
+  cv.addEventListener('pointerdown',e=>{e.preventDefault();down(e);},{passive:false});
+  window.addEventListener('pointerup',e=>{up(e);});
+  window.addEventListener('pointercancel',e=>{up(e);});
+  document.addEventListener('contextmenu',e=>e.preventDefault());
+
+  // ---------- main loop ----------
+  let last=performance.now();
+  function loop(now){
+    const dt=Math.min(0.05,(now-last)/1000); last=now;
+    swayPhase += dt*(1.2+depthT*2.2);
+    sway = Math.sin(swayPhase)*(8+depthT*46);
+
+    if(state===ST.PLAY && diving && lives>0){
+      holdT += dt;
+      depth = Math.pow(holdT,1.15)*620;        // meters-ish
+      depthT = Math.min(1.4, holdT/2.4);
+      warn = holdT/limit;
+      // gold window
+      goldActive = (holdT>=goldStart && holdT<=goldStart+goldWin);
+      setDrone(depthT); setWarn(warn);
+      // depth step tick
+      if(Math.floor(depth/250) > lastStep){ lastStep=Math.floor(depth/250); blip(420 - lastStep*14,0.06,'sine',0.12); vib(6); }
+      // spawn bubbles
+      if(Math.random()<0.35+depthT*0.5) spawnBubble();
+      if(warn>=1){ drown(); }
+    } else {
+      depthT *= 0.92; setDrone(0); setWarn(0);
+    }
+
+    // update bubbles
+    for(let i=bubbles.length-1;i>=0;i--){
+      const b=bubbles[i];
+      b.y -= b.v*(b.up?2.4:1)* (60*dt);
+      b.x += Math.sin((b.y+i)*0.02)*0.6;
+      if(b.up){ b.life-=dt*1.6; b.v*=0.98; }
+      if(b.y<-20 || b.life<=0) bubbles.splice(i,1);
+    }
+    if(shake>0) shake*=0.86;
+    if(flashT>0) flashT-=dt*2.2;
+
+    draw();
+    if(flickAnim>0){
+      flickAnim-=dt*1.4; if(flickAnim<0)flickAnim=0;
+      const p=1-flickAnim;
+      flick.style.opacity = (flickAnim>0? Math.min(1,flickAnim*2):0);
+      flick.style.top = (H*0.34 - p*40)+'px';
+    } else flick.style.opacity=0;
+
+    requestAnimationFrame(loop);
+  }
+
+  function lerpC(c1,c2,t){
+    return [ c1[0]+(c2[0]-c1[0])*t, c1[1]+(c2[1]-c1[1])*t, c1[2]+(c2[2]-c1[2])*t ].map(Math.round);
+  }
+  const SHALLOW=[10,61,92], DEEP=[4,10,38], ABYSS=[14,4,32];
+  function draw(){
+    const sx = (Math.random()-0.5)*shake;
+    const sy = (Math.random()-0.5)*shake;
+    ctx.save(); ctx.translate(sx,sy);
+
+    // background gradient by depth
+    const t=Math.min(1,depthT/1.2);
+    const top = lerpC(SHALLOW,DEEP,t);
+    const bot = lerpC(DEEP,ABYSS,t);
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,`rgb(${top[0]},${top[1]},${top[2]})`);
+    g.addColorStop(1,`rgb(${bot[0]},${bot[1]},${bot[2]})`);
+    ctx.fillStyle=g; ctx.fillRect(-40,-40,W+80,H+80);
+
+    // descending water lines (parallax depth cue)
+    ctx.globalAlpha=0.10; ctx.strokeStyle='#bfe8ff'; ctx.lineWidth=1;
+    const off=(depth*0.25)%60;
+    for(let y=-60+off;y<H;y+=60){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    ctx.globalAlpha=1;
+
+    // bubbles (additive)
+    ctx.globalCompositeOperation='lighter';
+    for(const b of bubbles){
+      const a=Math.max(0,Math.min(1,b.life))*0.8;
+      ctx.beginPath();
+      ctx.fillStyle=`hsla(${b.hue},100%,70%,${a})`;
+      ctx.shadowColor=`hsla(${b.hue},100%,65%,${a})`; ctx.shadowBlur=12;
+      ctx.arc(b.x,b.y,b.r,0,7); ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.globalCompositeOperation='source-over';
+
+    // diver orb
+    diverY = H*0.30 + Math.min(H*0.40, depth*0.18);
+    const dx=W*0.5+sway;
+    const pulse = diving? 1+Math.sin(now0*0.012)*0.06 : 1;
+    const orbR=(20+depthT*8)*pulse;
+    const og=ctx.createRadialGradient(dx,diverY,2,dx,diverY,orbR*2.4);
+    const oc = goldActive? '255,210,77' : '120,240,255';
+    og.addColorStop(0,`rgba(${oc},0.95)`); og.addColorStop(0.4,`rgba(${oc},0.5)`); og.addColorStop(1,`rgba(${oc},0)`);
+    ctx.fillStyle=og; ctx.beginPath(); ctx.arc(dx,diverY,orbR*2.4,0,7); ctx.fill();
+    ctx.fillStyle=`rgba(${oc},1)`; ctx.shadowColor=`rgba(${oc},1)`; ctx.shadowBlur=24;
+    ctx.beginPath(); ctx.arc(dx,diverY,orbR*0.55,0,7); ctx.fill(); ctx.shadowBlur=0;
+
+    if(state===ST.PLAY){
+      // depth readout near orb
+      ctx.textAlign='center';
+      ctx.fillStyle='rgba(223,242,255,0.9)'; ctx.font='900 '+Math.round(34)+'px -apple-system,sans-serif';
+      ctx.fillText(Math.floor(depth)+' m', dx, diverY-orbR*2.6);
+      if(goldActive){
+        ctx.fillStyle='#ffd24d'; ctx.font='800 16px sans-serif';
+        ctx.fillText('★ いま離せ ×2 ★', dx, diverY+orbR*2.9);
+      }
+
+      // warn ring
+      const ringR=Math.min(W,H)*0.34;
+      const ry=H*0.62;
+      ctx.lineWidth=10;
+      ctx.strokeStyle='rgba(255,255,255,0.10)';
+      ctx.beginPath(); ctx.arc(W*0.5,ry,ringR,0,7); ctx.stroke();
+      const wt=Math.min(1,warn);
+      const danger = wt>0.8;
+      const rc = wt<0.6? '95,240,255' : wt<0.85? '255,190,80':'255,60,90';
+      const blink = danger? (0.55+0.45*Math.sin(now0*0.03)) : 1;
+      ctx.strokeStyle=`rgba(${rc},${blink})`;
+      ctx.shadowColor=`rgba(${rc},${blink})`; ctx.shadowBlur=danger?22:12;
+      ctx.beginPath(); ctx.arc(W*0.5,ry,ringR,-Math.PI/2,-Math.PI/2+wt*Math.PI*2); ctx.stroke();
+      ctx.shadowBlur=0;
+      ctx.fillStyle=`rgba(${rc},${blink})`; ctx.font='800 13px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(danger?'危険！離せ':'タイパ警報', W*0.5, ry+5);
+      if(diving){ ctx.fillStyle='rgba(207,233,255,.85)'; ctx.font='900 26px sans-serif';
+        ctx.fillText('+'+fmtYen(depth*comboMult*(goldActive?2:1)), W*0.5, ry+ringR+34); }
+    }
+
+    // flash on surface
+    if(flashT>0){ ctx.fillStyle=`rgba(180,240,255,${flashT*0.35})`; ctx.fillRect(-40,-40,W+80,H+80); }
+    // vignette
+    const vg=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.55)');
+    ctx.fillStyle=vg; ctx.fillRect(-40,-40,W+80,H+80);
+
+    ctx.restore();
+  }
+  let now0=0;
+  function rafLoop(t){ now0=t; loop(t); }
+
+  // ---------- result / share card ----------
+  function titleFor(maxD){
+    if(maxD>=4000) return '沼の主';
+    if(maxD>=2600) return '深淵の常習者';
+    if(maxD>=1500) return '沼った人';
+    if(maxD>=700) return '見習いダイバー';
+    return '浅瀬の住人';
+  }
+  function endRun(){
+    state=ST.RESULT;
+    hud.classList.add('hidden'); hint.classList.add('hidden');
+    drawCard();
+    resultEl.classList.remove('hidden');
+  }
+  function drawCard(){
+    const c=document.getElementById('cardCanvas'); const x=c.getContext('2d');
+    const w=c.width,h=c.height;
+    const g=x.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#0a3d5c'); g.addColorStop(0.55,'#061a36'); g.addColorStop(1,'#0c0426');
+    x.fillStyle=g; x.fillRect(0,0,w,h);
+    // bubbles deco
+    x.globalCompositeOperation='lighter';
+    for(let i=0;i<90;i++){ const bx=Math.random()*w, by=Math.random()*h, br=Math.random()*7+1;
+      const hue=Math.random()<0.15?300:195; x.fillStyle=`hsla(${hue},100%,70%,${Math.random()*0.5+0.1})`;
+      x.beginPath(); x.arc(bx,by,br,0,7); x.fill(); }
+    x.globalCompositeOperation='source-over';
+    x.textAlign='center';
+    // logo
+    x.fillStyle='#5ff0ff'; x.shadowColor='#5ff0ff'; x.shadowBlur=30; x.font='900 150px sans-serif';
+    x.fillText('沼', w/2, 215); x.shadowBlur=0;
+    x.fillStyle='#8fc4e6'; x.font='700 22px sans-serif'; x.fillText('N U M A', w/2, 255);
+    // title rank
+    x.fillStyle='#ffd24d'; x.shadowColor='#ffd24d'; x.shadowBlur=22; x.font='900 58px sans-serif';
+    x.fillText(titleFor(maxDepth), w/2, 430); x.shadowBlur=0;
+    // stats
+    function stat(lab,val,y,col){
+      x.fillStyle='#7fb6d8'; x.font='700 24px sans-serif'; x.fillText(lab,w/2,y);
+      x.fillStyle=col||'#dff2ff'; x.shadowColor=col||'#9fe4ff'; x.shadowBlur=16; x.font='900 64px sans-serif';
+      x.fillText(val,w/2,y+66); x.shadowBlur=0;
+    }
+    stat('総沈潜額', fmtYen(score), 540, '#7ff4ff');
+    stat('最高到達深度', Math.floor(maxDepth)+' m', 700, '#ffd24d');
+    x.fillStyle='#9fb8cf'; x.font='700 26px sans-serif';
+    x.fillText('ダイブ '+dives+' 回 ・ 溺れ '+drowns+' 回', w/2, 830);
+    // footer
+    x.fillStyle='#5a7896'; x.font='600 20px sans-serif';
+    x.fillText('#沼った  Idea Radar', w/2, 910);
+  }
+  document.getElementById('shareBtn').addEventListener('click', async ()=>{
+    const c=document.getElementById('cardCanvas');
+    c.toBlob(async (blob)=>{
+      const file=new File([blob],'numa.png',{type:'image/png'});
+      const txt='【沼 NUMA】'+titleFor(maxDepth)+' / 総沈潜額'+fmtYen(score)+' / 最高深度'+Math.floor(maxDepth)+'m #沼った';
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], text:txt}); return; }catch(e){}
+      }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='numa.png'; a.click();
+    },'image/png');
+  });
+  document.getElementById('againBtn').addEventListener('click', startGame);
+  document.getElementById('startBtn').addEventListener('click', startGame);
+
+  requestAnimationFrame(rafLoop);
+})();
+</script>
+</body>
+</html>
