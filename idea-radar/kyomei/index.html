@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060f">
+<title>共鳴 Kyōmei — 呼吸を整える</title>
+<style>
+  :root{ --cyan:#00E5FF; --magenta:#FF2D87; --bg:#05060f; --ink:#eaf2ff; }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;
+    overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
+  #app{ position:fixed; inset:0; }
+  canvas#scene{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .layer{ position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:28px;
+    transition:opacity .5s ease; }
+  .hidden{ opacity:0; pointer-events:none; }
+
+  .logo{ font-size:13px; letter-spacing:.55em; color:#7f8db0; text-transform:uppercase; margin-bottom:14px; }
+  h1{ font-size:64px; font-weight:800; letter-spacing:.04em;
+    background:linear-gradient(120deg,var(--cyan),var(--magenta));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 22px rgba(0,229,255,.35)); }
+  .sub{ font-size:15px; color:#9fb0d6; margin-top:10px; line-height:1.7; max-width:300px; }
+  .how{ margin-top:26px; font-size:14px; color:#c3d0ee; line-height:2; }
+  .how b{ color:var(--cyan); font-weight:700; }
+  .how .x{ color:var(--magenta); font-weight:700; }
+
+  .btn{ margin-top:34px; padding:16px 46px; border-radius:40px; border:1.5px solid rgba(0,229,255,.6);
+    background:rgba(0,229,255,.08); color:#eaf6ff; font-size:17px; font-weight:700; letter-spacing:.18em;
+    box-shadow:0 0 30px rgba(0,229,255,.25); cursor:pointer; transition:transform .12s; }
+  .btn:active{ transform:scale(.95); }
+  .btn.alt{ border-color:rgba(255,45,135,.55); background:rgba(255,45,135,.08); box-shadow:0 0 30px rgba(255,45,135,.2); }
+
+  /* play HUD */
+  #hud{ position:absolute; top:0; left:0; right:0; padding:18px 22px;
+    display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
+  #timer{ font-size:15px; letter-spacing:.2em; color:#9fb0d6; font-variant-numeric:tabular-nums; }
+  #cohnum{ font-size:15px; letter-spacing:.12em; font-variant-numeric:tabular-nums; color:var(--cyan); }
+  #cue{ position:absolute; bottom:14%; left:0; right:0; text-align:center;
+    font-size:20px; letter-spacing:.3em; color:#cdd9f5; pointer-events:none; transition:color .3s, opacity .3s; }
+  #cuehint{ position:absolute; bottom:8%; left:0; right:0; text-align:center;
+    font-size:12px; letter-spacing:.08em; color:#5f6e93; pointer-events:none; }
+
+  /* result */
+  #result .rcard{ width:min(78vw,330px); aspect-ratio:9/16; border-radius:26px; overflow:hidden;
+    box-shadow:0 12px 60px rgba(0,0,0,.6), 0 0 40px rgba(0,229,255,.12); }
+  #result img{ width:100%; height:100%; display:block; }
+  .rrow{ display:flex; gap:14px; margin-top:24px; }
+  .rrow .btn{ padding:15px 32px; letter-spacing:.1em; white-space:nowrap; }
+  .note{ margin-top:16px; font-size:12px; color:#6b79a0; max-width:300px; line-height:1.7; }
+  .streak{ margin-top:14px; font-size:13px; color:#9fb0d6; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <!-- START -->
+  <div class="layer" id="start">
+    <div class="logo">Kyōmei · 共鳴</div>
+    <h1>共&#8203;鳴</h1>
+    <div class="sub">1分間、ネオンの光球と呼吸を合わせる。<br>ギザギザの赤い波が、滑らかな青へ。</div>
+    <div class="how">
+      球が<b>膨らむ＝吸う（長押し）</b><br>
+      球が<span class="x">縮む＝吐く（はなす）</span>
+    </div>
+    <button class="btn" id="startBtn">は じ め る</button>
+  </div>
+
+  <!-- PLAY -->
+  <div class="layer hidden" id="play" style="justify-content:flex-start;">
+    <div id="hud"><span id="timer">60</span><span id="cohnum">共鳴 0%</span></div>
+    <div id="cue">す っ て</div>
+    <div id="cuehint">押している間＝吸う / はなす＝吐く</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="layer hidden" id="result">
+    <div class="rcard"><img id="rimg" alt="共鳴カード"></div>
+    <div class="streak" id="streak"></div>
+    <div class="rrow">
+      <button class="btn" id="shareBtn">シェア</button>
+      <button class="btn alt" id="againBtn">もう一度</button>
+    </div>
+    <div class="note">※ 共鳴%は呼吸ペースへの追従度の実測です。落ち着いた呼吸で、長く吐くほど整います。完全オンデバイス。</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const cv = document.getElementById('scene');
+  const ctx = cv.getContext('2d');
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2.5);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+    cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ---------- breathing cycle ----------
+  const INHALE=4.0, EXHALE=6.0, PERIOD=INHALE+EXHALE; // 6 breaths/min, coherent
+  const SESSION=60.0;
+  function smooth(t){ return t*t*(3-2*t); }
+  function cyclePhase(elapsed){
+    const p = elapsed % PERIOD;
+    if(p < INHALE){ return { inhale:true, scale: 1 + 0.5*smooth(p/INHALE), turn:false }; }
+    const q=(p-INHALE)/EXHALE; return { inhale:false, scale: 1.5 - 0.5*smooth(q), turn:false };
+  }
+
+  // ---------- state ----------
+  let mode='start';           // start | play | result
+  let t0=0, elapsed=0, lastTurnInhale=null;
+  let pressing=false;
+  let coh=0;                  // smoothed instantaneous coherence 0..1
+  let cohSum=0, cohCount=0;   // session average
+  let bestStreak=0, streakSec=0, lastTs=0;
+  let crossed85=false;
+  const particles=[];
+  const wave=[];             // {y, c}
+  const WAVE_N=160; let wavePhase=0;
+  for(let i=0;i<WAVE_N;i++) wave.push({y:0,c:0});
+
+  // ---------- audio ----------
+  let AC=null, master=null, lp=null, drone=[];
+  function initAudio(){
+    if(AC) return;
+    try{
+      AC = new (window.AudioContext||window.webkitAudioContext)();
+      lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=240; lp.Q.value=0.7;
+      master = AC.createGain(); master.gain.value=0.0;
+      lp.connect(master); master.connect(AC.destination);
+      // missing-fundamental drone: 55 + 110 + 165
+      [[55,0.5],[110,0.32],[165,0.18]].forEach(([f,g])=>{
+        const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+        const gg=AC.createGain(); gg.gain.value=g;
+        o.connect(gg); gg.connect(lp); o.start();
+        drone.push(o);
+      });
+    }catch(e){ AC=null; }
+  }
+  function bell(){
+    if(!AC) return;
+    const now=AC.currentTime;
+    [523.25,659.25,783.99].forEach((f,i)=>{
+      const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=AC.createGain();
+      const st=now+i*0.06;
+      g.gain.setValueAtTime(0, st);
+      g.gain.linearRampToValueAtTime(0.06, st+0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, st+0.45);
+      o.connect(g); g.connect(master); o.start(st); o.stop(st+0.5);
+    });
+  }
+  function vibrate(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+  // ---------- color helpers ----------
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  // red (236,26,51) -> cyan (0,229,255)
+  function cohColor(c,a){
+    const r=Math.round(lerp(236,0,c)), g=Math.round(lerp(26,229,c)), b=Math.round(lerp(51,255,c));
+    return 'rgba('+r+','+g+','+b+','+a+')';
+  }
+
+  // ---------- particles ----------
+  function emit(cx,cy,outward,strength){
+    const n = outward ? Math.round(10+18*strength) : Math.round(6+10*strength);
+    for(let i=0;i<n;i++){
+      const ang=Math.random()*Math.PI*2;
+      const sp=(outward?1:-1)*(0.6+Math.random()*1.4)*(0.5+strength);
+      const rad = outward ? 0 : (90+Math.random()*70);
+      particles.push({ang, r:rad, vr: sp*(outward?1.6:1.0)*40, life:1, cx, cy, sz:1.5+Math.random()*2.2, c:coh});
+      if(particles.length>240) particles.shift();
+    }
+  }
+
+  // ---------- main loop ----------
+  function frame(ts){
+    requestAnimationFrame(frame);
+    if(!lastTs) lastTs=ts;
+    const dt=Math.min(0.05,(ts-lastTs)/1000); lastTs=ts;
+
+    const cx=W/2, cy=H*0.52;
+    let scale=1, inhale=true;
+
+    if(mode==='play'){
+      if(!t0) t0=ts;
+      elapsed=(ts-t0)/1000;
+      const cp=cyclePhase(elapsed);
+      scale=cp.scale; inhale=cp.inhale;
+
+      // turn detection (inhale<->exhale)
+      if(lastTurnInhale===null) lastTurnInhale=inhale;
+      if(inhale!==lastTurnInhale){
+        lastTurnInhale=inhale;
+        vibrate(15);
+        if(!inhale) bell(); // exhale begins: soft bell
+      }
+
+      // coherence = match between pressing and ideal inhale
+      const matched = (pressing===inhale);
+      const target = matched?1:0;
+      coh += (target-coh)*Math.min(1, dt*4.0);
+      cohSum+=coh; cohCount++;
+      // streak of "in resonance" (coh high)
+      if(coh>0.72){ streakSec+=dt; if(streakSec>bestStreak) bestStreak=streakSec; }
+      else streakSec=0;
+      if(!crossed85 && coh>0.85){ crossed85=true; vibrate([10,40,10]); }
+      else if(coh<0.6) crossed85=false;
+
+      // audio morph
+      if(AC){
+        master.gain.setTargetAtTime(0.05+0.22*coh, AC.currentTime, 0.2);
+        lp.frequency.setTargetAtTime(200+650*coh, AC.currentTime, 0.25);
+      }
+
+      // cue text
+      const cueEl=document.getElementById('cue');
+      cueEl.textContent = inhale ? 'す っ て' : 'は い て';
+      cueEl.style.color = matched ? cohColor(coh,1) : 'rgba(205,217,245,.55)';
+      document.getElementById('timer').textContent = Math.max(0,Math.ceil(SESSION-elapsed));
+      document.getElementById('cohnum').textContent = '共鳴 '+Math.round(coh*100)+'%';
+
+      // particles on breathing
+      if(inhale && Math.random()<0.4*coh) emit(cx,cy,false,coh);
+      if(!inhale && Math.random()<0.5*coh) emit(cx,cy,true,coh);
+
+      if(elapsed>=SESSION){ endSession(); }
+    } else {
+      // ambient idle breathing for start/result backdrop
+      elapsed=(ts/1000);
+      const cp=cyclePhase(elapsed); scale=cp.scale; inhale=cp.inhale;
+      coh += (0.0-coh)*0.02; // settle to red-ish ambient but keep some life
+      if(mode==='start') coh = 0.35 + 0.15*Math.sin(ts/1700);
+    }
+
+    // ---- update wave buffer ----
+    wavePhase += dt*2.4;
+    const amp = H*0.045;
+    const noise=(Math.random()*2-1);
+    const sy = Math.sin(wavePhase)*coh*amp + noise*(1-coh)*amp*1.1;
+    wave.push({y:sy, c:coh}); if(wave.length>WAVE_N) wave.shift();
+
+    // ===== draw =====
+    ctx.clearRect(0,0,W,H);
+    // bg vignette
+    const bgGrad=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*0.75);
+    bgGrad.addColorStop(0,'#0a0c1c'); bgGrad.addColorStop(1,'#05060f');
+    ctx.fillStyle=bgGrad; ctx.fillRect(0,0,W,H);
+
+    // ---- coherence wave (top) ----
+    const wy=H*0.16, step=W/(WAVE_N-1);
+    ctx.lineWidth=2.4; ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.globalCompositeOperation='lighter';
+    for(let i=1;i<wave.length;i++){
+      const a=wave[i-1], b=wave[i];
+      ctx.beginPath();
+      ctx.strokeStyle=cohColor((a.c+b.c)/2, 0.9);
+      ctx.moveTo((i-1)*step, wy+a.y);
+      ctx.lineTo(i*step, wy+b.y);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation='source-over';
+
+    // ---- particles ----
+    ctx.globalCompositeOperation='lighter';
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.r += p.vr*dt; p.life -= dt*0.7;
+      if(p.life<=0 || p.r<0){ particles.splice(i,1); continue; }
+      const px=p.cx+Math.cos(p.ang)*p.r, py=p.cy+Math.sin(p.ang)*p.r;
+      ctx.fillStyle=cohColor(p.c, 0.5*p.life);
+      ctx.beginPath(); ctx.arc(px,py,p.sz,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalCompositeOperation='source-over';
+
+    // ---- orb ----
+    const base=Math.min(W,H)*0.16;
+    const R=base*scale;
+    const sharp = mode==='play' ? coh : 0.4;
+    // outer bloom (magenta)
+    ctx.globalCompositeOperation='lighter';
+    const bloom=ctx.createRadialGradient(cx,cy,R*0.2,cx,cy,R*(2.4-0.8*sharp));
+    bloom.addColorStop(0, cohColor(sharp,0.30+0.25*sharp));
+    bloom.addColorStop(0.35,'rgba(255,45,135,'+(0.10+0.10*sharp)+')');
+    bloom.addColorStop(1,'rgba(255,45,135,0)');
+    ctx.fillStyle=bloom; ctx.beginPath(); ctx.arc(cx,cy,R*(2.4-0.8*sharp),0,Math.PI*2); ctx.fill();
+    // core
+    const core=ctx.createRadialGradient(cx-R*0.2,cy-R*0.2,R*0.1,cx,cy,R);
+    core.addColorStop(0,'rgba(255,255,255,'+(0.85*0.5+0.5*sharp)+')');
+    core.addColorStop(0.5, cohColor(sharp, 0.9));
+    core.addColorStop(1, cohColor(sharp, 0.15));
+    ctx.fillStyle=core; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+    // crisp ring (brighter when coherent)
+    ctx.lineWidth=2+2*sharp; ctx.strokeStyle=cohColor(sharp,0.4+0.5*sharp);
+    ctx.beginPath(); ctx.arc(cx,cy,R*1.02,0,Math.PI*2); ctx.stroke();
+    // resonance rings
+    if(mode==='play' && coh>0.5){
+      for(let k=1;k<=3;k++){
+        const rr=R*(1.1+k*0.5*(0.6+0.4*Math.sin(elapsed*2 - k)));
+        ctx.lineWidth=1; ctx.strokeStyle=cohColor(coh,(0.18*coh)/k);
+        ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke();
+      }
+    }
+    ctx.globalCompositeOperation='source-over';
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- input ----------
+  function down(e){ if(mode!=='play') return; pressing=true; if(e.cancelable) e.preventDefault(); }
+  function up(e){ if(mode!=='play') return; pressing=false; if(e.cancelable) e.preventDefault(); }
+  window.addEventListener('pointerdown', down, {passive:false});
+  window.addEventListener('pointerup', up, {passive:false});
+  window.addEventListener('pointercancel', up, {passive:false});
+
+  // ---------- flow ----------
+  const elStart=document.getElementById('start');
+  const elPlay=document.getElementById('play');
+  const elResult=document.getElementById('result');
+
+  function show(el){ [elStart,elPlay,elResult].forEach(x=>x.classList.add('hidden')); el.classList.remove('hidden'); }
+
+  function startSession(){
+    initAudio(); if(AC && AC.state==='suspended') AC.resume();
+    mode='play'; t0=0; elapsed=0; pressing=false; coh=0; cohSum=0; cohCount=0;
+    bestStreak=0; streakSec=0; lastTurnInhale=null; crossed85=false;
+    particles.length=0;
+    show(elPlay);
+  }
+
+  function endSession(){
+    mode='result';
+    if(AC){ master.gain.setTargetAtTime(0.0, AC.currentTime, 0.5); }
+    const avg = cohCount? Math.round((cohSum/cohCount)*100) : 0;
+    // streak record
+    let store={}; try{ store=JSON.parse(localStorage.getItem('kyomei')||'{}'); }catch(e){}
+    const today=new Date().toISOString().slice(0,10);
+    if(store.lastDay!==today){
+      // consecutive?
+      const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
+      store.streak = (store.lastDay===y)? (store.streak||0)+1 : 1;
+      store.lastDay=today;
+    }
+    store.best = Math.max(store.best||0, avg);
+    try{ localStorage.setItem('kyomei', JSON.stringify(store)); }catch(e){}
+    document.getElementById('streak').textContent =
+      '連続 '+(store.streak||1)+'日 ・ ベスト共鳴 '+(store.best||avg)+'%';
+    drawCard(avg, bestStreak, today);
+    show(elResult);
+  }
+
+  // ---------- share card 1080x1920 ----------
+  let cardBlob=null, cardURL=null;
+  function drawCard(avg, streak, dateStr){
+    const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+    const g=c.getContext('2d');
+    // bg
+    const bg=g.createRadialGradient(540,840,0,540,840,1300);
+    bg.addColorStop(0,'#0b0e20'); bg.addColorStop(1,'#05060f');
+    g.fillStyle=bg; g.fillRect(0,0,1080,1920);
+    const cc=avg/100;
+    // smooth blue wave strip
+    g.globalCompositeOperation='lighter';
+    g.lineWidth=5; g.lineCap='round';
+    g.beginPath();
+    for(let x=0;x<=1080;x+=6){
+      const y=1500+Math.sin(x/70)*70*cc;
+      if(x===0) g.moveTo(x,y); else g.lineTo(x,y);
+    }
+    g.strokeStyle=cohColor(cc,0.9); g.stroke();
+    // orb
+    const ox=540,oy=720,R=300;
+    const bloom=g.createRadialGradient(ox,oy,60,ox,oy,R*2.2);
+    bloom.addColorStop(0,cohColor(cc,0.5)); bloom.addColorStop(0.4,'rgba(255,45,135,0.18)'); bloom.addColorStop(1,'rgba(255,45,135,0)');
+    g.fillStyle=bloom; g.beginPath(); g.arc(ox,oy,R*2.2,0,Math.PI*2); g.fill();
+    const core=g.createRadialGradient(ox-60,oy-60,40,ox,oy,R);
+    core.addColorStop(0,'rgba(255,255,255,0.95)'); core.addColorStop(0.5,cohColor(cc,0.95)); core.addColorStop(1,cohColor(cc,0.12));
+    g.fillStyle=core; g.beginPath(); g.arc(ox,oy,R,0,Math.PI*2); g.fill();
+    g.globalCompositeOperation='source-over';
+    // texts
+    g.textAlign='center';
+    g.fillStyle='#7f8db0'; g.font='600 34px -apple-system,sans-serif';
+    g.fillText('K Y Ō M E I  ·  共 鳴', 540, 150);
+    // big %
+    const grad=g.createLinearGradient(340,0,740,0);
+    grad.addColorStop(0,'#00E5FF'); grad.addColorStop(1,'#FF2D87');
+    g.fillStyle=grad; g.font='800 220px -apple-system,sans-serif';
+    g.fillText(avg+'%', 540, 1230);
+    g.fillStyle='#cdd9f5'; g.font='700 46px -apple-system,sans-serif';
+    g.fillText('本日の共鳴', 540, 1330);
+    g.fillStyle='#9fb0d6'; g.font='500 34px -apple-system,sans-serif';
+    g.fillText('最長同調 '+streak.toFixed(1)+'秒   ·   '+dateStr, 540, 1650);
+    g.fillStyle='#5f6e93'; g.font='600 30px -apple-system,sans-serif';
+    g.fillText('呼吸を整える · オンデバイス', 540, 1810);
+
+    const url=c.toDataURL('image/png');
+    document.getElementById('rimg').src=url;
+    c.toBlob(function(b){ cardBlob=b; if(cardURL) URL.revokeObjectURL(cardURL); cardURL=b?URL.createObjectURL(b):null; }, 'image/png');
+  }
+
+  async function share(){
+    try{
+      if(cardBlob && navigator.canShare && navigator.canShare({files:[new File([cardBlob],'kyomei.png',{type:'image/png'})]})){
+        await navigator.share({ files:[new File([cardBlob],'kyomei.png',{type:'image/png'})], text:'共鳴を整えた #Kyōmei' });
+        return;
+      }
+    }catch(e){}
+    // fallback download
+    const a=document.createElement('a'); a.href=document.getElementById('rimg').src; a.download='kyomei.png'; a.click();
+  }
+
+  document.getElementById('startBtn').addEventListener('click', startSession);
+  document.getElementById('againBtn').addEventListener('click', startSession);
+  document.getElementById('shareBtn').addEventListener('click', share);
+
+  // keep audio context honest on visibility
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden && AC){ master&&master.gain.setTargetAtTime(0,AC.currentTime,0.1);} });
+})();
+</script>
+</body>
+</html>
