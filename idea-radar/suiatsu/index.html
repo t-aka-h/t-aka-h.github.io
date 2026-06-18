@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070d">
+<title>水圧 SUIATSU — ネオン高圧洗浄ASMR</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#06070d;font-family:-apple-system,'Hiragino Sans',sans-serif;color:#e8eaf0;}
+  #stage{position:fixed;inset:0;display:block;touch-action:none;}
+  /* HUD */
+  #hud{position:fixed;top:env(safe-area-inset-top,0);left:0;right:0;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:5;}
+  #logo{font-size:13px;font-weight:900;letter-spacing:3px;color:#00e5ff;text-shadow:0 0 12px rgba(0,229,255,.6);}
+  #logo small{display:block;font-size:9px;letter-spacing:2px;color:#5b6b8a;font-weight:700;margin-top:2px;}
+  #pct{font-size:34px;font-weight:900;line-height:1;color:#fff;text-shadow:0 0 16px rgba(0,229,255,.5);text-align:right;}
+  #pct small{display:block;font-size:9px;letter-spacing:2px;color:#5b6b8a;font-weight:700;text-align:right;margin-top:3px;}
+  /* intro */
+  #intro,#done{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;background:rgba(6,7,13,.82);backdrop-filter:blur(3px);text-align:center;padding:30px;}
+  #intro.hide,#done.hide{display:none;}
+  .big{font-size:46px;font-weight:900;letter-spacing:8px;color:#fff;text-shadow:0 0 24px rgba(0,229,255,.7);}
+  .jp{font-size:13px;letter-spacing:4px;color:#7fd6ff;margin-top:6px;}
+  .lead{font-size:13px;line-height:2;color:#aab2c8;margin:22px 0 26px;max-width:340px;}
+  .btn{pointer-events:auto;cursor:pointer;border:none;border-radius:40px;padding:15px 40px;font-size:15px;font-weight:900;letter-spacing:2px;color:#04121a;background:linear-gradient(135deg,#00e5ff,#39ffd0);box-shadow:0 0 28px rgba(0,229,255,.45);}
+  .btn:active{transform:scale(.96);}
+  .btn.ghost{color:#cfe8ff;background:transparent;border:1px solid #2a3656;box-shadow:none;font-size:13px;padding:13px 26px;}
+  #done .card-wrap{margin-bottom:22px;}
+  #shareCard{width:min(74vw,300px);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px #1d2740;display:block;}
+  #done .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .tag{font-size:11px;color:#c9a961;font-weight:800;letter-spacing:2px;}
+  #hint{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0) + 22px);text-align:center;font-size:12px;letter-spacing:2px;color:#5b6b8a;z-index:5;pointer-events:none;transition:opacity .5s;}
+  .muralname{font-size:12px;color:#7fd6ff;letter-spacing:2px;margin-top:10px;min-height:14px;}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="hud">
+  <div id="logo">水圧 SUIATSU<small>NEON POWER-WASH</small></div>
+  <div id="pct">0<small>WASHED %</small></div>
+</div>
+<div id="hint">指でこすって 汚れを 落とす</div>
+
+<div id="intro">
+  <div class="big">水圧</div>
+  <div class="jp">S U I A T S U</div>
+  <div class="lead">真っ黒に汚れたネオンパネルを<br>指でこすると、高圧の水が汚れを剥がす。<br>下から現れる光の絵を、ぜんぶ磨き出せ。<br><span style="color:#5b6b8a;font-size:11px">音ON推奨・完全オンデバイス</span></div>
+  <button class="btn" id="startBtn">こすって洗う</button>
+  <div class="muralname" id="introName"></div>
+</div>
+
+<div id="done" class="hide">
+  <div class="card-wrap"><canvas id="shareCard"></canvas></div>
+  <div class="row">
+    <button class="btn" id="nextBtn">次の壁画へ</button>
+    <button class="btn ghost" id="shareBtn">シェア / 保存</button>
+  </div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const stage=document.getElementById('stage');
+const ctx=stage.getContext('2d');
+let DPR=Math.min(2,window.devicePixelRatio||1);
+let W=0,H=0;
+
+// offscreen layers
+const mural=document.createElement('canvas');
+const mctx=mural.getContext('2d');
+const grime=document.createElement('canvas');
+const gctx=grime.getContext('2d',{willReadFrequently:true});
+const sample=document.createElement('canvas'); // tiny sampler for wash %
+sample.width=56; sample.height=100;
+const sctx=sample.getContext('2d',{willReadFrequently:true});
+let beforeShot=null; // snapshot of fully-grimed panel
+
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=Math.round(window.innerWidth); H=Math.round(window.innerHeight);
+  stage.width=W*DPR; stage.height=H*DPR; stage.style.width=W+'px'; stage.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  mural.width=W*DPR; mural.height=H*DPR;
+  grime.width=W*DPR; grime.height=H*DPR;
+  mctx.setTransform(DPR,0,0,DPR,0,0);
+  gctx.setTransform(DPR,0,0,DPR,0,0);
+}
+resize();
+addEventListener('resize',()=>{ const was=running; resize(); if(was){ /* re-render layers keep state */ buildRound(currentRound,true);} });
+
+/* ---------- palettes & murals ---------- */
+const PAL=[
+ ['#00e5ff','#39ffd0','#7fd6ff'],
+ ['#ff2d87','#ff7ac4','#ffd0e6'],
+ ['#fbbf24','#ff8a3d','#ffe08a'],
+ ['#39ff14','#b6ff6b','#d8ffb0'],
+ ['#b86bff','#ff6bd6','#d9b6ff'],
+ ['#00e5ff','#ff2d87','#fbbf24']
+];
+const MSGS=['PIKA','NICE','CLEAN','SHINE','✨','よくできました','ぴかぴか','つるつる','GOOD','スッキリ'];
+
+function rnd(a,b){return a+Math.random()*(b-a);}
+function pick(a){return a[(Math.random()*a.length)|0];}
+
+function glow(c,b){ mctx.shadowColor=c; mctx.shadowBlur=b; }
+function noGlow(){ mctx.shadowBlur=0; }
+
+const MURALS=[
+ {n:'ネオンの波',f:drawWave},
+ {n:'回路基板',f:drawCircuit},
+ {n:'ひかりクラゲ',f:drawJelly},
+ {n:'同心リング',f:drawRings},
+ {n:'銀河のうず',f:drawSpiral},
+ {n:'星座',f:drawStars},
+ {n:'稲妻',f:drawBolt},
+ {n:'にっこり',f:drawFace},
+ {n:'ひみつの言葉',f:drawMessage},
+];
+
+function paintBase(pal){
+  mctx.fillStyle='#0a0a14'; mctx.fillRect(0,0,W,H);
+  // subtle radial vignette glow
+  const g=mctx.createRadialGradient(W/2,H/2,40,W/2,H/2,Math.max(W,H)*0.75);
+  g.addColorStop(0,'rgba(255,255,255,0.05)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  mctx.fillStyle=g; mctx.fillRect(0,0,W,H);
+}
+function drawWave(pal){
+  const rows=Math.ceil(H/46)+1; const cw=46;
+  for(let r=0;r<rows;r++){
+    const y=r*46;
+    for(let x=-cw;x<W+cw;x+=cw){
+      mctx.beginPath();
+      mctx.arc(x+(r%2?cw/2:0),y,cw*0.6,Math.PI,0);
+      mctx.strokeStyle=pick(pal); glow(mctx.strokeStyle,10); mctx.lineWidth=2.4; mctx.stroke();
+    }
+  }
+  noGlow();
+}
+function drawCircuit(pal){
+  const step=Math.max(34,W/9);
+  mctx.lineWidth=2;
+  for(let x=step/2;x<W;x+=step){
+    for(let y=step/2;y<H;y+=step){
+      const c=pick(pal); glow(c,8); mctx.strokeStyle=c; mctx.fillStyle=c;
+      // random L trace
+      mctx.beginPath(); mctx.moveTo(x,y);
+      const dx=(Math.random()<.5?1:-1)*step*rnd(.3,.9);
+      const dy=(Math.random()<.5?1:-1)*step*rnd(.3,.9);
+      mctx.lineTo(x+dx,y); mctx.lineTo(x+dx,y+dy); mctx.stroke();
+      mctx.beginPath(); mctx.arc(x,y,3.2,0,7); mctx.fill();
+    }
+  }
+  noGlow();
+}
+function drawJelly(pal){
+  const n=Math.max(3,(W/120)|0);
+  for(let i=0;i<n;i++){
+    const cx=rnd(W*.12,W*.88), cy=rnd(H*.18,H*.6), R=rnd(26,46), c=pick(pal);
+    glow(c,16); mctx.strokeStyle=c; mctx.lineWidth=3;
+    mctx.beginPath(); mctx.arc(cx,cy,R,Math.PI,0); mctx.stroke();
+    mctx.lineWidth=2;
+    for(let t=0;t<6;t++){
+      const tx=cx-R+ (2*R)*(t/5);
+      mctx.beginPath(); mctx.moveTo(tx,cy);
+      for(let s=0;s<=10;s++){ const yy=cy+s*rnd(7,11); const xx=tx+Math.sin(s*0.9+t)*8; mctx.lineTo(xx,yy);}
+      mctx.stroke();
+    }
+  }
+  noGlow();
+}
+function drawRings(pal){
+  const n=Math.max(3,(W/110)|0);
+  for(let i=0;i<n;i++){
+    const cx=rnd(0,W),cy=rnd(0,H);
+    for(let r=12;r<rnd(60,150);r+=rnd(12,22)){
+      const c=pick(pal); glow(c,10); mctx.strokeStyle=c; mctx.lineWidth=2.4;
+      mctx.beginPath(); mctx.arc(cx,cy,r,0,7); mctx.stroke();
+    }
+  }
+  noGlow();
+}
+function drawSpiral(pal){
+  const cx=W/2,cy=H/2; const c0=pick(pal),c1=pick(pal);
+  for(let a=0;a<Math.PI*14;a+=0.12){
+    const r=a*rnd(3.2,4.2); const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r;
+    if(x<-20||x>W+20||y<-20||y>H+20)continue;
+    const c=(a/0.12|0)%2?c0:c1; glow(c,9); mctx.fillStyle=c;
+    mctx.beginPath(); mctx.arc(x,y,2.6,0,7); mctx.fill();
+  }
+  noGlow();
+}
+function drawStars(pal){
+  const pts=[]; const n=Math.max(16,(W*H/16000)|0);
+  for(let i=0;i<n;i++)pts.push({x:rnd(20,W-20),y:rnd(40,H-40)});
+  const c=pick(pal); glow(c,8); mctx.strokeStyle=c; mctx.lineWidth=1.2;
+  for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; if(Math.random()<.4){mctx.beginPath();mctx.moveTo(a.x,a.y);mctx.lineTo(b.x,b.y);mctx.stroke();}}
+  for(const p of pts){ const cc=pick(pal); glow(cc,12); mctx.fillStyle=cc; mctx.beginPath(); mctx.arc(p.x,p.y,rnd(1.5,3.4),0,7); mctx.fill(); }
+  noGlow();
+}
+function drawBolt(pal){
+  const n=Math.max(3,(W/90)|0);
+  for(let i=0;i<n;i++){
+    let x=rnd(W*.1,W*.9),y=0; const c=pick(pal); glow(c,16); mctx.strokeStyle=c; mctx.lineWidth=rnd(2,3.4);
+    mctx.beginPath(); mctx.moveTo(x,y);
+    while(y<H){ y+=rnd(24,46); x+=rnd(-30,30); x=Math.max(8,Math.min(W-8,x)); mctx.lineTo(x,y);}
+    mctx.stroke();
+  }
+  noGlow();
+}
+function drawFace(pal){
+  const cx=W/2,cy=H*0.42,c=pick(pal); glow(c,20); mctx.strokeStyle=c; mctx.fillStyle=c; mctx.lineWidth=5;
+  const R=Math.min(W,H)*0.26;
+  mctx.beginPath(); mctx.arc(cx,cy,R,0,7); mctx.stroke();
+  mctx.beginPath(); mctx.arc(cx-R*0.4,cy-R*0.18,R*0.1,0,7); mctx.fill();
+  mctx.beginPath(); mctx.arc(cx+R*0.4,cy-R*0.18,R*0.1,0,7); mctx.fill();
+  mctx.beginPath(); mctx.arc(cx,cy+R*0.1,R*0.5,0.15*Math.PI,0.85*Math.PI); mctx.lineWidth=6; mctx.stroke();
+  noGlow();
+}
+function drawMessage(pal){
+  const msg=pick(MSGS); const c=pick(pal); glow(c,24); mctx.fillStyle=c;
+  mctx.textAlign='center'; mctx.textBaseline='middle';
+  let fs=Math.min(W*0.9/Math.max(2,msg.length),H*0.3); fs=Math.max(40,fs);
+  mctx.font='900 '+fs+'px -apple-system,sans-serif';
+  mctx.fillText(msg,W/2,H*0.45);
+  noGlow();
+  return msg;
+}
+
+/* ---------- grime ---------- */
+function paintGrime(){
+  gctx.setTransform(DPR,0,0,DPR,0,0);
+  gctx.globalCompositeOperation='source-over';
+  gctx.clearRect(0,0,W,H);
+  // base dark grime
+  gctx.fillStyle='#0c0d11'; gctx.fillRect(0,0,W,H);
+  // mottled texture
+  const N=(W*H/900)|0;
+  for(let i=0;i<N;i++){
+    const x=Math.random()*W,y=Math.random()*H,r=rnd(2,9);
+    const a=rnd(0,0.5);
+    gctx.fillStyle=Math.random()<.5?`rgba(0,0,0,${a})`:`rgba(60,55,45,${a*0.5})`;
+    gctx.beginPath(); gctx.arc(x,y,r,0,7); gctx.fill();
+  }
+  // streaks
+  for(let i=0;i<((W/12)|0);i++){
+    gctx.strokeStyle=`rgba(40,35,28,${rnd(.05,.18)})`; gctx.lineWidth=rnd(6,16);
+    gctx.beginPath(); const x=Math.random()*W; gctx.moveTo(x,0); gctx.lineTo(x+rnd(-30,30),H); gctx.stroke();
+  }
+}
+
+/* ---------- wash carving ---------- */
+let brush=0;
+function carve(x0,y0,x1,y1,deep){
+  gctx.globalCompositeOperation='destination-out';
+  const dist=Math.hypot(x1-x0,y1-y0);
+  const steps=Math.max(1,Math.ceil(dist/(brush*0.4)));
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, x=x0+(x1-x0)*t, y=y0+(y1-y0)*t;
+    const g=gctx.createRadialGradient(x,y,0,x,y,brush);
+    const core=deep?1:0.85;
+    g.addColorStop(0,`rgba(0,0,0,${core})`);
+    g.addColorStop(0.7,`rgba(0,0,0,${core*0.9})`);
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    gctx.fillStyle=g;
+    gctx.beginPath(); gctx.arc(x,y,brush,0,7); gctx.fill();
+  }
+  gctx.globalCompositeOperation='source-over';
+}
+
+/* ---------- particles ---------- */
+const parts=[];
+function spray(x,y,vx,vy,amt){
+  for(let i=0;i<amt;i++){
+    const a=Math.atan2(vy,vx)+rnd(-0.6,0.6);
+    const sp=rnd(2,7)+Math.hypot(vx,vy)*0.15;
+    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-rnd(0,2),life:rnd(0.25,0.6),t:0,r:rnd(1,2.6)});
+  }
+  if(parts.length>420)parts.splice(0,parts.length-420);
+}
+
+/* ---------- audio (all synthesized) ---------- */
+let AC=null,master=null,noiseSrc=null,noiseGain=null,bp=null,sub=null,subGain=null;
+function initAudio(){
+  if(AC)return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    // continuous water noise
+    const len=AC.sampleRate*2; const buf=AC.createBuffer(1,len,AC.sampleRate); const d=buf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    noiseSrc=AC.createBufferSource(); noiseSrc.buffer=buf; noiseSrc.loop=true;
+    bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1100; bp.Q.value=0.7;
+    noiseGain=AC.createGain(); noiseGain.gain.value=0;
+    noiseSrc.connect(bp).connect(noiseGain).connect(master); noiseSrc.start();
+    // 55Hz sub drone
+    sub=AC.createOscillator(); sub.type='sine'; sub.frequency.value=55;
+    subGain=AC.createGain(); subGain.gain.value=0.0;
+    const subH=AC.createOscillator(); subH.type='sine'; subH.frequency.value=110;
+    const subHg=AC.createGain(); subHg.gain.value=0.18;
+    sub.connect(subGain).connect(master); subH.connect(subHg).connect(subGain);
+    sub.start(); subH.start();
+  }catch(e){}
+}
+function water(level,spd){
+  if(!AC)return;
+  const t=AC.currentTime;
+  noiseGain.gain.setTargetAtTime(level*0.5,t,0.05);
+  bp.frequency.setTargetAtTime(900+spd*60+level*400,t,0.05);
+  subGain.gain.setTargetAtTime(level*0.22,t,0.08);
+}
+function punch(){
+  if(!AC)return; const t=AC.currentTime;
+  subGain.gain.cancelScheduledValues(t);
+  subGain.gain.setValueAtTime(0.34,t); subGain.gain.exponentialRampToValueAtTime(0.06,t+0.18);
+}
+function chime(){
+  if(!AC)return; const t=AC.currentTime; const notes=[523.25,659.25,783.99,1046.5];
+  notes.forEach((f,i)=>{ const o=AC.createOscillator(),g=AC.createGain();
+    o.type='triangle'; o.frequency.value=f; g.gain.setValueAtTime(0,t+i*0.08);
+    g.gain.linearRampToValueAtTime(0.3,t+i*0.08+0.02); g.gain.exponentialRampToValueAtTime(0.001,t+i*0.08+0.7);
+    o.connect(g).connect(master); o.start(t+i*0.08); o.stop(t+i*0.08+0.75); });
+  // sub boom
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='sine'; o.frequency.value=55;
+  g.gain.setValueAtTime(0.4,t); g.gain.exponentialRampToValueAtTime(0.001,t+1.1);
+  o.connect(g).connect(master); o.start(t); o.stop(t+1.15);
+}
+function vib(p){ if(navigator.vibrate)navigator.vibrate(p); }
+
+/* ---------- round state ---------- */
+let running=false, washed=0, done=false, currentRound=0, muralName='', isRare=false, palette=PAL[0];
+let frame=0;
+
+function buildRound(seedRound,keepGrime){
+  currentRound=seedRound;
+  brush=Math.max(20,Math.min(W,H)*0.06);
+  isRare=Math.random()<0.05;
+  palette=isRare?['#ffd86b','#ffb13d','#fff0b0']:pick(PAL);
+  paintBase(palette);
+  if(isRare){
+    // ornate gold frame mural
+    const m=18; mctx.strokeStyle='#ffd86b'; glow('#ffd86b',22); mctx.lineWidth=6;
+    mctx.strokeRect(m,m,W-2*m,H-2*m);
+    mctx.lineWidth=2; mctx.strokeRect(m+10,m+10,W-2*m-20,H-2*m-20);
+    noGlow();
+    const r=pick(MURALS); r.f(palette); muralName='★金の壁画★ '+r.n;
+  }else{
+    const m=pick(MURALS); const out=m.f(palette); muralName=(m.n==='ひみつの言葉'&&out)?('「'+out+'」'):m.n;
+  }
+  if(!keepGrime){
+    paintGrime();
+    // snapshot "before" = base + grime composited
+    const tmp=document.createElement('canvas'); tmp.width=W*DPR; tmp.height=H*DPR;
+    const tc=tmp.getContext('2d');
+    tc.fillStyle='#0a0a14'; tc.fillRect(0,0,tmp.width,tmp.height);
+    tc.drawImage(grime,0,0);
+    beforeShot=tmp;
+    washed=0; done=false;
+  }
+  document.getElementById('introName').textContent='今夜の壁画：'+muralName;
+}
+
+function computeWash(){
+  sctx.clearRect(0,0,sample.width,sample.height);
+  sctx.drawImage(grime,0,0,sample.width,sample.height);
+  const d=sctx.getImageData(0,0,sample.width,sample.height).data;
+  let cleaned=0,total=0;
+  for(let i=3;i<d.length;i+=4){ total++; if(d[i]<40)cleaned++; }
+  return total?cleaned/total:0;
+}
+
+/* ---------- render loop ---------- */
+function schedule(){
+  // rAF when the tab is visible (smooth, battery-friendly); setTimeout fallback
+  // keeps the loop alive when rAF is throttled/paused (e.g. hidden tab).
+  if(document.hidden){ setTimeout(loop,16); } else { requestAnimationFrame(loop); }
+}
+function loop(){
+  frame++;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#06070d'; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(mural,0,0,W,H);
+  ctx.drawImage(grime,0,0,W,H);
+  // particles
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.t+=0.016; if(p.t>=p.life){parts.splice(i,1);continue;}
+    p.vy+=0.35; p.x+=p.vx; p.y+=p.vy; const al=1-p.t/p.life;
+    ctx.fillStyle=`rgba(160,225,255,${al*0.8})`; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
+  ctx.restore();
+  // jet cone at pointer while pressing
+  if(pressing){
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const g=ctx.createRadialGradient(px,py,0,px,py,brush*1.4);
+    g.addColorStop(0,'rgba(190,235,255,0.5)'); g.addColorStop(1,'rgba(190,235,255,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,brush*1.4,0,7); ctx.fill(); ctx.restore();
+  }
+  // periodic wash calc
+  if(running&&!done&&frame%8===0){
+    washed=computeWash();
+    const shown=Math.min(100,Math.round(washed*100));
+    document.getElementById('pct').firstChild.nodeValue=shown;
+    if(washed>=0.985){ finish(); }
+  }
+  // celebration glow flash decay
+  if(flash>0){ ctx.fillStyle=`rgba(255,255,255,${flash*0.5})`; ctx.fillRect(0,0,W,H); flash*=0.88; }
+  schedule();
+}
+let flash=0;
+
+/* ---------- pointer ---------- */
+let pressing=false,px=0,py=0,lastX=0,lastY=0,lastT=0,moveAcc=0;
+function pos(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+function down(e){ if(!running||done)return; e.preventDefault(); initAudio(); if(AC&&AC.state==='suspended')AC.resume();
+  pressing=true; const p=pos(e); px=lastX=p.x; py=lastY=p.y; lastT=performance.now();
+  hideHint(); carve(p.x,p.y,p.x,p.y,washed<0.85); }
+function move(e){ if(!pressing)return; e.preventDefault(); const p=pos(e);
+  const now=performance.now(); const dt=Math.max(8,now-lastT); const d=Math.hypot(p.x-lastX,p.y-lastY);
+  const spd=d/dt*16;
+  carve(lastX,lastY,p.x,p.y,washed<0.85);
+  spray(p.x,p.y,p.x-lastX,p.y-lastY,Math.min(10,2+d*0.25));
+  water(Math.min(1,0.3+d*0.04),Math.min(12,spd));
+  moveAcc+=d; if(moveAcc>26){ punch(); vib(8); moveAcc=0; }
+  px=p.x;py=p.y;lastX=p.x;lastY=p.y;lastT=now;
+}
+function up(){ pressing=false; water(0,0); }
+stage.addEventListener('touchstart',down,{passive:false});
+stage.addEventListener('touchmove',move,{passive:false});
+stage.addEventListener('touchend',up); stage.addEventListener('touchcancel',up);
+stage.addEventListener('mousedown',down); addEventListener('mousemove',move); addEventListener('mouseup',up);
+
+let hintGone=false;
+function hideHint(){ if(hintGone)return; hintGone=true; document.getElementById('hint').style.opacity='0'; }
+
+/* ---------- finish ---------- */
+function rank(){
+  return 'すみずみまで磨いた職人';
+}
+function finish(){
+  if(done)return; done=true; running=false;
+  // full clear remaining grime visually
+  gctx.globalCompositeOperation='source-over'; gctx.clearRect(0,0,W,H);
+  flash=1; chime(); vib([20,40,120]); water(0,0);
+  document.getElementById('pct').firstChild.nodeValue=100;
+  buildShareCard();
+  setTimeout(()=>{ document.getElementById('done').classList.remove('hide'); },650);
+}
+
+/* ---------- share card (9:16) ---------- */
+const shareCard=document.getElementById('shareCard');
+function buildShareCard(){
+  const cw=1080,ch=1920; shareCard.width=cw; shareCard.height=ch;
+  const c=shareCard.getContext('2d');
+  c.fillStyle='#06070d'; c.fillRect(0,0,cw,ch);
+  // header
+  c.textAlign='center';
+  c.fillStyle='#00e5ff'; c.shadowColor='rgba(0,229,255,.6)'; c.shadowBlur=24;
+  c.font='900 64px -apple-system,sans-serif'; c.fillText('水圧 SUIATSU',cw/2,120);
+  c.shadowBlur=0; c.fillStyle='#5b6b8a'; c.font='700 26px -apple-system,sans-serif';
+  c.fillText('NEON POWER-WASH',cw/2,165);
+  // before / after split
+  const bx=80,bw=cw-160, by=230, bh=560, gap=40;
+  function panel(src,label,y){
+    c.save();
+    c.beginPath(); const rr=28,x=bx,w=bw,h=bh;
+    c.moveTo(x+rr,y); c.arcTo(x+w,y,x+w,y+h,rr); c.arcTo(x+w,y+h,x,y+h,rr); c.arcTo(x,y+h,x,y,rr); c.arcTo(x,y,x+w,y,rr); c.closePath(); c.clip();
+    c.fillStyle='#0a0a14'; c.fillRect(x,y,w,h);
+    if(src){ // cover-fit
+      const ar=src.width/src.height, tar=w/h; let sw,sh,sx,sy;
+      if(ar>tar){ sh=src.height; sw=sh*tar; sx=(src.width-sw)/2; sy=0;} else { sw=src.width; sh=sw/tar; sx=0; sy=(src.height-sh)/2;}
+      c.drawImage(src,sx,sy,sw,sh,x,y,w,h);
+    }
+    c.restore();
+    c.fillStyle='#c9a961'; c.font='800 28px -apple-system,sans-serif'; c.textAlign='left';
+    c.fillText(label,bx+8,y-14); c.textAlign='center';
+  }
+  panel(beforeShot,'BEFORE — 汚れ',by);
+  panel(mural,'AFTER — ぴかぴか',by+bh+gap+30);
+  // stats
+  const sy=by+bh*2+gap+90;
+  c.fillStyle='#fff'; c.shadowColor='rgba(0,229,255,.5)'; c.shadowBlur=20;
+  c.font='900 200px -apple-system,sans-serif'; c.fillText('100%',cw/2,sy+150);
+  c.shadowBlur=0;
+  c.fillStyle='#7fd6ff'; c.font='800 40px -apple-system,sans-serif'; c.fillText('WASHED',cw/2,sy+205);
+  c.fillStyle='#e8eaf0'; c.font='700 38px -apple-system,sans-serif';
+  c.fillText('壁画：'+muralName,cw/2,sy+285);
+  if(isRare){ c.fillStyle='#ffd86b'; c.font='900 44px -apple-system,sans-serif'; c.fillText('★ RARE 金の壁画 ★',cw/2,sy+350); }
+  c.fillStyle='#5b6b8a'; c.font='700 30px -apple-system,sans-serif';
+  c.fillText('#水圧  Idea Radar',cw/2,ch-70);
+}
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  shareCard.toBlob(async(blob)=>{
+    const file=new File([blob],'suiatsu.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:'ネオンを高圧洗浄でぴかぴかに磨いた！ #水圧'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='suiatsu.png'; a.click();
+  },'image/png');
+});
+
+/* ---------- flow ---------- */
+document.getElementById('startBtn').addEventListener('click',()=>{
+  initAudio(); if(AC&&AC.state==='suspended')AC.resume();
+  document.getElementById('intro').classList.add('hide');
+  running=true; document.getElementById('hint').style.opacity='1'; hintGone=false;
+});
+document.getElementById('nextBtn').addEventListener('click',()=>{
+  document.getElementById('done').classList.add('hide');
+  buildRound(currentRound+1,false);
+  document.getElementById('pct').firstChild.nodeValue=0;
+  running=true; hintGone=false; document.getElementById('hint').style.opacity='1';
+});
+
+buildRound(1,false);
+loop();
+})();
+</script>
+</body>
+</html>
