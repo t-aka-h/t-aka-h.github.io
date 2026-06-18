@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<title>Sukui（掬い）— ネオン金魚すくい</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:#05070f;overflow:hidden;
+    font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    color:#eaf2ff;-webkit-user-select:none;user-select:none;touch-action:none;}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#05070f;}
+  canvas{display:block;touch-action:none;}
+  /* overlays */
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;pointer-events:none;}
+  .layer.show{pointer-events:auto;}
+  .hide{display:none !important;}
+  .title{font-weight:900;letter-spacing:.5px;}
+  .neon{text-shadow:0 0 12px rgba(120,200,255,.55),0 0 30px rgba(120,200,255,.25);}
+  .neonM{text-shadow:0 0 12px rgba(255,90,170,.6),0 0 30px rgba(255,90,170,.3);}
+  .btn{pointer-events:auto;margin-top:22px;padding:15px 40px;border-radius:999px;border:1.5px solid #7fd6ff;
+    background:rgba(20,40,70,.55);color:#eaf6ff;font-size:17px;font-weight:800;letter-spacing:1px;
+    box-shadow:0 0 22px rgba(90,200,255,.35);backdrop-filter:blur(4px);}
+  .btn:active{transform:scale(.96);}
+  .small{font-size:13px;color:#8fa0c4;line-height:1.85;}
+  .kana{font-size:13px;letter-spacing:6px;color:#7fd6ff;margin-bottom:6px;}
+  .big{font-size:62px;line-height:1;margin:2px 0 4px;}
+  .glasswrap{pointer-events:none;background:rgba(8,14,28,.55);border:1px solid rgba(120,170,255,.22);
+    border-radius:22px;padding:26px 26px 30px;backdrop-filter:blur(6px);max-width:330px;width:88%;}
+  /* result share card 9:16 */
+  #cardCanvas{width:230px;max-width:62vw;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.6);}
+  .row{display:flex;gap:12px;margin-top:18px;justify-content:center;flex-wrap:wrap;}
+  .btn.alt{border-color:#c9a961;box-shadow:0 0 18px rgba(201,169,97,.3);color:#ffeebc;font-size:15px;padding:13px 26px;}
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;padding:14px 18px;display:flex;justify-content:space-between;
+    align-items:flex-start;pointer-events:none;font-variant-numeric:tabular-nums;}
+  #hud .l{font-size:12px;color:#8fa6cc;letter-spacing:1px;}
+  #hud .v{font-size:26px;font-weight:900;}
+  #onpoi{text-align:right;}
+  #wetwrap{position:absolute;left:18px;right:18px;bottom:30px;height:14px;border-radius:8px;
+    background:rgba(255,255,255,.07);overflow:hidden;border:1px solid rgba(255,255,255,.08);pointer-events:none;}
+  #wetfill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:8px;transition:width .08s linear;}
+  #wetlabel{position:absolute;left:0;right:0;bottom:48px;text-align:center;font-size:12px;letter-spacing:2px;
+    color:#9fb2d8;pointer-events:none;}
+  .redzone{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,80,80,.55);}
+  #hint{position:absolute;left:0;right:0;bottom:74px;text-align:center;font-size:13px;color:#bcd0f4;
+    pointer-events:none;opacity:.9;}
+  .fade{animation:fade 2.4s ease forwards;}
+  @keyframes fade{0%{opacity:1}70%{opacity:1}100%{opacity:0}}
+  .pulse{animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+
+<!-- HUD (in-game) -->
+<div id="hud" class="hide">
+  <div><div class="l">SCORE</div><div class="v neon" id="score">0</div></div>
+  <div id="onpoi"><div class="l">ON POI</div><div class="v neonM" id="poiCount">0</div></div>
+</div>
+<div id="wetlabel" class="hide">ふやけ</div>
+<div id="wetwrap" class="hide"><div id="wetfill"></div><div class="redzone" id="redmark"></div></div>
+<div id="hint" class="hide"></div>
+
+<!-- TITLE -->
+<div id="titleLayer" class="layer show">
+  <div class="glasswrap">
+    <div class="kana">す　く　い</div>
+    <div class="title big neon">掬い</div>
+    <div class="small" style="margin-bottom:6px">ネオンの光魚を ポイ で掬う夜店</div>
+    <div class="small" style="color:#aeb9d8">指で<b style="color:#ff8fc4">ポイを潜らせ</b>、光魚が乗ったら<br><b style="color:#7fd6ff">欲張らず指を離して</b>掬い上げる。<br>浸けるほど紙はふやける。破れたら終わり。</div>
+  </div>
+  <button class="btn" id="startBtn">すくいはじめる</button>
+  <div class="small" style="margin-top:14px;opacity:.7">音が出ます · 縦持ち推奨</div>
+</div>
+
+<!-- RESULT -->
+<div id="resultLayer" class="layer hide">
+  <canvas id="cardCanvas" width="540" height="960"></canvas>
+  <div class="row">
+    <button class="btn alt" id="shareBtn">シェア / 保存</button>
+    <button class="btn" id="againBtn">もう一枚</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ========================================================================
+   Sukui（掬い）— single-file neon goldfish-scooping toy
+   Canvas + WebAudio (synth only) + navigator.vibrate. No external assets.
+   ===================================================================== */
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cvs.width = W*DPR; cvs.height = H*DPR;
+  cvs.style.width = W+'px'; cvs.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- audio (lazy) ---------- */
+let AC=null, master=null, drone=null, droneGain=null, droneFilt=null;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    // deep water drone: 55Hz + harmonic, low-pass, missing-fundamental feel
+    drone = AC.createGain(); drone.gain.value=0;
+    droneFilt = AC.createBiquadFilter(); droneFilt.type='lowpass'; droneFilt.frequency.value=260;
+    droneGain = AC.createGain(); droneGain.gain.value=0.0;
+    const o1=AC.createOscillator(); o1.type='sine'; o1.frequency.value=55;
+    const o2=AC.createOscillator(); o2.type='sine'; o2.frequency.value=110;
+    const o3=AC.createOscillator(); o3.type='triangle'; o3.frequency.value=165;
+    const g2=AC.createGain(); g2.gain.value=0.5; const g3=AC.createGain(); g3.gain.value=0.28;
+    o1.connect(droneGain); o2.connect(g2); g2.connect(droneGain); o3.connect(g3); g3.connect(droneGain);
+    droneGain.connect(droneFilt); droneFilt.connect(master);
+    o1.start();o2.start();o3.start();
+  }catch(e){ AC=null; }
+}
+function resumeAudio(){ if(AC && AC.state==='suspended') AC.resume(); }
+function setDrone(level){ // level 0..1
+  if(!AC) return;
+  const t=AC.currentTime;
+  droneGain.gain.setTargetAtTime(0.05+level*0.5, t, 0.08);
+  droneFilt.frequency.setTargetAtTime(220+level*900, t, 0.12);
+}
+function noiseBurst(dur, hp, lp, vol, decay){
+  if(!AC) return;
+  const n = AC.createBufferSource();
+  const len = Math.floor(AC.sampleRate*dur);
+  const buf = AC.createBuffer(1,len,AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++){ d[i]=(Math.random()*2-1); }
+  n.buffer=buf;
+  const hpf=AC.createBiquadFilter(); hpf.type='highpass'; hpf.frequency.value=hp;
+  const lpf=AC.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=lp;
+  const g=AC.createGain(); g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+decay);
+  n.connect(hpf);hpf.connect(lpf);lpf.connect(g);g.connect(master);
+  n.start();
+}
+function sfxScoop(){ noiseBurst(0.22, 900, 6500, 0.5, 0.28); }
+function sfxTear(){
+  noiseBurst(0.5, 300, 4000, 0.85, 0.55);
+  if(!AC) return;
+  // descending growl
+  const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(180,AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+0.5);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.4,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.55);
+  o.connect(g);g.connect(master);o.start();o.stop(AC.currentTime+0.6);
+}
+function sfxBlip(freq){
+  if(!AC) return;
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.value=freq;
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0,AC.currentTime);
+  g.gain.linearRampToValueAtTime(0.25,AC.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.18);
+  o.connect(g);g.connect(master);o.start();o.stop(AC.currentTime+0.2);
+}
+function vib(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+/* ---------- game state ---------- */
+const FISH_COLORS=[
+  {c:'#7fe9ff',name:'cyan'},
+  {c:'#ff7fc4',name:'magenta'},
+  {c:'#ffd27f',name:'amber'},
+];
+let fishes=[];
+let poi={x:W/2,y:H*0.55,r:64,down:false};
+let state='title';      // title | play | result
+let wet=0;              // 0..1 cumulative poi soak (persists across dips, only rises)
+let maxWet=0;
+let score=0;
+let banked=0;           // fish banked count
+let dipFish=[];         // fish currently riding on poi (indexes into fishes)
+let redEntered=false;
+let lastRedPulse=0;
+let torn=false;
+let started=0;
+let lastT=0;
+const RED=0.80;
+let bestScore = +(localStorage.getItem('sukui_best')||0);
+
+/* spawn pool */
+function spawnFish(){
+  const big = Math.random()<0.18;
+  const huge = Math.random()<0.05;
+  const col = FISH_COLORS[(Math.random()*FISH_COLORS.length)|0];
+  const size = huge? (30+Math.random()*8) : big? (20+Math.random()*6) : (12+Math.random()*6);
+  return {
+    x: 30+Math.random()*(W-60),
+    y: H*0.18 + Math.random()*(H*0.62),
+    size, col:col.c,
+    val: huge?5:big?3:1,
+    ph: Math.random()*Math.PI*2,
+    sp: 0.4+Math.random()*0.6,
+    vx:(Math.random()*2-1)*0.25, vy:(Math.random()*2-1)*0.18,
+    riding:false, jump:0, gone:false,
+  };
+}
+function resetGame(){
+  fishes=[]; for(let i=0;i<9;i++) fishes.push(spawnFish());
+  wet=0;maxWet=0;score=0;banked=0;dipFish=[];redEntered=false;torn=false;
+  poi.down=false; started=performance.now();
+}
+
+/* ---------- input ---------- */
+function pt(e){
+  const t = e.touches? e.touches[0] : e;
+  return {x:t.clientX, y:t.clientY};
+}
+function onDown(e){
+  if(state!=='play') return;
+  e.preventDefault(); resumeAudio();
+  const p=pt(e); poi.x=p.x; poi.y=p.y; poi.down=true;
+  redEntered=false;
+  setDrone(0.1+wet*0.5);
+}
+function onMove(e){
+  if(state!=='play'||!poi.down) return;
+  e.preventDefault();
+  const p=pt(e); poi.x=p.x; poi.y=p.y;
+}
+function onUp(e){
+  if(state!=='play'||!poi.down) return;
+  e.preventDefault();
+  poi.down=false;
+  liftPoi();
+}
+cvs.addEventListener('touchstart',onDown,{passive:false});
+cvs.addEventListener('touchmove',onMove,{passive:false});
+cvs.addEventListener('touchend',onUp,{passive:false});
+cvs.addEventListener('touchcancel',onUp,{passive:false});
+cvs.addEventListener('mousedown',onDown);
+window.addEventListener('mousemove',onMove);
+window.addEventListener('mouseup',onUp);
+
+function liftPoi(){
+  // bank riding fish
+  let got=0, pts=0;
+  for(const f of fishes){
+    if(f.riding && !f.gone){
+      f.gone=true; f.jump=1; got++; pts+=f.val;
+    }
+  }
+  if(got>0){
+    score+=pts; banked+=got;
+    sfxScoop(); vib(28);
+    // respawn caught fish elsewhere after a moment (keep pond stocked)
+    setTimeout(()=>{ let n=0; for(let i=0;i<fishes.length;i++){ if(fishes[i].gone && n<got){ fishes[i]=spawnFish(); n++; } } }, 650);
+  } else {
+    // empty lift — tiny water sound
+    sfxBlip(520);
+  }
+  dipFish=[];
+  setDrone(0.05);
+  updateHUD();
+}
+
+/* ---------- core update ---------- */
+function update(dt){
+  // drift fishes
+  for(const f of fishes){
+    if(f.gone){ f.jump=Math.max(0,f.jump-dt*2.2); continue; }
+    f.ph+=dt*f.sp;
+    f.x+=f.vx*dt*60 + Math.cos(f.ph)*0.15;
+    f.y+=f.vy*dt*60 + Math.sin(f.ph*0.7)*0.12;
+    if(f.x<24){f.x=24;f.vx=Math.abs(f.vx);} if(f.x>W-24){f.x=W-24;f.vx=-Math.abs(f.vx);}
+    if(f.y<H*0.14){f.y=H*0.14;f.vy=Math.abs(f.vy);} if(f.y>H*0.84){f.y=H*0.84;f.vy=-Math.abs(f.vy);}
+  }
+
+  if(state==='play' && poi.down){
+    // attract fish inside poi toward center; mark riding
+    let onCount=0;
+    for(const f of fishes){
+      if(f.gone) continue;
+      const dx=poi.x-f.x, dy=poi.y-f.y, d=Math.hypot(dx,dy);
+      if(d < poi.r){
+        f.riding=true;
+        f.x += dx*Math.min(1,dt*3);
+        f.y += dy*Math.min(1,dt*3);
+        onCount++;
+      } else {
+        f.riding=false;
+      }
+    }
+    // deterministic wetting: faster with more fish riding
+    const rate = (0.085 + onCount*0.05); // per second
+    wet = Math.min(1, wet + rate*dt);
+    if(wet>maxWet) maxWet=wet;
+
+    // red-zone warning + probabilistic tear
+    if(wet>=RED){
+      if(!redEntered){ redEntered=true; }
+      const now=performance.now();
+      if(now-lastRedPulse>260){ lastRedPulse=now; vib(14); }
+      // break prob scales with how deep into red, per frame
+      const over=(wet-RED)/(1-RED); // 0..1
+      const pFrame = (over*over)*0.9*dt; // grows quadratically
+      if(Math.random()<pFrame){ tear(); return; }
+    }
+    setDrone(0.1+wet*0.7);
+  } else {
+    for(const f of fishes){ if(!f.gone) f.riding=false; }
+  }
+  updateHUD();
+}
+
+function tear(){
+  torn=true; poi.down=false;
+  sfxTear(); vib([0,300,80,120]);
+  // drop riding fish
+  for(const f of fishes){ f.riding=false; }
+  flash=1;
+  setTimeout(endGame, 900);
+}
+
+/* ---------- rendering ---------- */
+let flash=0;
+let waterPhase=0;
+function draw(){
+  // background gradient (deep indigo -> black)
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#070b18'); g.addColorStop(0.5,'#08122a'); g.addColorStop(1,'#04060f');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // water surface lines (sine, scrolling)
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const lines=14;
+  for(let i=0;i<lines;i++){
+    const yy = H*0.08 + (H*0.82)*(i/lines);
+    const amp = 5+ (i%3)*3;
+    const alpha = 0.05 + 0.05*Math.sin(waterPhase+i);
+    ctx.strokeStyle='rgba(90,170,230,'+alpha.toFixed(3)+')';
+    ctx.lineWidth=1.2;
+    ctx.beginPath();
+    for(let x=0;x<=W;x+=14){
+      const y = yy + Math.sin(x*0.018 + waterPhase*1.2 + i*0.6)*amp;
+      if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // fishes (additive neon)
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(const f of fishes){
+    if(f.gone && f.jump<=0) continue;
+    const jl = f.gone? (1-f.jump) : 0;
+    const ry = f.y - (f.gone? f.jump*40 : 0);
+    const sz = f.size*(1 + (f.riding?0.12:0));
+    ctx.save();
+    ctx.translate(f.x, ry);
+    ctx.globalAlpha = f.gone? Math.max(0,f.jump) : 1;
+    // glow body
+    const rg=ctx.createRadialGradient(0,0,0,0,0,sz*2.2);
+    rg.addColorStop(0, f.col);
+    rg.addColorStop(0.4, hexA(f.col,0.55));
+    rg.addColorStop(1, hexA(f.col,0));
+    ctx.fillStyle=rg;
+    ctx.beginPath(); ctx.arc(0,0,sz*2.2,0,Math.PI*2); ctx.fill();
+    // body core (fish-ish: ellipse + tail)
+    ctx.globalAlpha = (f.gone?Math.max(0,f.jump):1);
+    ctx.fillStyle=f.col;
+    ctx.beginPath(); ctx.ellipse(0,0,sz*0.85,sz*0.55,Math.sin(f.ph)*0.25,0,Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    const tw=sz*0.9, th=sz*0.5, tx=-sz*0.7;
+    ctx.moveTo(tx,0); ctx.lineTo(tx-tw,-th); ctx.lineTo(tx-tw*0.6,0); ctx.lineTo(tx-tw,th); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // poi
+  if(state==='play' && poi.down){
+    drawPoi();
+  }
+
+  if(flash>0){
+    ctx.fillStyle='rgba(255,120,120,'+(flash*0.5)+')';
+    ctx.fillRect(0,0,W,H);
+    flash=Math.max(0,flash-0.04);
+  }
+}
+
+function drawPoi(){
+  const red = wet>=RED;
+  const over = red? (wet-RED)/(1-RED):0;
+  // rim color amber -> red as it soaks
+  const rimCol = red? mix('#ffcf7f','#ff4040', Math.min(1,over)) : mix('#9fe6ff','#ffcf7f', Math.min(1,wet/RED));
+  ctx.save();
+  ctx.translate(poi.x,poi.y);
+  // wobble ring stronger when red
+  const wob = (red? 4+over*8 : 1.5);
+  // paper fill (translucent, more transparent as it soaks)
+  ctx.globalCompositeOperation='lighter';
+  const pg=ctx.createRadialGradient(0,0,0,0,0,poi.r);
+  pg.addColorStop(0, hexA(rimCol, 0.06+ (1-wet)*0.14));
+  pg.addColorStop(0.7, hexA(rimCol, 0.04+ (1-wet)*0.1));
+  pg.addColorStop(1, hexA(rimCol, 0));
+  ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(0,0,poi.r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // rim
+  ctx.save();
+  ctx.translate(poi.x,poi.y);
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineWidth = red? 3.2 : 2.4;
+  ctx.strokeStyle = rimCol;
+  ctx.shadowBlur = red? 22 : 12; ctx.shadowColor=rimCol;
+  ctx.beginPath();
+  for(let a=0;a<=Math.PI*2+0.01;a+=0.18){
+    const rr = poi.r + Math.sin(a*5 + waterPhase*4)*wob;
+    const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+    if(a===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath(); ctx.stroke();
+  // handle
+  ctx.shadowBlur=0; ctx.strokeStyle=hexA(rimCol,0.8); ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(0,poi.r*0.8); ctx.lineTo(0,poi.r*1.7); ctx.stroke();
+  ctx.restore();
+}
+
+/* color helpers */
+function hexA(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+}
+function mix(h1,h2,t){
+  const a=parseInt(h1.slice(1),16), b=parseInt(h2.slice(1),16);
+  const r=Math.round(((a>>16)&255)+(((b>>16)&255)-((a>>16)&255))*t);
+  const g=Math.round(((a>>8)&255)+(((b>>8)&255)-((a>>8)&255))*t);
+  const bl=Math.round((a&255)+((b&255)-(a&255))*t);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+bl).toString(16).slice(1);
+}
+
+/* ---------- HUD ---------- */
+const elScore=document.getElementById('score');
+const elPoiCount=document.getElementById('poiCount');
+const elWetFill=document.getElementById('wetfill');
+const elRed=document.getElementById('redmark');
+const elHint=document.getElementById('hint');
+function updateHUD(){
+  elScore.textContent=score;
+  let on=0; for(const f of fishes){ if(f.riding&&!f.gone) on++; }
+  elPoiCount.textContent=on;
+  const pct=Math.round(wet*100);
+  elWetFill.style.width=pct+'%';
+  elWetFill.style.background = wet>=RED
+    ? 'linear-gradient(90deg,#ffb14d,#ff4040)'
+    : 'linear-gradient(90deg,#5fd0ff,#ffce7a)';
+  elRed.style.left=(RED*100)+'%';
+}
+
+/* ---------- loop ---------- */
+function frame(t){
+  const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t;
+  waterPhase += dt*0.6;
+  if(state==='play') update(dt);
+  else { // idle drift on title/result behind overlay
+    for(const f of fishes){ if(!f.gone){ f.ph+=dt*f.sp; f.x+=f.vx*dt*40; f.y+=f.vy*dt*30;
+      if(f.x<24||f.x>W-24)f.vx*=-1; if(f.y<H*0.14||f.y>H*0.84)f.vy*=-1; } }
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- screens ---------- */
+const titleLayer=document.getElementById('titleLayer');
+const resultLayer=document.getElementById('resultLayer');
+const hud=document.getElementById('hud');
+const wetwrap=document.getElementById('wetwrap');
+const wetlabel=document.getElementById('wetlabel');
+
+function show(el){el.classList.remove('hide');el.classList.add('show');}
+function hideEl(el){el.classList.add('hide');el.classList.remove('show');}
+
+function startGame(){
+  initAudio(); resumeAudio();
+  resetGame();
+  state='play';
+  hideEl(titleLayer); hideEl(resultLayer);
+  show(hud); wetwrap.classList.remove('hide'); wetlabel.classList.remove('hide');
+  elHint.classList.remove('hide'); elHint.textContent='ポイを潜らせて…乗ったら離す';
+  elHint.classList.remove('fade'); void elHint.offsetWidth; elHint.classList.add('fade');
+  setDrone(0.06);
+  updateHUD();
+}
+
+function endGame(){
+  state='result';
+  setDrone(0);
+  hud.classList.add('hide'); wetwrap.classList.add('hide'); wetlabel.classList.add('hide'); elHint.classList.add('hide');
+  if(score>bestScore){ bestScore=score; localStorage.setItem('sukui_best',bestScore); }
+  drawCard();
+  show(resultLayer);
+}
+
+document.getElementById('startBtn').addEventListener('click', e=>{e.preventDefault();startGame();});
+document.getElementById('againBtn').addEventListener('click', e=>{e.preventDefault();startGame();});
+
+/* ---------- share card 9:16 ---------- */
+const card=document.getElementById('cardCanvas');
+const cctx=card.getContext('2d');
+function titleFor(s){
+  if(s>=120) return 'すくいの達人';
+  if(s>=60)  return '夜店の常連';
+  if(s>=30)  return 'なかなかの腕';
+  if(s>=10)  return 'はじめての一匹';
+  return 'また来てね';
+}
+function drawCard(){
+  const w=card.width,h=card.height;
+  const g=cctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#0a1430'); g.addColorStop(0.55,'#091025'); g.addColorStop(1,'#05070f');
+  cctx.fillStyle=g; cctx.fillRect(0,0,w,h);
+  // faint water lines
+  cctx.globalCompositeOperation='lighter';
+  for(let i=0;i<10;i++){
+    const yy=h*0.12+i*h*0.075;
+    cctx.strokeStyle='rgba(80,160,220,0.08)'; cctx.lineWidth=2;
+    cctx.beginPath();
+    for(let x=0;x<=w;x+=18){ const y=yy+Math.sin(x*0.02+i)*8; x===0?cctx.moveTo(x,y):cctx.lineTo(x,y);} cctx.stroke();
+  }
+  // a few neon fish
+  const cols=['#7fe9ff','#ff7fc4','#ffd27f'];
+  for(let i=0;i<7;i++){
+    const fx=80+Math.random()*(w-160), fy=h*0.18+Math.random()*(h*0.5), s=14+Math.random()*22, c=cols[i%3];
+    const rg=cctx.createRadialGradient(fx,fy,0,fx,fy,s*2.4);
+    rg.addColorStop(0,c); rg.addColorStop(0.4,hexA(c,0.5)); rg.addColorStop(1,hexA(c,0));
+    cctx.fillStyle=rg; cctx.beginPath(); cctx.arc(fx,fy,s*2.4,0,Math.PI*2); cctx.fill();
+    cctx.fillStyle=c; cctx.beginPath(); cctx.ellipse(fx,fy,s*0.85,s*0.55,0.2,0,Math.PI*2); cctx.fill();
+  }
+  cctx.globalCompositeOperation='source-over';
+  // header
+  cctx.textAlign='center';
+  cctx.fillStyle='#7fd6ff'; cctx.font='600 30px -apple-system,sans-serif';
+  cctx.fillText('す　く　い', w/2, 120);
+  cctx.fillStyle='#fff'; cctx.font='900 92px -apple-system,sans-serif';
+  cctx.shadowBlur=24; cctx.shadowColor='rgba(120,200,255,.7)';
+  cctx.fillText('掬い', w/2, 215); cctx.shadowBlur=0;
+  // score big
+  cctx.fillStyle='#aab8da'; cctx.font='600 30px -apple-system,sans-serif';
+  cctx.fillText('SCORE', w/2, h*0.48);
+  cctx.fillStyle='#ffd27f'; cctx.font='900 150px -apple-system,sans-serif';
+  cctx.shadowBlur=30; cctx.shadowColor='rgba(255,200,120,.6)';
+  cctx.fillText(String(score), w/2, h*0.61); cctx.shadowBlur=0;
+  // title badge
+  cctx.fillStyle='#ff7fc4'; cctx.font='800 46px -apple-system,sans-serif';
+  cctx.fillText('「'+titleFor(score)+'」', w/2, h*0.70);
+  // stats
+  const pct=Math.round(maxWet*100);
+  cctx.fillStyle='#9fb2d8'; cctx.font='600 34px -apple-system,sans-serif';
+  cctx.fillText('掬った魚 '+banked+' 匹 ／ ふやけ耐性 '+pct+'%', w/2, h*0.78);
+  cctx.fillStyle=(score>=bestScore?'#ffd27f':'#7f93b8'); cctx.font='700 30px -apple-system,sans-serif';
+  cctx.fillText((score>=bestScore? '★ 自己ベスト更新':'自己ベスト '+bestScore), w/2, h*0.83);
+  // footer
+  cctx.fillStyle='#6577a0'; cctx.font='600 26px -apple-system,sans-serif';
+  cctx.fillText('Sukui（掬い）· Idea Radar', w/2, h*0.93);
+  cctx.fillStyle='#445; '; cctx.fillStyle='#52607f'; cctx.font='500 22px -apple-system,sans-serif';
+  cctx.fillText('t-aka-h.github.io/idea-radar', w/2, h*0.96);
+}
+
+document.getElementById('shareBtn').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  try{
+    const blob = await new Promise(r=>card.toBlob(r,'image/png'));
+    const file = new File([blob],'sukui.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], text:'掬いで '+score+'点 #掬い #Sukui'});
+    }else{
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='sukui.png'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+    }
+  }catch(err){/* user cancelled */}
+});
+
+/* idle pond on title */
+resetGame(); state='title';
+requestAnimationFrame(frame);
+
+/* inert debug hook (used only by automated verification; harmless in normal play) */
+window.__dbg={
+  step:(dt)=>{ if(state==='play') update(dt); draw(); },
+  setWet:(v)=>{ wet=v; if(v>maxWet)maxWet=v; },
+  poiDown:(x,y)=>{ poi.x=x;poi.y=y;poi.down=true;redEntered=false; },
+  get:()=>({state,wet:+wet.toFixed(3),score,banked,maxWet:+maxWet.toFixed(3),torn,poiDown:poi.down,
+    onPoi:fishes.filter(f=>f.riding&&!f.gone).length})
+};
+</script>
+</body>
+</html>
