@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<title>一夜 — Ichiya</title>
+<style>
+  :root{
+    --bg0:#05060a; --bg1:#0a0e1a;
+    --cyan:#00e5ff; --lime:#39ff14; --mag:#ff2d6f; --amber:#ffb800;
+    --ink:#eaf2ff; --dim:#7e8aa6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#000;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;color:var(--ink);}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;}
+  #wrap{position:relative;width:100vw;height:100vh;max-width:calc(100vh * 9 / 16);max-height:100vh;overflow:hidden;
+        background:radial-gradient(120% 80% at 50% 18%, #0e1730 0%, var(--bg1) 46%, var(--bg0) 100%);}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+           text-align:center;padding:7vw;gap:3.2vh;z-index:5;}
+  .hidden{display:none!important;}
+  .kicker{font-size:3.4vw;letter-spacing:.42em;color:var(--cyan);text-transform:uppercase;
+          text-shadow:0 0 14px rgba(0,229,255,.7);}
+  h1{font-size:17vw;font-weight:900;line-height:.92;letter-spacing:.04em;
+     background:linear-gradient(180deg,#fff,#9fe9ff 60%,#00e5ff);-webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 0 22px rgba(0,229,255,.45));}
+  .sub{font-size:3.9vw;color:var(--dim);line-height:1.7;max-width:84%;}
+  .sub b{color:var(--ink);font-weight:700;}
+  .amberline{color:var(--amber);font-weight:800;text-shadow:0 0 12px rgba(255,184,0,.5);}
+  .btn{margin-top:1vh;font-size:5.2vw;font-weight:800;letter-spacing:.14em;color:#001018;
+       padding:3.6vh 12vw;border:none;border-radius:999px;
+       background:linear-gradient(180deg,#7df9ff,#00e5ff);
+       box-shadow:0 0 28px rgba(0,229,255,.6),0 8px 28px rgba(0,0,0,.5);cursor:pointer;}
+  .btn:active{transform:translateY(2px) scale(.99);}
+  .btn.mag{background:linear-gradient(180deg,#ff85ab,#ff2d6f);color:#1a0009;box-shadow:0 0 26px rgba(255,45,111,.55);}
+  .row{display:flex;gap:3.5vw;flex-wrap:wrap;justify-content:center;}
+  .btn.sm{font-size:4.2vw;padding:2.8vh 7vw;}
+  .credit{position:absolute;bottom:2.4vh;left:0;right:0;text-align:center;font-size:2.7vw;color:#4a5675;letter-spacing:.06em;z-index:6;}
+  .credit a{color:#7e8aa6;text-decoration:none;}
+  .tiny{font-size:3vw;color:#5c688a;line-height:1.7;max-width:88%;}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;mix-blend-mode:screen;}
+</style>
+</head>
+<body>
+<div id="stage"><div id="wrap">
+  <canvas id="cv"></canvas>
+  <div class="flash" id="flash"></div>
+
+  <!-- INTRO -->
+  <div class="overlay" id="introScreen">
+    <div class="kicker">Idea Radar</div>
+    <h1>一夜</h1>
+    <div class="kicker" style="margin-top:-1vh">ICHIYA</div>
+    <div class="sub">人口50万の島国が強豪を<b>0-0で守り切る</b>。<br>その夜、無名GKのフォロワーは<br><b>一夜にして</b>世界的スターを抜く。</div>
+    <div class="tiny">飛んでくるシュートを、<b style="color:var(--cyan)">光のリングが重なる一瞬にタップ</b>。<br>左右に振られたら、その方向をタップして弾く。<br>守り切った数字が、あなたを<span class="amberline">大谷超え</span>へ運ぶ。</div>
+    <button class="btn" id="startBtn">ピッチに立つ</button>
+  </div>
+
+  <!-- RESULT BUTTONS (filled by JS) -->
+  <div class="overlay hidden" id="resultScreen">
+    <div class="row" id="resultBtns"></div>
+  </div>
+
+  <div class="credit">Idea Radar 自動巡回 · 2026-06-19 · L11×ワイルドカード</div>
+</div></div>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const wrap=document.getElementById('wrap'), flashEl=document.getElementById('flash');
+const introScreen=document.getElementById('introScreen');
+const resultScreen=document.getElementById('resultScreen'), resultBtns=document.getElementById('resultBtns');
+let W=0,H=0,DPR=1;
+function resize(){
+  const r=wrap.getBoundingClientRect();
+  W=r.width; H=r.height; DPR=Math.min(window.devicePixelRatio||1,2.5);
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio ---------- */
+let AC=null;
+function audio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended')AC.resume(); return AC; }
+function tone(freq,dur,type,vol,opt){
+  const ac=audio(); if(!ac)return; opt=opt||{};
+  const t=ac.currentTime, o=ac.createOscillator(), g=ac.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t);
+  if(opt.slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,opt.slide),t+dur);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol||0.3,t+(opt.atk||0.008));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function sub(freq,dur,vol){ tone(freq,dur,'sine',vol||0.5); tone(freq*2,dur*0.8,'triangle',(vol||0.5)*0.5); tone(freq*3,dur*0.6,'sine',(vol||0.5)*0.25); }
+function noise(dur,vol){
+  const ac=audio(); if(!ac)return;
+  const n=Math.floor(ac.sampleRate*dur), b=ac.createBuffer(1,n,ac.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  const s=ac.createBufferSource(); s.buffer=b; const g=ac.createGain();
+  g.gain.setValueAtTime(vol||0.3,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+dur);
+  s.connect(g).connect(ac.destination); s.start();
+}
+function buzz(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+function sfxSave(just){ tone(just?150:120,0.16,'square',0.32,{slide:just?90:80}); if(just)sub(58,0.22,0.4); }
+function sfxConcede(){ noise(0.3,0.32); tone(110,0.4,'sawtooth',0.3,{slide:55}); }
+function sfxTick(i){ tone(620+i*12,0.045,'square',0.12,{slide:520}); }
+
+/* ---------- helpers ---------- */
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeOutExpo=t=>t>=1?1:1-Math.pow(2,-10*t);
+function neonDot(x,y,r,c,blur){ ctx.save();ctx.shadowColor=c;ctx.shadowBlur=blur||18;ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.restore(); }
+function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+function doFlash(a){ flashEl.style.transition='none'; flashEl.style.opacity=a; requestAnimationFrame(()=>{ flashEl.style.transition='opacity .5s ease'; flashEl.style.opacity=0; }); }
+
+/* ---------- balance ---------- */
+const TOTAL_SHOTS=18;
+const OHTANI=10780000;
+const COEF={base:200000, save:120000, just:380000, combo:110000, clean:1600000};
+function computeFollowers(s){
+  return COEF.base + s.saves*COEF.save + s.justs*COEF.just + s.maxCombo*COEF.combo + (s.conceded===0?COEF.clean:0);
+}
+
+/* ---------- game state ---------- */
+let state='intro', t0=0, now=0, raf=0;
+let shots=[], spawnQ=[], parts=[], gloveX=0.5, gkX=0.5, lastTapX=0.5;
+let stat={saves:0,justs:0,goods:0,conceded:0,combo:0,maxCombo:0,shotsDone:0};
+let ignite={start:0,target:0,val:0,crossed:false,beat:0,done:false,fw:[]};
+
+function buildSchedule(){
+  spawnQ=[]; let t=900; let gap=2500;
+  for(let i=0;i<TOTAL_SHOTS;i++){
+    const lane=clamp(rand(0.16,0.84),0.12,0.88);
+    const flight= i<5?1500: i<12?1320:1140;
+    spawnQ.push({at:t, lane, flight, fired:false});
+    gap=clamp(gap-95, 980, 2500);
+    // late "猛攻ラッシュ": occasional tight double
+    if(i>=12 && i%2===1) t+= gap*0.55; else t+=gap;
+  }
+}
+function startGame(){
+  introScreen.classList.add('hidden'); resultScreen.classList.add('hidden');
+  state='defend'; t0=performance.now(); now=0;
+  shots=[]; parts=[]; spawnQ=[];
+  stat={saves:0,justs:0,goods:0,conceded:0,combo:0,maxCombo:0,shotsDone:0};
+  gloveX=0.5; gkX=0.5; lastTapX=0.5;
+  buildSchedule();
+  audio(); buzz(8);
+}
+
+function spawnShot(s){
+  shots.push({ lane:s.lane, t0:now, flight:s.flight, judged:false, saved:false, just:false });
+}
+function shotPos(sh){
+  const p=clamp((now-sh.t0)/sh.flight,0,1.4);
+  const sx=W*0.5, sy=H*0.30;          // vanishing point at goal center
+  const tx=W*sh.lane, ty=H*0.70;       // arrives near GK line
+  return { x:lerp(sx,tx,easeIn(p)), y:lerp(sy,ty,easeIn(p)), r:lerp(7,46,p), p };
+}
+function easeIn(t){ return t*t; }
+
+function addParts(x,y,c,n,spd){
+  for(let i=0;i<n;i++){ const a=rand(0,7), v=rand(spd*0.3,spd);
+    parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-rand(0,spd*0.4),life:1,c,r:rand(2,4)}); }
+}
+
+/* ---------- input ---------- */
+function pointer(e){
+  const r=cv.getBoundingClientRect();
+  const cx=( (e.touches&&e.touches[0])?e.touches[0].clientX:e.clientX ) - r.left;
+  const cy=( (e.touches&&e.touches[0])?e.touches[0].clientY:e.clientY ) - r.top;
+  return {x:cx, y:cy};
+}
+function onTap(e){
+  e.preventDefault(); audio();
+  if(state==='intro'||state==='result') return;
+  if(state==='defend'){
+    const p=pointer(e); lastTapX=clamp(p.x/W,0,1); gloveX=lastTapX;
+    judgeTap(p.x,p.y);
+  }
+}
+cv.addEventListener('pointerdown',onTap,{passive:false});
+cv.addEventListener('touchstart',onTap,{passive:false});
+
+function judgeTap(tx,ty){
+  // find best unjudged shot in lane tolerance, closest to impact
+  let best=null,bestd=1e9;
+  for(const sh of shots){ if(sh.judged)continue;
+    const pos=shotPos(sh);
+    if(pos.p<0.55) continue;
+    const laneOk=Math.abs(tx-pos.x) < pos.r+70;
+    if(!laneOk) continue;
+    const d=Math.abs(pos.p-1);
+    if(d<bestd){bestd=d;best=sh;}
+  }
+  if(!best){ tone(300,0.05,'square',0.08); return; } // whiff
+  const pos=shotPos(best); best.judged=true; stat.shotsDone++;
+  const d=Math.abs(pos.p-1);
+  if(d<0.07){ // JUST
+    best.saved=true; best.just=true; stat.saves++; stat.justs++;
+    stat.combo++; stat.maxCombo=Math.max(stat.maxCombo,stat.combo);
+    sfxSave(true); buzz([12,28,12]); addParts(pos.x,pos.y,'#39ff14',30,9);
+    doFlash(0.08);
+  } else if(d<0.16){ // GOOD
+    best.saved=true; stat.saves++; stat.goods++;
+    stat.combo++; stat.maxCombo=Math.max(stat.maxCombo,stat.combo);
+    sfxSave(false); buzz(20); addParts(pos.x,pos.y,'#00e5ff',20,7);
+  } else { // mistimed -> conceded
+    concede(best,pos);
+  }
+}
+function concede(sh,pos){
+  sh.saved=false; stat.conceded++; stat.combo=0;
+  sfxConcede(); buzz(60); doFlash(0.5); addParts(pos.x,pos.y,'#ff2d6f',26,8);
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  now=performance.now()-t0;
+  // spawn
+  for(const s of spawnQ){ if(!s.fired && now>=s.at){ s.fired=true; spawnShot(s); } }
+  // auto-concede passed shots
+  for(const sh of shots){ if(!sh.judged){ const pos=shotPos(sh); if(pos.p>1.18){ sh.judged=true; stat.shotsDone++; concede(sh,pos); } } }
+  shots=shots.filter(sh=>shotPos(sh).p<1.45);
+  // glove ease
+  gkX=lerp(gkX,gloveX,clamp(dt*0.012,0,1));
+  // particles
+  for(const p of parts){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.25; p.life-=dt*0.0022; }
+  parts=parts.filter(p=>p.life>0);
+  // end?
+  if(state==='defend' && stat.shotsDone>=TOTAL_SHOTS && shots.length===0){ toIgnite(); }
+}
+
+function toIgnite(){
+  state='ignite';
+  ignite.target=computeFollowers(stat); ignite.val=0; ignite.start=performance.now();
+  ignite.crossed=false; ignite.done=false; ignite.beat=0; ignite.fw=[];
+  sub(60,0.5,0.4);
+}
+
+/* ---------- draw: pitch / goal ---------- */
+function drawGoal(){
+  ctx.save();
+  // crowd glow band
+  const g=ctx.createLinearGradient(0,H*0.18,0,H*0.34);
+  g.addColorStop(0,'rgba(20,40,80,0)'); g.addColorStop(1,'rgba(30,60,120,0.25)');
+  ctx.fillStyle=g; ctx.fillRect(0,H*0.12,W,H*0.26);
+  // goal frame (neon)
+  ctx.strokeStyle='rgba(0,229,255,.9)'; ctx.lineWidth=3; ctx.shadowColor='#00e5ff'; ctx.shadowBlur=16;
+  const gx=W*0.16, gw=W*0.68, gy=H*0.16, gh=H*0.22;
+  ctx.strokeRect(gx,gy,gw,gh);
+  // net
+  ctx.globalAlpha=0.18; ctx.lineWidth=1; ctx.shadowBlur=0;
+  for(let i=1;i<8;i++){ const x=gx+gw*i/8; ctx.beginPath();ctx.moveTo(x,gy);ctx.lineTo(x,gy+gh);ctx.stroke(); }
+  for(let j=1;j<4;j++){ const y=gy+gh*j/4; ctx.beginPath();ctx.moveTo(gx,y);ctx.lineTo(gx+gw,y);ctx.stroke(); }
+  ctx.globalAlpha=1;
+  // pitch lines converging
+  ctx.strokeStyle='rgba(0,229,255,.22)'; ctx.lineWidth=2; ctx.shadowBlur=0;
+  ctx.beginPath(); ctx.moveTo(W*0.42,H*0.40); ctx.lineTo(-W*0.1,H);
+  ctx.moveTo(W*0.58,H*0.40); ctx.lineTo(W*1.1,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,H*0.72); ctx.lineTo(W,H*0.72); ctx.stroke();
+  ctx.restore();
+}
+function drawGK(){
+  const x=W*gkX, y=H*0.74;
+  neonDot(x-W*0.06,y,W*0.034,'#eaf2ff',16);
+  neonDot(x+W*0.06,y,W*0.034,'#eaf2ff',16);
+  ctx.save(); ctx.globalAlpha=0.5; ctx.strokeStyle='#00e5ff'; ctx.lineWidth=3; ctx.shadowColor='#00e5ff';ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.arc(x,y,W*0.11,Math.PI,0); ctx.stroke(); ctx.restore();
+}
+function drawShots(){
+  for(const sh of shots){ if(sh.judged && !sh.saved) continue;
+    const pos=shotPos(sh); if(sh.judged) continue;
+    // timing ring
+    const ringR=pos.r + (1-clamp(pos.p,0,1))*pos.r*3.4;
+    const close=clamp(1-Math.abs(pos.p-1)/0.5,0,1);
+    ctx.save();
+    ctx.strokeStyle=`rgba(${close>0.7?'57,255,20':'255,255,255'},${0.3+close*0.6})`;
+    ctx.lineWidth=2+close*2; ctx.shadowColor=close>0.7?'#39ff14':'#9fe9ff'; ctx.shadowBlur=10+close*16;
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,ringR,0,7); ctx.stroke(); ctx.restore();
+    // ball
+    neonDot(pos.x,pos.y,pos.r,'#ffffff',14);
+    ctx.save();ctx.fillStyle='rgba(10,16,30,.6)';ctx.beginPath();ctx.arc(pos.x,pos.y,pos.r*0.5,0,7);ctx.fill();ctx.restore();
+  }
+}
+function drawParts(){
+  for(const p of parts){ ctx.save(); ctx.globalAlpha=clamp(p.life,0,1);
+    neonDot(p.x,p.y,p.r,p.c,10); ctx.restore(); }
+}
+function drawHUD(){
+  // time / shots / combo
+  const left=Math.max(0,TOTAL_SHOTS-stat.shotsDone);
+  ctx.save();
+  ctx.textAlign='left'; ctx.fillStyle='#7e8aa6'; ctx.font='700 '+(W*0.035)+'px system-ui';
+  ctx.fillText('SHOTS  '+left, W*0.07, H*0.075);
+  ctx.textAlign='right';
+  ctx.fillStyle=stat.conceded?'#ff2d6f':'#39ff14';
+  ctx.fillText(stat.conceded?('失点 '+stat.conceded):'CLEAN SHEET', W*0.93, H*0.075);
+  ctx.restore();
+  // combo big
+  if(stat.combo>1){
+    ctx.save(); ctx.textAlign='center';
+    ctx.fillStyle='#ffb800'; ctx.shadowColor='#ffb800'; ctx.shadowBlur=18;
+    ctx.font='900 '+(W*0.10)+'px system-ui';
+    ctx.fillText(stat.combo+'', W*0.5, H*0.115);
+    ctx.font='700 '+(W*0.032)+'px system-ui'; ctx.shadowBlur=0; ctx.fillStyle='#caa14a';
+    ctx.fillText('SAVE COMBO', W*0.5, H*0.135);
+    ctx.restore();
+  }
+  // save line marker
+  ctx.save(); ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H*0.70); ctx.lineTo(W,H*0.70); ctx.stroke(); ctx.restore();
+}
+
+/* ---------- draw: ignite ---------- */
+function drawIgnite(){
+  const el=performance.now()-ignite.start;
+  const p=clamp(el/2200,0,1);
+  ignite.val=ignite.target*easeOutExpo(p);
+  if(!ignite.crossed && ignite.val>=OHTANI && ignite.target>=OHTANI){
+    ignite.crossed=true; doFlash(0.85); sub(40,0.6,0.5); noise(0.4,0.3); buzz([0,40,30,40,30,140]);
+    for(let i=0;i<46;i++) ignite.fw.push({x:rand(W*0.1,W*0.9),y:rand(H*0.2,H*0.5),vx:rand(-4,4),vy:rand(-9,-3),life:1,c:['#ffb800','#39ff14','#00e5ff','#ff2d6f'][i%4]});
+  }
+  // count ticks
+  const tickStep=Math.floor(p*30);
+  if(tickStep!==ignite.beat){ ignite.beat=tickStep; if(p<1) sfxTick(tickStep); }
+
+  // fireworks update
+  for(const f of ignite.fw){ f.x+=f.vx; f.y+=f.vy; f.vy+=0.22; f.life-=0.012; }
+  ignite.fw=ignite.fw.filter(f=>f.life>0);
+
+  ctx.save();
+  ctx.textAlign='center';
+  ctx.fillStyle='#7e8aa6'; ctx.font='700 '+(W*0.038)+'px system-ui';
+  ctx.fillText('一夜にして', W*0.5, H*0.30);
+  // big number
+  const crossed=ignite.val>=OHTANI;
+  ctx.fillStyle=crossed?'#ffb800':'#eaf2ff'; ctx.shadowColor=crossed?'#ffb800':'#00e5ff'; ctx.shadowBlur=26;
+  ctx.font='900 '+(W*0.135)+'px system-ui';
+  ctx.fillText(fmt(ignite.val), W*0.5, H*0.40);
+  ctx.shadowBlur=0; ctx.fillStyle='#7e8aa6'; ctx.font='700 '+(W*0.034)+'px system-ui';
+  ctx.fillText('FOLLOWERS', W*0.5, H*0.435);
+
+  // OHTANI line bar
+  const bx=W*0.12, bw=W*0.76, by=H*0.52, bh=H*0.03;
+  ctx.fillStyle='rgba(255,255,255,.08)'; roundRect(bx,by,bw,bh,bh/2); ctx.fill();
+  const maxScale=Math.max(ignite.target,OHTANI)*1.02;
+  const fillw=bw*clamp(ignite.val/maxScale,0,1);
+  ctx.fillStyle=crossed?'#ffb800':'#00e5ff'; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=16;
+  roundRect(bx,by,fillw,bh,bh/2); ctx.fill(); ctx.shadowBlur=0;
+  // ohtani marker
+  const ox=bx+bw*clamp(OHTANI/maxScale,0,1);
+  ctx.strokeStyle='#ffb800'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(ox,by-H*0.012); ctx.lineTo(ox,by+bh+H*0.012); ctx.stroke();
+  ctx.fillStyle='#ffb800'; ctx.font='700 '+(W*0.028)+'px system-ui'; ctx.textAlign='center';
+  ctx.fillText('大谷 10,780,000', ox, by-H*0.022);
+
+  // verdict
+  ctx.textAlign='center';
+  if(p>=0.62){
+    if(crossed){ ctx.fillStyle='#ffb800'; ctx.shadowColor='#ffb800'; ctx.shadowBlur=20; ctx.font='900 '+(W*0.07)+'px system-ui';
+      ctx.fillText('大谷 超え！', W*0.5, H*0.60); }
+    else { ctx.fillStyle='#ff2d6f'; ctx.font='800 '+(W*0.05)+'px system-ui';
+      ctx.fillText('あと '+fmt(OHTANI-ignite.target)+' 人', W*0.5, H*0.60); }
+    ctx.shadowBlur=0;
+  }
+  // fireworks draw
+  for(const f of ignite.fw){ ctx.globalAlpha=clamp(f.life,0,1); neonDot(f.x,f.y,3.2,f.c,12); }
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  if(p>=1 && !ignite.done){ ignite.done=true; setTimeout(showResult, 700); }
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath(); }
+
+/* ---------- result + share ---------- */
+function rank(){
+  const f=ignite.target;
+  if(f>=OHTANI) return {t:'ONE-NIGHT LEGEND', c:'#ffb800'};
+  if(f>=8500000) return {t:'NATIONAL HERO', c:'#39ff14'};
+  if(f>=5500000) return {t:'BREAKOUT KEEPER', c:'#00e5ff'};
+  return {t:'CULT FAVORITE', c:'#7e8aa6'};
+}
+function showResult(){
+  state='result';
+  resultScreen.classList.remove('hidden');
+  resultBtns.innerHTML='';
+  const share=document.createElement('button'); share.className='btn'; share.textContent='結果をシェア';
+  share.onclick=doShare;
+  const retry=document.createElement('button'); retry.className='btn mag sm'; retry.textContent='もう一夜';
+  retry.onclick=()=>{ resultScreen.classList.add('hidden'); startGame(); };
+  resultBtns.appendChild(share); resultBtns.appendChild(retry);
+}
+function buildCard(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920; const x=c.getContext('2d');
+  const crossed=ignite.target>=OHTANI; const rk=rank();
+  // bg
+  const g=x.createRadialGradient(540,420,80,540,900,1200); g.addColorStop(0,'#10203f');g.addColorStop(.5,'#0a0e1a');g.addColorStop(1,'#05060a');
+  x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // scanlines
+  x.globalAlpha=0.05; x.fillStyle='#9fe9ff'; for(let y=0;y<1920;y+=6) x.fillRect(0,y,1080,2); x.globalAlpha=1;
+  function glow(col,bl){ x.shadowColor=col; x.shadowBlur=bl; }
+  x.textAlign='center';
+  x.fillStyle='#00e5ff'; x.font='700 40px system-ui'; x.fillText('I C H I Y A · 一 夜', 540, 200);
+  x.fillStyle='#eaf2ff'; glow('#00e5ff',28); x.font='900 120px system-ui'; x.fillText('一夜にして', 540, 360); x.shadowBlur=0;
+  x.fillStyle='#7e8aa6'; x.font='700 38px system-ui'; x.fillText('FOLLOWERS', 540, 640);
+  x.fillStyle=crossed?'#ffb800':'#eaf2ff'; glow(crossed?'#ffb800':'#00e5ff',40); x.font='900 170px system-ui';
+  x.fillText(fmt(ignite.target), 540, 760); x.shadowBlur=0;
+  // vs ohtani bar
+  const bx=140,bw=800,by=900,bh=42, maxS=Math.max(ignite.target,OHTANI)*1.02;
+  x.fillStyle='rgba(255,255,255,.1)'; rr(x,bx,by,bw,bh,21);
+  x.fillStyle=crossed?'#ffb800':'#00e5ff'; glow(x.fillStyle,20); rr(x,bx,by,bw*clamp(ignite.target/maxS,0,1),bh,21); x.shadowBlur=0;
+  const ox=bx+bw*clamp(OHTANI/maxS,0,1);
+  x.strokeStyle='#ffb800'; x.lineWidth=4; x.beginPath();x.moveTo(ox,by-16);x.lineTo(ox,by+bh+16);x.stroke();
+  x.fillStyle='#ffb800'; x.font='700 34px system-ui'; x.fillText('大谷 10,780,000', ox, by-34);
+  // verdict
+  if(crossed){ x.fillStyle='#ffb800'; glow('#ffb800',24); x.font='900 96px system-ui'; x.fillText('大谷 超え！',540,1100); x.shadowBlur=0; }
+  else { x.fillStyle='#ff2d6f'; x.font='800 64px system-ui'; x.fillText('あと '+fmt(OHTANI-ignite.target)+' 人',540,1090); }
+  // rank
+  x.fillStyle=rk.c; glow(rk.c,18); x.font='800 56px system-ui'; x.fillText(rk.t, 540, 1230); x.shadowBlur=0;
+  // stats row
+  x.fillStyle='#7e8aa6'; x.font='700 40px system-ui';
+  const cs= stat.conceded===0?'完封':('失点 '+stat.conceded);
+  x.fillText('SAVES '+stat.saves+'/'+TOTAL_SHOTS+'   JUST '+stat.justs+'   '+cs, 540, 1400);
+  x.fillStyle='#caa14a'; x.font='700 40px system-ui'; x.fillText('MAX COMBO '+stat.maxCombo, 540, 1470);
+  // footer
+  x.fillStyle='#5c688a'; x.font='600 34px system-ui';
+  x.fillText('一夜にしてスター — Ichiya', 540, 1740);
+  x.fillText('t-aka-h.github.io/idea-radar', 540, 1792);
+  return c;
+}
+function rr(x,a,b,w,h,r){ x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();x.fill(); }
+function doShare(){
+  const card=buildCard();
+  card.toBlob(async (blob)=>{
+    const file=new File([blob],'ichiya.png',{type:'image/png'});
+    const txt='一夜にしてスター。フォロワー '+fmt(ignite.target)+(ignite.target>=OHTANI?'（大谷超え！）':'')+' #一夜 #Ichiya';
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text:txt}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ichiya.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },'image/png');
+}
+
+/* ---------- main loop ---------- */
+let last=0;
+function loop(ts){
+  const dt=last?Math.min(ts-last,50):16; last=ts;
+  ctx.clearRect(0,0,W,H);
+  if(state==='defend'){
+    update(dt); drawGoal(); drawShots(); drawGK(); drawParts(); drawHUD();
+  } else if(state==='ignite'){
+    update(dt); drawIgnite(); drawParts();
+  } else if(state==='result'){
+    drawIgnite(); // keep last frame visuals subtle
+  } else {
+    drawGoal();
+  }
+  raf=requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.getElementById('startBtn').addEventListener('click',()=>{ audio(); startGame(); });
+// expose for verification
+window.__ICHIYA={ get state(){return state;}, get stat(){return stat;}, get target(){return ignite.target;},
+  forceFinish(){ // auto-save remaining shots as JUST for testing
+    state='defend'; stat.shotsDone=TOTAL_SHOTS; stat.saves=TOTAL_SHOTS; stat.justs=TOTAL_SHOTS; stat.maxCombo=TOTAL_SHOTS; stat.combo=TOTAL_SHOTS; stat.conceded=0; shots=[]; toIgnite(); } };
+})();
+</script>
+</body>
+</html>
