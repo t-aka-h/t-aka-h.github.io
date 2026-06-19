@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060E">
+<title>Pacchin（パッチン）— 閉じる、を芸術にする</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
+  html,body{height:100%;overflow:hidden;background:#05060E;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;}
+  #stage{position:fixed;inset:0;touch-action:none;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  #flash{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .09s ease;}
+  .ui{position:fixed;left:0;right:0;text-align:center;pointer-events:none;color:#fff;}
+  #hud{top:max(14px,env(safe-area-inset-top));font-weight:800;letter-spacing:.04em;}
+  #combo{font-size:13px;color:#8c93b8;}
+  #comboBig{font-size:30px;color:#00E5FF;text-shadow:0 0 16px rgba(0,229,255,.6);min-height:34px;transition:transform .12s;}
+  #verdict{position:fixed;left:0;right:0;top:38%;text-align:center;font-size:46px;font-weight:900;letter-spacing:.06em;opacity:0;pointer-events:none;color:#fff;transition:opacity .12s,transform .12s;text-shadow:0 0 24px currentColor;}
+  #hint{bottom:max(30px,calc(env(safe-area-inset-bottom) + 22px));font-size:15px;color:#aeb4d6;font-weight:700;letter-spacing:.05em;}
+  #hint .arrow{display:block;font-size:26px;color:#00E5FF;animation:bob 1.2s ease-in-out infinite;text-shadow:0 0 14px rgba(0,229,255,.7);}
+  @keyframes bob{0%,100%{transform:translateY(-4px);opacity:.6}50%{transform:translateY(6px);opacity:1}}
+  /* start + result overlays */
+  .panel{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:rgba(5,6,14,.92);z-index:20;padding:30px;text-align:center;color:#fff;}
+  .panel.hide{display:none;}
+  .logo{font-size:54px;font-weight:900;letter-spacing:.02em;background:linear-gradient(90deg,#00E5FF,#FF2D87);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .sub{font-size:15px;color:#9aa0c4;font-weight:600;line-height:1.7;max-width:320px;}
+  .btn{pointer-events:auto;cursor:pointer;border:none;border-radius:999px;padding:17px 46px;font-size:19px;font-weight:900;letter-spacing:.08em;color:#05060E;background:linear-gradient(90deg,#00E5FF,#28f0c0);box-shadow:0 0 30px rgba(0,229,255,.55);}
+  .btn.share{background:linear-gradient(90deg,#FF2D87,#ff6ba8);color:#fff;box-shadow:0 0 28px rgba(255,45,135,.5);padding:14px 34px;font-size:16px;}
+  .rank{font-size:40px;font-weight:900;color:#00E5FF;text-shadow:0 0 22px rgba(0,229,255,.6);}
+  .stat{font-size:15px;color:#cfd4ee;line-height:1.9;font-weight:600;}
+  .stat b{color:#FFB547;font-size:20px;}
+  #cardWrap{margin-top:4px;}
+  #cardImg{width:172px;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.08);}
+  .row{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center;}
+  .credit{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#3f4566;pointer-events:none;}
+  #endBtn{position:fixed;top:max(12px,env(safe-area-inset-top));right:14px;z-index:15;pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#cfd4ee;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:800;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+</div>
+<div id="flash"></div>
+
+<div class="ui" id="hud" style="display:none">
+  <div id="comboBig"></div>
+  <div id="combo"></div>
+</div>
+<div id="verdict"></div>
+<div class="ui" id="hint" style="display:none">下にスワイプして閉じる<span class="arrow">↓</span></div>
+<button id="endBtn" style="display:none">結果へ</button>
+
+<div class="panel" id="start">
+  <div class="logo">Pacchin</div>
+  <div class="sub">パチン、と閉じる。<br>あの最高に気持ちいいスナップだけを極める。<br><br>ガラケーを<b style="color:#00E5FF">下スワイプ</b>で閉じる。<br>速すぎず遅すぎず——ジャストで決めろ。<br>連続で決めるほど、騒がしい世界が静かになる。</div>
+  <button class="btn" id="startBtn">はじめる</button>
+  <div class="sub" style="font-size:12px;color:#5b6080">🔊 音を出すと気持ちよさ倍増 / iPhoneは縦持ち推奨</div>
+</div>
+
+<div class="panel hide" id="result">
+  <div class="sub" style="font-size:13px;color:#8c93b8;letter-spacing:.1em">閉じ師ランク</div>
+  <div class="rank" id="rankName">—</div>
+  <div class="stat" id="resultStats"></div>
+  <div id="cardWrap"><img id="cardImg" alt="result card"></div>
+  <div class="row">
+    <button class="btn share" id="shareBtn">結果をシェア</button>
+    <button class="btn" id="againBtn">もう一度</button>
+  </div>
+</div>
+
+<div class="credit">Idea Radar · L06 反動・揺り戻し × L15 関係性 — Pacchin</div>
+
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const flash=document.getElementById('flash');
+const hud=document.getElementById('hud'), comboBig=document.getElementById('comboBig'), comboTxt=document.getElementById('combo');
+const verdict=document.getElementById('verdict'), hint=document.getElementById('hint');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- WebAudio ---------- */
+let AC=null;
+function audio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended')AC.resume(); return AC; }
+function env(g,t,a,d,peak){ g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); }
+function noiseBuf(dur){ const ac=AC,n=Math.floor(ac.sampleRate*dur),b=ac.createBuffer(1,n,ac.sampleRate),d=b.getData?b.getData(0):b.getChannelData(0); for(let i=0;i<n;i++)d[i]=(Math.random()*2-1); return b; }
+// missing-fundamental bass: stack 2F..6F so the phone speaker fakes the low end
+function bass(base,dur,vol){ const ac=audio(); if(!ac)return; const t=ac.currentTime; const harm=[2,3,4,5,6],mix=[1,.7,.55,.4,.3]; harm.forEach((h,i)=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='sine'; o.frequency.value=base*h; env(g,t,.006,dur,vol*mix[i]); o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+.05); }); }
+function metalClick(strength){ // strength 0..1 (1=crisp JUST)
+  const ac=audio(); if(!ac)return; const t=ac.currentTime;
+  // 1) contact attack: short noise burst, highpassed
+  const nb=ac.createBufferSource(); nb.buffer=noiseBuf(0.02);
+  const hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1800+1800*strength;
+  const ng=ac.createGain(); env(ng,t,.001,.012+.01*strength,.5*strength+.12);
+  nb.connect(hp).connect(ng).connect(ac.destination); nb.start(t); nb.stop(t+.04);
+  // 2) hinge sweep 2200 -> 700
+  const sw=ac.createOscillator(),sg=ac.createGain(); sw.type='triangle';
+  sw.frequency.setValueAtTime(2200,t); sw.frequency.exponentialRampToValueAtTime(700,t+.06);
+  env(sg,t,.002,.07,.18*strength+.05); sw.connect(sg).connect(ac.destination); sw.start(t); sw.stop(t+.12);
+  // 3) metallic non-integer partials
+  [880,1318,1760].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='triangle'; o.frequency.value=f*(1+ (Math.random()-.5)*.01); env(g,t,.002,.18-i*.04,(.16-i*.04)*strength); o.connect(g).connect(ac.destination); o.start(t); o.stop(t+.25); });
+  // 4) missing-fundamental thunk
+  bass(50, .26+.18*strength, .5*strength+.18);
+}
+function dullKoto(){ const ac=audio(); if(!ac)return; const t=ac.currentTime; const o=ac.createOscillator(),g=ac.createGain(),lp=ac.createBiquadFilter(); o.type='sine'; o.frequency.setValueAtTime(280,t); o.frequency.exponentialRampToValueAtTime(150,t+.12); lp.type='lowpass'; lp.frequency.value=600; env(g,t,.004,.16,.22); o.connect(lp).connect(g).connect(ac.destination); o.start(t); o.stop(t+.25); bass(46,.14,.12); }
+function slamCrack(){ const ac=audio(); if(!ac)return; const t=ac.currentTime; const nb=ac.createBufferSource(); nb.buffer=noiseBuf(.07); const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=.7; const g=ac.createGain(); env(g,t,.001,.09,.4); nb.connect(bp).connect(g).connect(ac.destination); nb.start(t); nb.stop(t+.1); bass(40,.2,.3); }
+function muteTone(){ const ac=audio(); if(!ac)return; const t=ac.currentTime; const o=ac.createOscillator(),g=ac.createGain(); o.type='sine'; o.frequency.setValueAtTime(1320,t); env(g,t,.002,.08,.07); o.connect(g).connect(ac.destination); o.start(t); o.stop(t+.12); }
+function silenceChord(){ const ac=audio(); if(!ac)return; const t=ac.currentTime; [220,330,440].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='sine'; o.frequency.value=f; env(g,t+i*.05,.05,1.1,.12); o.connect(g).connect(ac.destination); o.start(t+i*.05); o.stop(t+1.4); }); bass(55,1.2,.22); }
+function vib(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+/* ---------- Game state ---------- */
+const C={cyan:'#00E5FF',mag:'#FF2D87',amber:'#FFB547',mint:'#28f0c0'};
+const ICON_COLORS=['#FF2D87','#00E5FF','#FFB547','#28f0c0','#a78bff','#ff7a59','#5b8aff','#ff5db1','#3ddc97','#ffd24a','#7ae0ff','#c084fc'];
+let state='start'; // start, playing, result
+let angle=0;        // 0 open(upright) .. PI closed(flat over base)
+let target=0, closing=false, closeVel=0;
+let combo=0, maxCombo=0, level=1, silenceLevel=0, totalJust=0, misses=0;
+let icons=[]; // {col, lit, x,y, dimT}
+let parts=[]; // particles
+let afterT=0;   // afterglow timer
+let hingePulse=0;
+let lastVerdict='';
+let reopenT=0;
+const ICON_N=12;
+
+function resetIcons(){ icons=[]; for(let i=0;i<ICON_N;i++){ icons.push({col:ICON_COLORS[i%ICON_COLORS.length], lit:true, dim:0}); } }
+function newGame(){ angle=0;target=0;closing=false;combo=0;maxCombo=0;level=1;silenceLevel=0;totalJust=0;misses=0;parts=[];afterT=0;reopenT=0; resetIcons(); state='playing'; hud.style.display='block'; hint.style.display='block'; document.getElementById('endBtn').style.display='block'; updateHud(); }
+function updateHud(){ comboBig.textContent=combo>1?('×'+combo):''; comboTxt.textContent='最高 ×'+maxCombo+'   /   LV '+level+'   /   ミス '+misses+'/3'; }
+
+/* sweet zone for release angular velocity (rad per ms). narrows as level rises */
+function zone(){ const base=0.0075; const lo=base - Math.min(level-1,5)*0.0004; const hi=0.013 - Math.min(level-1,5)*0.0007; return {lo:Math.max(.0045,lo),hi:Math.max(.008,hi)}; }
+
+/* ---------- Input ---------- */
+let dragging=false, startY=0, startT=0, lastY=0, lastT=0, recentVel=0, dragStartAngle=0;
+const stage=document.getElementById('stage');
+function pt(e){ return e.touches?e.touches[0].clientY:e.clientY; }
+function down(e){ if(state!=='playing'||closing||afterT>0||reopenT>0)return; e.preventDefault(); dragging=true; startY=lastY=pt(e); startT=lastT=performance.now(); recentVel=0; dragStartAngle=angle; }
+function move(e){ if(!dragging)return; e.preventDefault(); const y=pt(e), now=performance.now(); const dy=y-startY; // downward positive
+  angle=Math.max(0,Math.min(Math.PI, dragStartAngle + (dy/(H*0.34))*Math.PI ));
+  const ddt=now-lastT; if(ddt>0){ recentVel=(y-lastY)/ddt; } lastY=y; lastT=now; }
+function up(e){ if(!dragging)return; e.preventDefault(); dragging=false;
+  // require a real downward swipe
+  if(angle<0.5 || recentVel<=0){ // not enough; reopen gently
+    closing=true; closeVel=-0.004; target=0; return; }
+  // angular velocity (rad/ms) approx from px velocity
+  const av=Math.abs(recentVel)/(H*0.34)*Math.PI;
+  judge(av);
+}
+stage.addEventListener('touchstart',down,{passive:false});
+stage.addEventListener('touchmove',move,{passive:false});
+stage.addEventListener('touchend',up,{passive:false});
+stage.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+
+function judge(av){
+  const z=zone(); closing=true; target=Math.PI;
+  if(av>=z.lo && av<=z.hi){ // JUST
+    closeVel=Math.min(av,0.02); doJust();
+  } else if(av>z.hi){ // SLAM (too fast)
+    closeVel=Math.min(av,0.035); doFail('SLAM!','#ff6b6b',slamCrack,[0,30,30,30]); }
+  else { // SLOPPY (too slow)
+    closeVel=Math.max(av,0.0035); doFail('だらしない','#7a86b8',dullKoto,[0,12]); }
+}
+function doJust(){
+  combo++; totalJust++; if(combo>maxCombo)maxCombo=combo;
+  showVerdict('JUST!',C.cyan);
+  metalClick(1); vib([0,18,40,12]);
+  // blackout afterglow
+  afterT=0.42; flash.style.opacity='0.92'; setTimeout(()=>{flash.style.opacity='0';},95);
+  burst();
+  // mute one lit icon
+  const lit=icons.filter(i=>i.lit); if(lit.length){ const ic=lit[Math.floor(Math.random()*lit.length)]; ic.lit=false; muteTone();
+    if(icons.every(i=>!i.lit)){ silenceLevel++; level++; silenceChord(); showVerdict('静寂世界',C.mint); afterT=1.0; setTimeout(()=>{ resetIcons(); },650); }
+  }
+  comboBig.style.transform='scale(1.35)'; setTimeout(()=>comboBig.style.transform='scale(1)',120);
+  updateHud();
+}
+function doFail(label,col,sound,vp){ combo=0; showVerdict(label,col); sound(); vib(vp);
+  // relight one icon as a small penalty
+  const dark=icons.filter(i=>!i.lit); if(dark.length){ dark[Math.floor(Math.random()*dark.length)].lit=true; }
+  misses++; updateHud();
+  if(misses>=3){ setTimeout(()=>{ if(state==='playing')endGame(); },700); }
+}
+function showVerdict(t,col){ lastVerdict=t; verdict.textContent=t; verdict.style.color=col; verdict.style.opacity='1'; verdict.style.transform='scale(1.08)'; clearTimeout(showVerdict._t); showVerdict._t=setTimeout(()=>{verdict.style.opacity='0';verdict.style.transform='scale(1)';},620); }
+
+function burst(){ const cx=W/2, cy=hingeY(); const n=18; for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2+Math.random()*.3; const sp=2+Math.random()*4.5; parts.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,life:1,col:i%3===0?C.cyan:(i%3===1?'#ffffff':C.mag),r:2+Math.random()*2.5}); } }
+
+/* ---------- Layout helpers ---------- */
+function phoneMetrics(){ const pw=Math.min(W*0.62,300); const ph=pw*1.18; const cx=W/2; const baseTop=H*0.5; return {pw,ph,cx,baseTop}; }
+function hingeY(){ return phoneMetrics().baseTop; }
+
+/* ---------- Render ---------- */
+let last=performance.now();
+function frame(now){ const dt=Math.max(0,Math.min(40,now-last)); last=now; const ds=dt/1000;
+  if(state==='playing'){
+    hingePulse+=ds*3;
+    if(reopenT>0){ reopenT-=ds; if(reopenT<=0){ reopenT=0; closing=true; target=0; closeVel=-0.012; } }
+    if(closing){ const dir=target>angle?1:-1; angle+=dir*Math.abs(closeVel)*dt*1.1;
+      if((dir>0&&angle>=target)||(dir<0&&angle<=target)){ angle=target; closing=false;
+        if(target>=Math.PI-0.001){ // fully closed -> hold a beat then reopen for next
+          reopenT=0.28; }
+      }
+      angle=Math.max(0,Math.min(Math.PI,angle)); // guard against overshoot
+    }
+    if(afterT>0)afterT-=ds; if(afterT<0)afterT=0;
+    // particles
+    for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.18; p.vx*=0.97; p.life-=ds*1.8; if(p.life<=0)parts.splice(i,1); }
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg vignette
+  const g=ctx.createRadialGradient(W/2,H*0.42,0,W/2,H*0.42,Math.max(W,H)*0.75);
+  const calm=Math.min(1,silenceLevel*0.18+(1-Math.min(combo,8)/8)*0);
+  g.addColorStop(0,'#0a0c1c'); g.addColorStop(1,'#04050c'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  if(state==='start')return;
+  const m=phoneMetrics();
+  drawBase(m);
+  drawFlip(m);
+  // particles
+  parts.forEach(p=>{ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.col; ctx.shadowColor=p.col; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,7); ctx.fill(); }); ctx.globalAlpha=1; ctx.shadowBlur=0;
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function drawBase(m){ const {pw,ph,cx,baseTop}=m; const x=cx-pw/2;
+  // lower body (keypad half)
+  ctx.save(); ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=24; ctx.shadowOffsetY=10;
+  ctx.fillStyle='#16182b'; roundRect(x,baseTop,pw,ph,18); ctx.fill(); ctx.restore();
+  ctx.strokeStyle='rgba(0,229,255,.25)'; ctx.lineWidth=1.5; roundRect(x,baseTop,pw,ph,18); ctx.stroke();
+  // keypad dots
+  const cols=3,rows=4, pad=pw*0.16, gx=(pw-pad*2)/(cols-1), gy=(ph-pad*1.5)/(rows);
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){ const kx=x+pad+c*gx, ky=baseTop+pad+r*gy*0.92; ctx.fillStyle='rgba(255,255,255,.06)'; roundRect(kx-pw*0.1,ky-6,pw*0.2,12,6); ctx.fill(); }
+}
+function drawFlip(m){ const {pw,ph,cx,baseTop}=m;
+  // hinge at top edge of base. Flip rotates about hinge: angle 0 = upright (-y), PI = lying over base (+y)
+  ctx.save();
+  ctx.translate(cx,baseTop);
+  // foreshorten as it passes vertical-to-viewer
+  ctx.rotate(angle-0); // 0 upright handled by drawing flip upward then rotating
+  // draw flip pointing "up" (negative y) initially; rotation tips it forward
+  const fx=-pw/2, fy=-ph, fw=pw, fh=ph;
+  // glow when ready (open & idle)
+  const ready = angle<0.15 && !closing && reopenT<=0;
+  ctx.save(); ctx.shadowColor=C.cyan; ctx.shadowBlur=ready?(14+Math.sin(hingePulse)*8):8;
+  ctx.fillStyle='#101226'; roundRect(fx,fy,fw,fh,18); ctx.fill(); ctx.restore();
+  // neon rim
+  ctx.strokeStyle=ready?'rgba(0,229,255,'+(0.6+Math.sin(hingePulse)*0.3)+')':'rgba(255,45,135,.4)'; ctx.lineWidth=2; roundRect(fx,fy,fw,fh,18); ctx.stroke();
+  // screen content (home screen with icons)
+  const sx=fx+fw*0.1, sy=fy+fh*0.1, sw=fw*0.8, sh=fh*0.72;
+  ctx.fillStyle='#070912'; roundRect(sx,sy,sw,sh,10); ctx.fill();
+  // clock (always faint, brightens as world quiets)
+  const litCount=icons.filter(i=>i.lit).length; const quiet=1-litCount/ICON_N;
+  ctx.save(); ctx.globalAlpha=0.5+quiet*0.5; ctx.fillStyle='#cfe9ff'; ctx.textAlign='center'; ctx.font='900 '+(sw*0.20)+'px -apple-system,system-ui,sans-serif'; ctx.shadowColor=C.cyan; ctx.shadowBlur=quiet*16;
+  ctx.fillText(clockStr(), sx+sw/2, sy+sh*0.30); ctx.restore();
+  // icon grid 3x4
+  const gc=3,gr=4, ic=icons.length; const gpx=sw*0.20, gpy=sh*0.42; const gw=(sw-gpx*2)/(gc-1), ghh=(sh*0.50)/(gr-1);
+  for(let i=0;i<ic;i++){ const r=Math.floor(i/gc), c=i%gc; const ix=sx+gpx+c*gw, iy=sy+gpy+r*ghh; const o=icons[i]; const a=o.lit?1:0.12;
+    ctx.globalAlpha=a; ctx.fillStyle=o.col; if(o.lit){ctx.shadowColor=o.col;ctx.shadowBlur=10;} else ctx.shadowBlur=0;
+    roundRect(ix-sw*0.085,iy-sw*0.085,sw*0.17,sw*0.17,sw*0.05); ctx.fill();
+    if(o.lit){ ctx.globalAlpha=1; ctx.fillStyle=C.mag; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(ix+sw*0.075,iy-sw*0.075,sw*0.03,0,7); ctx.fill(); }
+  }
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+  ctx.restore();
+  // hinge bar
+  ctx.fillStyle='#2a2d44'; roundRect(cx-pw*0.5,baseTop-5,pw,10,5); ctx.fill();
+}
+function clockStr(){ const d=new Date(); const h=('0'+d.getHours()).slice(-2),mi=('0'+d.getMinutes()).slice(-2); return h+':'+mi; }
+
+/* ---------- Result + share ---------- */
+const RANKS=[ {n:0,t:'まだ眠い手'},{n:3,t:'閉じ見習い'},{n:6,t:'手首が冴える'},{n:10,t:'居合抜き級'},{n:16,t:'閉じの達人'},{n:24,t:'静寂の閉じ師'},{n:40,t:'パッチン仙人'} ];
+function rankFor(mc){ let r=RANKS[0]; for(const x of RANKS){ if(mc>=x.n)r=x; } return r.t; }
+function endGame(){ state='result'; hud.style.display='none'; hint.style.display='none'; document.getElementById('endBtn').style.display='none'; verdict.style.opacity='0';
+  const rank=rankFor(maxCombo);
+  document.getElementById('rankName').textContent=rank;
+  document.getElementById('resultStats').innerHTML='最高連続JUST <b>'+maxCombo+'</b><br>到達した静寂 <b>'+silenceLevel+'</b> 回<br>通算ジャスト <b>'+totalJust+'</b>';
+  buildCard(rank);
+  document.getElementById('result').classList.remove('hide');
+}
+let cardBlob=null;
+function buildCard(rank){ const c=document.createElement('canvas'); c.width=1080;c.height=1920; const x=c.getContext('2d');
+  const g=x.createRadialGradient(540,720,0,540,720,1300); g.addColorStop(0,'#0c0f22'); g.addColorStop(1,'#04050c'); x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // neon flip silhouette
+  x.save(); x.translate(540,760); x.shadowColor=C.cyan; x.shadowBlur=40; x.strokeStyle='rgba(0,229,255,.85)'; x.lineWidth=8;
+  rrect(x,-150,-360,300,300,34); x.stroke(); rrect(x,-150,-40,300,360,34); x.stroke(); x.restore();
+  x.fillStyle='#2a2d44'; rrect(x,540-160,720-30,320,18,9); x.fill();
+  x.textAlign='center';
+  x.fillStyle='#8c93b8'; x.font='600 38px -apple-system,system-ui,sans-serif'; x.fillText('閉じ師ランク',540,1230);
+  // gradient rank text
+  const lg=x.createLinearGradient(240,0,840,0); lg.addColorStop(0,'#00E5FF'); lg.addColorStop(1,'#FF2D87'); x.fillStyle=lg;
+  x.font='900 92px -apple-system,system-ui,sans-serif'; x.shadowColor='rgba(0,229,255,.5)'; x.shadowBlur=30; x.fillText(rank,540,1340); x.shadowBlur=0;
+  x.fillStyle='#FFB547'; x.font='900 130px -apple-system,system-ui,sans-serif'; x.fillText('×'+maxCombo,540,1520);
+  x.fillStyle='#cfd4ee'; x.font='600 40px -apple-system,system-ui,sans-serif'; x.fillText('最高連続JUST',540,1580);
+  x.fillStyle='#9aa0c4'; x.font='600 34px -apple-system,system-ui,sans-serif'; x.fillText('静寂世界 '+silenceLevel+'回到達 ・ 通算 '+totalJust+' パッチン',540,1660);
+  x.fillStyle='#fff'; x.font='900 60px -apple-system,system-ui,sans-serif'; x.fillText('Pacchin（パッチン）',540,300);
+  x.fillStyle='#5b6080'; x.font='600 30px -apple-system,system-ui,sans-serif'; x.fillText('閉じる、を芸術にする',540,360);
+  x.fillStyle='#3f4566'; x.font='500 26px -apple-system,system-ui,sans-serif'; x.fillText('t-aka-h.github.io/idea-radar/pacchin',540,1850);
+  document.getElementById('cardImg').src=c.toDataURL('image/png');
+  c.toBlob(b=>{cardBlob=b;},'image/png');
+}
+function rrect(x,a,b,w,h,r){ x.beginPath(); x.moveTo(a+r,b); x.arcTo(a+w,b,a+w,b+h,r); x.arcTo(a+w,b+h,a,b+h,r); x.arcTo(a,b+h,a,b,r); x.arcTo(a,b,a+w,b,r); x.closePath(); }
+
+/* Session ends after 3 total misses, or when the player taps the end button. */
+/* ---------- buttons ---------- */
+document.getElementById('startBtn').addEventListener('click',()=>{ audio(); document.getElementById('start').classList.add('hide'); newGame(); });
+document.getElementById('againBtn').addEventListener('click',()=>{ document.getElementById('result').classList.add('hide'); newGame(); });
+document.getElementById('endBtn').addEventListener('click',()=>{ if(state==='playing')endGame(); });
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  const text='閉じ師ランク「'+rankFor(maxCombo)+'」最高連続JUST ×'+maxCombo+' / Pacchin で遊ぼう';
+  try{ if(cardBlob && navigator.canShare && navigator.canShare({files:[new File([cardBlob],'pacchin.png',{type:'image/png'})]})){ await navigator.share({files:[new File([cardBlob],'pacchin.png',{type:'image/png'})],text,title:'Pacchin'}); return; } }catch(e){}
+  try{ if(navigator.share){ await navigator.share({text,title:'Pacchin',url:location.href}); return; } }catch(e){}
+  // fallback: download image
+  const a=document.createElement('a'); a.href=document.getElementById('cardImg').src; a.download='pacchin.png'; a.click();
+});
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
