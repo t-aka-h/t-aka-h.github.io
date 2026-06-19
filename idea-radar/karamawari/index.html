@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070710">
+<title>空回り KARAMAWARI — 炎は燃えていた。実力は、空回りだった。</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#070710;
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    color:#f4f0e0;touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;z-index:5;pointer-events:none;}
+  .overlay.show{pointer-events:auto;}
+
+  /* intro */
+  #intro{background:radial-gradient(120% 90% at 50% 38%,rgba(60,12,12,.55),rgba(7,7,16,.96));}
+  .logo{font-size:13px;letter-spacing:7px;color:#ff8a3c;font-weight:800;margin-bottom:8px;}
+  .title{font-size:62px;font-weight:900;line-height:.98;letter-spacing:2px;
+    background:linear-gradient(180deg,#ffd23f,#ff4d1c);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 22px rgba(255,77,28,.5));}
+  .title small{display:block;font-size:15px;letter-spacing:5px;color:#9aa0b4;margin-top:14px;
+    background:none;-webkit-text-fill-color:#9aa0b4;filter:none;font-weight:700;}
+  .lead{font-size:14px;line-height:1.85;color:#cfd2e0;margin:26px 6px 0;max-width:340px;}
+  .lead b{color:#22e3ff;}
+  .lead .g{color:#ffc247;}
+  .btn{pointer-events:auto;margin-top:30px;border:none;border-radius:44px;
+    padding:18px 46px;font-size:19px;font-weight:900;letter-spacing:2px;color:#1a0a04;
+    background:linear-gradient(180deg,#ffd23f,#ff7a1c);box-shadow:0 0 30px rgba(255,120,28,.6);cursor:pointer;}
+  .btn:active{transform:scale(.96);}
+  .btn.ghost{background:transparent;color:#9aa0b4;box-shadow:none;border:1px solid #2a2f44;
+    font-size:15px;padding:14px 30px;font-weight:700;}
+
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;z-index:4;padding:14px 16px 0;pointer-events:none;}
+  .hudrow{display:flex;justify-content:space-between;align-items:flex-start;}
+  .streak{font-weight:900;line-height:1;}
+  .streak .num{font-size:46px;color:#ff7a1c;filter:drop-shadow(0 0 14px rgba(255,90,20,.6));font-variant-numeric:tabular-nums;}
+  .streak .lab{font-size:11px;letter-spacing:3px;color:#ff8a3c;font-weight:800;margin-bottom:2px;}
+  .xp{text-align:right;}
+  .xp .num{font-size:30px;color:#22e3ff;font-weight:900;font-variant-numeric:tabular-nums;
+    filter:drop-shadow(0 0 12px rgba(34,227,255,.55));}
+  .xp .lab{font-size:10px;letter-spacing:3px;color:#22e3ff;font-weight:800;}
+  .quit{pointer-events:auto;position:absolute;top:16px;right:16px;z-index:6;
+    border:1px solid #2a2f44;background:rgba(10,12,22,.5);color:#9aa0b4;border-radius:20px;
+    padding:8px 16px;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;display:none;}
+  .quit:active{transform:scale(.95);}
+
+  /* skill bar */
+  #skillwrap{position:absolute;left:0;right:0;bottom:0;z-index:4;padding:0 18px 22px;pointer-events:none;}
+  .sklab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;
+    letter-spacing:2px;color:#6f7088;font-weight:800;margin-bottom:7px;}
+  .sklab .lv{color:#9a9ab2;font-size:13px;}
+  .skbar{height:14px;border-radius:8px;background:#15151f;border:1px solid #23232f;overflow:hidden;position:relative;}
+  .skfill{height:100%;width:0%;border-radius:8px;background:#5a5a6e;transition:width .55s cubic-bezier(.2,.8,.2,1);}
+  .skfill.flash{background:linear-gradient(90deg,#f4f0e0,#fffbe6);box-shadow:0 0 18px rgba(255,251,230,.8);}
+  .skmiss{text-align:center;font-size:11px;color:#5a4a4a;margin-top:8px;letter-spacing:1px;font-weight:700;}
+  .skmiss b{color:#c0556b;}
+
+  /* real question */
+  #qz{position:absolute;inset:0;z-index:7;display:none;align-items:center;justify-content:center;
+    flex-direction:column;background:rgba(2,2,6,0);transition:background .25s;padding:24px;}
+  #qz.on{display:flex;background:rgba(2,2,6,.86);}
+  #qz.holding{background:rgba(0,0,0,.97);}
+  .qcard{width:100%;max-width:360px;border-radius:24px;padding:26px 22px 24px;
+    background:linear-gradient(180deg,rgba(40,30,8,.9),rgba(20,14,4,.92));
+    border:1.5px solid #ffc247;box-shadow:0 0 50px rgba(255,194,71,.28);text-align:center;position:relative;}
+  .qtag{font-size:12px;letter-spacing:5px;color:#ffc247;font-weight:900;margin-bottom:4px;}
+  .qsub{font-size:11px;color:#b59a5a;letter-spacing:1px;margin-bottom:16px;}
+  .qtext{font-size:52px;font-weight:900;color:#fff7e0;letter-spacing:2px;margin:6px 0 22px;
+    filter:drop-shadow(0 0 16px rgba(255,194,71,.4));font-variant-numeric:tabular-nums;}
+  .qchoices{display:flex;gap:14px;}
+  .choice{flex:1;position:relative;border:1.5px solid #b9923a;border-radius:16px;
+    background:rgba(255,194,71,.08);color:#fff7e0;font-size:30px;font-weight:900;
+    padding:20px 0;cursor:pointer;overflow:hidden;font-variant-numeric:tabular-nums;}
+  .choice:active{transform:scale(.98);}
+  .choice .holdfill{position:absolute;left:0;bottom:0;width:100%;height:0%;
+    background:linear-gradient(180deg,rgba(244,240,224,.25),rgba(255,251,230,.5));pointer-events:none;}
+  .choice .hint{position:absolute;left:0;right:0;bottom:6px;font-size:9px;letter-spacing:1px;
+    color:#b59a5a;font-weight:700;}
+  .qring{position:absolute;top:-10px;right:-10px;width:46px;height:46px;}
+  .qhold{font-size:12px;color:#ffc247;letter-spacing:2px;margin-top:16px;font-weight:800;height:16px;}
+
+  /* result */
+  #result{display:none;z-index:9;background:radial-gradient(120% 90% at 50% 30%,rgba(40,10,10,.7),rgba(7,7,16,.98));
+    flex-direction:column;align-items:center;justify-content:center;padding:22px;}
+  #result.on{display:flex;}
+  #cardImg{width:min(78vw,320px);border-radius:18px;box-shadow:0 14px 50px rgba(0,0,0,.6);}
+  .rbtns{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;justify-content:center;pointer-events:auto;}
+  .toast{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    background:rgba(20,22,34,.92);color:#cfd2e0;border:1px solid #2a2f44;border-radius:20px;
+    padding:10px 18px;font-size:12px;opacity:0;transition:opacity .3s;z-index:20;pointer-events:none;}
+  .toast.on{opacity:1;}
+  .credit{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:9px;color:#3a3f54;z-index:3;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hudrow">
+      <div class="streak"><div class="lab">連続ログイン</div><span class="num" id="streakNum">0</span><span style="font-size:15px;color:#ff8a3c;font-weight:800;"> 日</span></div>
+      <div class="xp"><div class="lab">XP</div><span class="num" id="xpNum">0</span></div>
+    </div>
+  </div>
+  <button class="quit" id="quitBtn">やめる ▸</button>
+
+  <!-- skill bar -->
+  <div id="skillwrap">
+    <div class="sklab"><span>実力レベル</span><span class="lv" id="skLv">Lv.0</span></div>
+    <div class="skbar"><div class="skfill" id="skFill"></div></div>
+    <div class="skmiss" id="skMiss">本物の一問を <b id="missNum">0</b> 回 見逃した</div>
+  </div>
+
+  <!-- real question -->
+  <div id="qz">
+    <div class="qcard">
+      <div class="qtag">本物の一問</div>
+      <div class="qsub">連打をやめて・選択肢を長押しして熟考せよ</div>
+      <div class="qtext" id="qText">7 × 8 ?</div>
+      <div class="qchoices">
+        <button class="choice" data-i="0"><span id="cA">56</span><div class="holdfill" id="hfA"></div><div class="hint">長押し</div></button>
+        <button class="choice" data-i="1"><span id="cB">54</span><div class="holdfill" id="hfB"></div><div class="hint">長押し</div></button>
+      </div>
+      <div class="qhold" id="qHold"></div>
+      <svg class="qring" viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="none" stroke="#3a2e10" stroke-width="4"/><circle id="qRing" cx="23" cy="23" r="20" fill="none" stroke="#ffc247" stroke-width="4" stroke-linecap="round" transform="rotate(-90 23 23)" stroke-dasharray="125.6" stroke-dashoffset="0"/></svg>
+    </div>
+  </div>
+
+  <!-- intro -->
+  <div class="overlay show" id="intro">
+    <div class="logo">IDEA RADAR</div>
+    <div class="title">空回り<small>K A R A M A W A R I</small></div>
+    <div class="lead">炎を絶やすな。連打すれば<b>連続日数</b>も<b>XP</b>も景気よく増える。<br>……でも、<span class="g">実力レベル</span>は1ミリも動かない。<br>たまに降る<span class="g">「本物の一問」</span>を、連打をやめて長押しで解いた時だけ、実力は伸びる。</div>
+    <button class="btn" id="startBtn">炎を灯す 🔥</button>
+    <button class="btn ghost" id="howBtn" style="margin-top:14px;">どういうこと？</button>
+  </div>
+
+  <!-- result -->
+  <div class="overlay" id="result">
+    <img id="cardImg" alt="result">
+    <div class="rbtns">
+      <button class="btn" id="shareBtn" style="font-size:16px;padding:15px 30px;">シェア / 保存</button>
+      <button class="btn ghost" id="againBtn" style="margin-top:0;">もう一度</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="credit">Idea Radar 優勝作 · 単一HTML / Canvas / WebAudio · 完全オンデバイス</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,cx=0,cyWheel=0,wheelR=0;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx=W/2;cyWheel=H*0.46;wheelR=Math.min(W*0.30,150);
+}
+window.addEventListener('resize',resize);resize();
+
+// ---------- audio ----------
+let AC=null,master=null;
+function initAudio(){
+  if(AC)return;
+  try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
+  master=AC.createGain();master.gain.value=0.9;master.connect(AC.destination);
+}
+function now(){return AC?AC.currentTime:0;}
+function jara(){ // cheap, noisy, "上達してる気がする" XP sound
+  if(!AC)return;
+  const t=now();
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=Math.random()<0.5?'square':'sawtooth';
+  const base=80+Math.random()*60;
+  o.frequency.setValueAtTime(base,t);
+  o.frequency.exponentialRampToValueAtTime(base*1.6,t+0.05);
+  g.gain.setValueAtTime(0.0,t);
+  g.gain.linearRampToValueAtTime(0.13,t+0.005);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.13);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+0.15);
+}
+function boom(){ // 55Hz + harmonics, missing fundamental — real reward
+  if(!AC)return;
+  const t=now();
+  [55,110,165,220].forEach((f,i)=>{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine';o.frequency.value=f;
+    const amp=[0.42,0.3,0.2,0.12][i];
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(amp,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.9);
+    o.connect(g);g.connect(master);o.start(t);o.stop(t+0.95);
+  });
+  // sparkle top
+  const o2=AC.createOscillator(),g2=AC.createGain();
+  o2.type='triangle';o2.frequency.setValueAtTime(660,t);o2.frequency.exponentialRampToValueAtTime(1320,t+0.18);
+  g2.gain.setValueAtTime(0.0,t);g2.gain.linearRampToValueAtTime(0.16,t+0.02);g2.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  o2.connect(g2);g2.connect(master);o2.start(t);o2.stop(t+0.4);
+}
+function buzz(){
+  if(!AC)return;const t=now();
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type='sawtooth';o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(70,t+0.3);
+  g.gain.setValueAtTime(0.0,t);g.gain.linearRampToValueAtTime(0.14,t+0.01);g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+0.4);
+}
+let silenced=false;
+function silence(on){
+  if(!AC)return;silenced=on;
+  master.gain.cancelScheduledValues(now());
+  master.gain.exponentialRampToValueAtTime(on?0.0001:0.9, now()+ (on?0.06:0.25));
+}
+function vib(p){try{navigator.vibrate&&navigator.vibrate(p);}catch(e){}}
+
+// ---------- state ----------
+let state='idle'; // idle, grinding, question, result
+let streakDays=0, xp=0;
+let skillLevel=0, skillBar=0; // skillBar 0..1, 0.34 per correct
+let missed=0, answeredCorrect=0, answeredWrong=0, questionsShown=0;
+let runStart=0;
+
+// flame
+let particles=[], pulses=[], floatXP=[];
+let wheelAngle=0, wheelSpin=0, flameHeat=0;
+let nextQAt=0;
+
+// question runtime
+let q=null; // {text,answers,correct,deadline,holdIdx,holdStart}
+
+const E={
+  streakNum:document.getElementById('streakNum'),
+  xpNum:document.getElementById('xpNum'),
+  skLv:document.getElementById('skLv'),
+  skFill:document.getElementById('skFill'),
+  skMiss:document.getElementById('skMiss'),
+  missNum:document.getElementById('missNum'),
+  quit:document.getElementById('quitBtn'),
+  qz:document.getElementById('qz'),
+  qText:document.getElementById('qText'),
+  cA:document.getElementById('cA'),cB:document.getElementById('cB'),
+  hfA:document.getElementById('hfA'),hfB:document.getElementById('hfB'),
+  qHold:document.getElementById('qHold'),
+  qRing:document.getElementById('qRing'),
+  intro:document.getElementById('intro'),
+  result:document.getElementById('result'),
+  cardImg:document.getElementById('cardImg'),
+  toast:document.getElementById('toast'),
+};
+
+function fmt(n){return Math.floor(n).toLocaleString('en-US');}
+function toast(m){E.toast.textContent=m;E.toast.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>E.toast.classList.remove('on'),1600);}
+
+// ---------- grinding tap ----------
+function grindTap(px,py){
+  if(state!=='grinding')return;
+  streakDays += 1;
+  const gain = 10 + Math.floor(Math.random()*32);
+  xp += gain;
+  wheelSpin = Math.min(wheelSpin+0.9, 7);
+  flameHeat = Math.min(flameHeat+0.22,1.4);
+  // particles from wheel center-ish
+  const n=14+Math.floor(Math.random()*12);
+  for(let i=0;i<n;i++){
+    const a=-Math.PI/2 + (Math.random()-0.5)*1.5;
+    const sp=2+Math.random()*5.5;
+    particles.push({x:cx+(Math.random()-0.5)*wheelR*0.6,y:cyWheel-wheelR*0.2,
+      vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1.5,life:1,age:0,
+      r:3+Math.random()*5,hot:Math.random()});
+  }
+  floatXP.push({x:cx+(Math.random()-0.5)*W*0.4,y:cyWheel-wheelR-10,v:'+'+gain,age:0});
+  E.streakNum.textContent=fmt(streakDays);
+  E.xpNum.textContent=fmt(xp);
+  jara();vib(8);
+}
+
+// ---------- question flow ----------
+function scheduleQuestion(){ nextQAt = performance.now() + 4600 + Math.random()*2600; }
+function genQ(){
+  const a=6+Math.floor(Math.random()*4), b=6+Math.floor(Math.random()*4);
+  const correct=a*b;
+  let wrong=correct + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*7));
+  if(wrong===correct)wrong+=3;
+  const ci=Math.random()<0.5?0:1;
+  const ans=ci===0?[correct,wrong]:[wrong,correct];
+  return {text:a+' × '+b+' ?', answers:ans, correct:ci, deadline:performance.now()+2600,
+          holdIdx:-1, holdStart:0, resolved:false};
+}
+function openQuestion(){
+  q=genQ();questionsShown++;
+  E.qText.textContent=q.text;
+  E.cA.textContent=q.answers[0];E.cB.textContent=q.answers[1];
+  E.hfA.style.height='0%';E.hfB.style.height='0%';
+  E.qHold.textContent='';
+  E.qz.classList.remove('holding');
+  E.qz.classList.add('on');
+  state='question';
+}
+function closeQuestion(){
+  E.qz.classList.remove('on','holding');
+  E.hfA.style.height='0%';E.hfB.style.height='0%';
+  if(silenced)silence(false);
+  q=null;state='grinding';scheduleQuestion();
+}
+function missQuestion(){
+  missed++;E.missNum.textContent=missed;
+  E.skMiss.innerHTML='本物の一問を <b>'+missed+'</b> 回 見逃した';
+  toast('連打に夢中で本物を逃した…');
+  closeQuestion();
+}
+const HOLD_MS=420;
+function startHold(idx){
+  if(state!=='question'||!q||q.resolved)return;
+  q.holdIdx=idx;q.holdStart=performance.now();
+  E.qz.classList.add('holding');
+  silence(true); // 派手→無音 — the showpiece
+  E.qHold.textContent='熟考中…';
+  vib(6);
+}
+function endHold(idx){
+  if(state!=='question'||!q||q.resolved)return;
+  if(q.holdIdx!==idx){return;}
+  const dur=performance.now()-q.holdStart;
+  q.holdIdx=-1;
+  if(dur<HOLD_MS){
+    // too quick = reflexive tap, not 熟考
+    E.qz.classList.remove('holding');silence(false);
+    E.hfA.style.height='0%';E.hfB.style.height='0%';
+    E.qHold.textContent='早すぎ — それは連打と同じ';
+    vib(12);
+    return;
+  }
+  commitAnswer(idx);
+}
+function commitAnswer(idx){
+  if(!q||q.resolved)return;q.resolved=true;
+  const ok=(idx===q.correct);
+  silence(false);
+  E.qz.classList.remove('holding');
+  if(ok){
+    answeredCorrect++;
+    skillBar+=0.34;
+    while(skillBar>=1){skillBar-=1;skillLevel++;}
+    boom();vib([40,30,90]);
+    flashSkill();
+    updateSkill();
+    E.qHold.textContent='正解 — 実力が伸びた';
+    // celebratory burst on skill bar
+    for(let i=0;i<26;i++){pulses.push({x:cx,y:H-40,a:Math.random()*Math.PI*2,sp:2+Math.random()*5,age:0,c:'#fffbe6'});}
+  }else{
+    answeredWrong++;
+    buzz();vib(20);
+    E.qHold.textContent='不正解 — 実力は伸びない';
+  }
+  setTimeout(closeQuestion,560);
+}
+function updateSkill(){
+  E.skLv.textContent='Lv.'+skillLevel;
+  E.skFill.style.width=(skillBar*100).toFixed(1)+'%';
+}
+function flashSkill(){E.skFill.classList.add('flash');setTimeout(()=>E.skFill.classList.remove('flash'),650);}
+
+// answer button events (hold)
+document.querySelectorAll('.choice').forEach(btn=>{
+  const i=parseInt(btn.dataset.i,10);
+  const fill=i===0?E.hfA:E.hfB;
+  btn.addEventListener('pointerdown',e=>{e.preventDefault();startHold(i);},{passive:false});
+  btn.addEventListener('pointerup',e=>{e.preventDefault();endHold(i);},{passive:false});
+  btn.addEventListener('pointercancel',e=>{endHold(i);});
+  btn.addEventListener('pointerleave',e=>{ if(q&&q.holdIdx===i){endHold(i);} });
+});
+
+// ---------- main canvas input ----------
+function onTap(e){
+  initAudio();
+  if(AC&&AC.state==='suspended')AC.resume();
+  if(state==='grinding'){
+    const t=e.touches?e.touches[0]:e;
+    grindTap(t.clientX,t.clientY);
+  } else if(state==='question'){
+    // mindless tapping during a real question = ignoring it
+    flameHeat=Math.min(flameHeat+0.1,1.4);
+    if(!grindTap._warned){grindTap._warned=true;toast('連打しても本物は解けない');setTimeout(()=>grindTap._warned=false,1200);}
+  }
+}
+cv.addEventListener('pointerdown',e=>{e.preventDefault();onTap(e);},{passive:false});
+
+// ---------- loop ----------
+let last=performance.now();
+function frame(t){
+  const dt=Math.min((t-last)/16.67,3);last=t;
+  wheelAngle += wheelSpin*0.05*dt;
+  wheelSpin *= Math.pow(0.92,dt);
+  flameHeat *= Math.pow(0.95,dt);
+  // particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.age+=dt*0.045;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.12*dt;p.vx*=0.98;p.life=1-p.age;
+    if(p.life<=0)particles.splice(i,1);
+  }
+  for(let i=pulses.length-1;i>=0;i--){const p=pulses[i];p.age+=dt*0.04;p.x+=Math.cos(p.a)*p.sp*dt;p.y+=Math.sin(p.a)*p.sp*dt;p.sp*=0.96;if(p.age>=1)pulses.splice(i,1);}
+  for(let i=floatXP.length-1;i>=0;i--){const f=floatXP[i];f.age+=dt*0.02;f.y-=1.2*dt;if(f.age>=1)floatXP.splice(i,1);}
+
+  // question timing
+  if(state==='grinding' && t>=nextQAt){ openQuestion(); }
+  if(state==='question' && q && !q.resolved){
+    const remain=(q.deadline - t)/2600;
+    if(q.holdIdx<0){ // only count down when not actively holding
+      E.qRing.style.strokeDashoffset = (125.6*(1-Math.max(0,remain))).toFixed(1);
+      if(remain<=0){missQuestion();}
+    }
+    if(q.holdIdx>=0){
+      const dur=t-q.holdStart;const pct=Math.min(dur/HOLD_MS,1)*100;
+      (q.holdIdx===0?E.hfA:E.hfB).style.height=pct+'%';
+      if(dur>=HOLD_MS){commitAnswer(q.holdIdx);}
+    }
+  }
+
+  draw();
+  requestAnimationFrame(frame);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg radial
+  const bg=ctx.createRadialGradient(cx,cyWheel,10,cx,cyWheel,Math.max(W,H)*0.8);
+  bg.addColorStop(0,'rgba(46,8,18,0.55)');bg.addColorStop(1,'rgba(7,7,16,1)');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  if(state==='idle'){return;}
+
+  // wheel ring (spinning, dazzling)
+  ctx.save();ctx.translate(cx,cyWheel);
+  const glow=0.4+flameHeat*0.5;
+  for(let ring=0;ring<2;ring++){
+    ctx.beginPath();const rr=wheelR*(1+ring*0.13);
+    ctx.lineWidth=ring===0?10:3;
+    ctx.strokeStyle=ring===0?`rgba(255,120,28,${glow})`:`rgba(255,210,63,${0.35*glow})`;
+    ctx.shadowColor='rgba(255,90,20,0.8)';ctx.shadowBlur=24*glow;
+    ctx.arc(0,0,rr,0,Math.PI*2);ctx.stroke();
+  }
+  // ticks
+  ctx.shadowBlur=0;
+  const ticks=24;
+  for(let i=0;i<ticks;i++){
+    const a=wheelAngle+i/ticks*Math.PI*2;
+    const r1=wheelR*0.82,r2=wheelR*0.97;
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*r1,Math.sin(a)*r1);ctx.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+    ctx.lineWidth=3;ctx.strokeStyle=`rgba(255,180,90,${0.25+0.4*((i%2)?glow:glow*0.4)})`;ctx.stroke();
+  }
+  // center label
+  ctx.fillStyle='rgba(255,150,60,0.9)';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='800 13px -apple-system,sans-serif';ctx.fillText('TAP TO KEEP',0,-8);
+  ctx.font='900 15px -apple-system,sans-serif';ctx.fillStyle='#ff8a3c';ctx.fillText('THE STREAK',0,12);
+  ctx.restore();
+
+  // flame particles (additive)
+  ctx.globalCompositeOperation='lighter';
+  for(const p of particles){
+    const a=Math.max(0,p.life);
+    const r=p.r*(0.6+p.life*0.7);
+    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r);
+    if(p.hot>0.6){g.addColorStop(0,`rgba(255,235,160,${a})`);g.addColorStop(.5,`rgba(255,160,40,${a*0.7})`);g.addColorStop(1,'rgba(120,20,10,0)');}
+    else{g.addColorStop(0,`rgba(255,180,70,${a*0.9})`);g.addColorStop(.5,`rgba(255,90,20,${a*0.6})`);g.addColorStop(1,'rgba(80,10,5,0)');}
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+  }
+  for(const p of pulses){
+    const a=1-p.age;ctx.fillStyle=`rgba(255,251,230,${a})`;
+    ctx.beginPath();ctx.arc(p.x,p.y,2.5*(1-p.age*0.5),0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+
+  // floating XP
+  for(const f of floatXP){
+    ctx.globalAlpha=1-f.age;ctx.fillStyle='#22e3ff';ctx.textAlign='center';
+    ctx.font='900 22px -apple-system,sans-serif';
+    ctx.shadowColor='rgba(34,227,255,.7)';ctx.shadowBlur=10;
+    ctx.fillText(f.v,f.x,f.y);ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+}
+requestAnimationFrame(frame);
+
+// ---------- run control ----------
+function startRun(){
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  state='grinding';
+  streakDays=0;xp=0;skillLevel=0;skillBar=0;missed=0;answeredCorrect=0;answeredWrong=0;questionsShown=0;
+  particles=[];pulses=[];floatXP=[];wheelSpin=0;flameHeat=0;
+  runStart=performance.now();
+  E.streakNum.textContent='0';E.xpNum.textContent='0';E.missNum.textContent='0';
+  E.skMiss.innerHTML='本物の一問を <b>0</b> 回 見逃した';
+  updateSkill();
+  E.intro.classList.remove('show');E.intro.style.display='none';
+  E.result.classList.remove('on');E.result.style.display='none';
+  E.quit.style.display='block';
+  scheduleQuestion();
+}
+function endRun(){
+  state='result';
+  E.qz.classList.remove('on','holding');if(silenced)silence(false);
+  E.quit.style.display='none';
+  buildCard();
+  E.result.style.display='flex';E.result.classList.add('on');
+}
+
+document.getElementById('startBtn').addEventListener('click',startRun);
+document.getElementById('howBtn').addEventListener('click',()=>{
+  toast('連打＝学んだ気。実力は「本物の一問」を長押しで解いた時だけ伸びる');
+});
+E.quit.addEventListener('click',endRun);
+document.getElementById('againBtn').addEventListener('click',startRun);
+
+// ---------- share card 1080x1920 ----------
+let cardURL=null;
+function buildCard(){
+  const cn=document.createElement('canvas');cn.width=1080;cn.height=1920;
+  const g=cn.getContext('2d');
+  // bg
+  const bg=g.createRadialGradient(540,640,40,540,640,1300);
+  bg.addColorStop(0,'#2a0a12');bg.addColorStop(1,'#070710');
+  g.fillStyle=bg;g.fillRect(0,0,1080,1920);
+  // embers top
+  g.globalCompositeOperation='lighter';
+  for(let i=0;i<70;i++){
+    const x=Math.random()*1080,y=200+Math.random()*420,r=4+Math.random()*22;
+    const rg=g.createRadialGradient(x,y,0,x,y,r);
+    rg.addColorStop(0,'rgba(255,180,80,'+(0.18+Math.random()*0.4)+')');rg.addColorStop(1,'rgba(120,20,10,0)');
+    g.fillStyle=rg;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();
+  }
+  g.globalCompositeOperation='source-over';
+  g.textAlign='center';
+  // header
+  g.fillStyle='#ff8a3c';g.font='800 34px -apple-system,sans-serif';
+  g.fillText('K A R A M A W A R I  ·  空 回 り',540,150);
+  // streak huge
+  g.fillStyle='#ff8a3c';g.font='800 40px -apple-system,sans-serif';g.fillText('連続ログイン',540,500);
+  const grad=g.createLinearGradient(0,520,0,720);grad.addColorStop(0,'#ffd23f');grad.addColorStop(1,'#ff4d1c');
+  g.fillStyle=grad;g.font='900 230px -apple-system,sans-serif';
+  g.shadowColor='rgba(255,77,28,0.6)';g.shadowBlur=50;
+  g.fillText(fmt(streakDays),540,720);g.shadowBlur=0;
+  g.fillStyle='#ff8a3c';g.font='800 54px -apple-system,sans-serif';g.fillText('日',540,800);
+  // skill small + dim
+  g.fillStyle='#6f7088';g.font='800 32px -apple-system,sans-serif';g.fillText('実力レベル',540,980);
+  g.fillStyle=skillLevel>0?'#cfd2e0':'#5a5a6e';g.font='900 130px -apple-system,sans-serif';
+  g.fillText('Lv.'+skillLevel,540,1110);
+  // stats row
+  g.fillStyle='#22e3ff';g.font='900 60px -apple-system,sans-serif';g.fillText(fmt(xp)+' XP',540,1240);
+  g.fillStyle='#c0556b';g.font='700 36px -apple-system,sans-serif';
+  g.fillText('本物の一問を '+missed+' 回 見逃した',540,1320);
+  if(answeredCorrect>0){g.fillStyle='#9aa0b4';g.font='700 32px -apple-system,sans-serif';
+    g.fillText('熟考して解けたのは '+answeredCorrect+' 問',540,1372);}
+  // verdict line
+  g.fillStyle='#f4f0e0';g.font='900 56px -apple-system,sans-serif';
+  g.fillText('炎は燃えていた。',540,1620);
+  g.fillStyle=skillLevel>0?'#ffd23f':'#ff6a3c';
+  g.fillText(skillLevel>0?'実力も、少し伸びた。':'実力は、空回りだった。',540,1700);
+  // footer
+  g.fillStyle='#5a5f74';g.font='600 28px -apple-system,sans-serif';
+  g.fillText('#空回り  ·  Idea Radar',540,1840);
+
+  cardURL=cn.toDataURL('image/png');
+  E.cardImg.src=cardURL;
+  cn.toBlob(b=>{cardBlob=b;},'image/png');
+}
+let cardBlob=null;
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  try{
+    if(cardBlob&&navigator.canShare&&navigator.canShare({files:[new File([cardBlob],'karamawari.png',{type:'image/png'})]})){
+      await navigator.share({files:[new File([cardBlob],'karamawari.png',{type:'image/png'})],
+        text:'連続'+streakDays+'日 / 実力Lv.'+skillLevel+' — 炎は燃えていた。実力は、空回りだった。 #空回り'});
+      return;
+    }
+  }catch(e){}
+  // fallback: download
+  const a=document.createElement('a');a.href=cardURL;a.download='karamawari.png';
+  document.body.appendChild(a);a.click();a.remove();
+  toast('画像を保存しました（長押しでも保存できます）');
+});
+
+// debug hook (only when ?debug=1 — live URL stays clean)
+if(/[?&]debug=1/.test(location.search)){
+  window.__kara={open:openQuestion,commit:commitAnswer,state:()=>state,
+    skill:()=>({lv:skillLevel,bar:skillBar,miss:missed,correct:answeredCorrect})};
+}
+
+// prevent gestures
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('dblclick',e=>e.preventDefault());
+})();
+</script>
+</body>
+</html>
