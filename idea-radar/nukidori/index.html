@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#06030D" />
+<title>抜き取り Nukidori — データ自衛リフレックス</title>
+<meta name="description" content="改正APPIで個人データは黙ってAI学習に使われる時代。呑まれる前にフリックで抜き取れ。" />
+<style>
+  :root{
+    --bg:#06030D; --bg2:#0c0716; --ink:#EAF0F8; --sub:#9aa3bf;
+    --hot:#FF1F6B; --pur:#7A0EE0; --sens:#FF2D55; --anon:#3A4151;
+    --warn:#FF1414; --ok:#39E0A8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%; background:var(--bg); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    color:var(--ink); touch-action:none; overscroll-behavior:none;}
+  #wrap{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;}
+  canvas{display:block; width:100%; height:100%; touch-action:none;}
+  .overlay{position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:28px; z-index:10;
+    background:radial-gradient(120% 90% at 50% 18%, rgba(122,14,224,.16), rgba(6,3,13,.0) 60%),
+               radial-gradient(120% 90% at 50% 100%, rgba(255,31,107,.14), rgba(6,3,13,0) 55%),
+               rgba(6,3,13,.86); backdrop-filter:blur(3px);}
+  .overlay.hidden{display:none;}
+  .logo{font-weight:900; letter-spacing:.06em; line-height:.95;}
+  .jp{font-size:clamp(46px,17vw,90px); background:linear-gradient(180deg,#fff, #FF8FB6 55%, var(--hot));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(255,31,107,.35); filter:drop-shadow(0 4px 18px rgba(255,31,107,.25));}
+  .en{font-size:clamp(13px,4.4vw,18px); letter-spacing:.5em; color:var(--sub); margin-top:6px; padding-left:.5em;}
+  .tag{margin:18px 6px 4px; font-size:clamp(13px,4.1vw,16px); color:var(--ink); line-height:1.7; max-width:560px;}
+  .tag b{color:var(--sens);}
+  .mini{font-size:clamp(11px,3.3vw,13px); color:var(--sub); margin-top:14px; line-height:1.7; max-width:520px;}
+  .btn{margin-top:26px; border:none; cursor:pointer; font-weight:800; letter-spacing:.04em;
+    color:#fff; font-size:clamp(17px,5vw,21px); padding:17px 46px; border-radius:999px;
+    background:linear-gradient(135deg,var(--hot),var(--pur));
+    box-shadow:0 0 34px rgba(255,31,107,.5), inset 0 0 0 1px rgba(255,255,255,.18); transition:transform .08s;}
+  .btn:active{transform:scale(.96);}
+  .btn.ghost{background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 1px rgba(255,255,255,.2); margin-top:14px; font-size:15px; padding:13px 30px;}
+  .legend{display:flex; gap:22px; margin-top:22px; font-size:13px; color:var(--sub);}
+  .legend .swatch{width:13px;height:13px;border-radius:3px;display:inline-block;margin-right:7px;vertical-align:-2px;}
+  /* result */
+  #result .card{width:min(86vw,360px); aspect-ratio:9/16; border-radius:22px; overflow:hidden;
+    box-shadow:0 0 50px rgba(255,31,107,.35), inset 0 0 0 1px rgba(255,143,182,.35);}
+  #result .card canvas{width:100%;height:100%;}
+  .row{display:flex; gap:12px; margin-top:18px;}
+  .credit{position:fixed; bottom:8px; left:0; right:0; text-align:center; font-size:10px; color:#4d5570; z-index:5; letter-spacing:.04em;}
+  .hud{position:fixed; top:0; left:0; right:0; z-index:6; display:flex; justify-content:space-between;
+    padding:14px 18px calc(8px + env(safe-area-inset-top)); pointer-events:none;
+    font-variant-numeric:tabular-nums; text-shadow:0 1px 8px rgba(0,0,0,.6);}
+  .hud .blk{font-size:11px; letter-spacing:.18em; color:var(--sub);}
+  .hud .val{font-size:23px; font-weight:900; line-height:1;}
+  .hud .leak .val{color:var(--warn);}
+  .hud .save .val{color:var(--ok);}
+  .hud .mid{text-align:center;} .hud .rt{text-align:right;}
+  .combo{position:fixed; top:64px; left:0; right:0; text-align:center; z-index:6; pointer-events:none;
+    font-weight:900; font-size:30px; color:#fff; opacity:0; transition:opacity .2s; text-shadow:0 0 18px var(--hot);}
+  .hud.hidden,.combo.hidden{display:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+
+<div class="hud hidden" id="hud">
+  <div class="lt"><div class="blk">TIME</div><div class="val" id="hTime">0.0</div></div>
+  <div class="mid save"><div class="blk">SAVED</div><div class="val" id="hSave">0</div></div>
+  <div class="rt leak"><div class="blk">LEAKED</div><div class="val" id="hLeak">0 / 10</div></div>
+</div>
+<div class="combo hidden" id="combo"></div>
+
+<!-- TITLE -->
+<div class="overlay" id="title">
+  <div class="logo jp">抜き取り</div>
+  <div class="logo en">NUKIDORI</div>
+  <div class="tag">改正APPI施行。あなたの<b>健康・生体・位置データ</b>は、黙ってAI学習に吸い込まれていく。<br>呑まれる前に、<b>フリックで抜き取れ。</b></div>
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--sens);box-shadow:0 0 10px var(--sens)"></span>機微 = 抜く</span>
+    <span><span class="swatch" style="background:var(--anon)"></span>匿名化済 = 通す</span>
+  </div>
+  <button class="btn" id="startBtn">取り込みを止める</button>
+  <div class="mini">落ちてくる赤いデータを横フリックで救出。匿名化済み（青）は触らず通す。<br>10件流出したら終わり。音が出ます。</div>
+</div>
+
+<!-- RESULT -->
+<div class="overlay hidden" id="result">
+  <div class="card"><canvas id="shareCanvas" width="540" height="960"></canvas></div>
+  <div class="row">
+    <button class="btn" id="shareBtn">結果をシェア</button>
+    <button class="btn ghost" id="againBtn">もう一度</button>
+  </div>
+</div>
+
+<div class="credit">Idea Radar 自動生成 — レンズ L11 規制・政策（改正APPI）／ 完全オンデバイス・データ収集ゼロ</div>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio ---------- */
+let AC=null, master=null, drone=null, droneGain=null, lfoVal=0;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    // 55Hz drone + 110Hz harmonic (missing-fundamental thickness)
+    droneGain=AC.createGain(); droneGain.gain.value=0.0; droneGain.connect(master);
+    const o1=AC.createOscillator(); o1.type='sine'; o1.frequency.value=55;
+    const o2=AC.createOscillator(); o2.type='sine'; o2.frequency.value=110;
+    const g2=AC.createGain(); g2.gain.value=0.5; o2.connect(g2); g2.connect(droneGain);
+    o1.connect(droneGain); o1.start(); o2.start();
+    drone=o1;
+  }catch(e){ AC=null; }
+}
+function droneOn(on){ if(droneGain) droneGain.gain.setTargetAtTime(on?0.22:0.0, AC.currentTime, .4); }
+function now(){ return AC?AC.currentTime:0; }
+function noiseBuf(dur){
+  const n=Math.floor(AC.sampleRate*dur); const b=AC.createBuffer(1,n,AC.sampleRate);
+  const d=b.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1; return b;
+}
+function sfxSave(){ // shhh + rising pitch
+  if(!AC) return; const t=now();
+  const src=AC.createBufferSource(); src.buffer=noiseBuf(0.18);
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(900,t); bp.frequency.exponentialRampToValueAtTime(4200,t+.16); bp.Q.value=1.1;
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+.012); g.gain.exponentialRampToValueAtTime(0.0001,t+.2);
+  src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t+.22);
+  const o=AC.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(420,t); o.frequency.exponentialRampToValueAtTime(1500,t+.14);
+  const og=AC.createGain(); og.gain.setValueAtTime(.0001,t); og.gain.exponentialRampToValueAtTime(.18,t+.02); og.gain.exponentialRampToValueAtTime(.0001,t+.18);
+  o.connect(og); og.connect(master); o.start(t); o.stop(t+.2);
+}
+function sfxLeak(){ // warning two-tone saw + sub thump
+  if(!AC) return; const t=now();
+  [0,0.12].forEach((off,i)=>{
+    const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.value=i?180:240;
+    const g=AC.createGain(); g.gain.setValueAtTime(.0001,t+off); g.gain.exponentialRampToValueAtTime(.26,t+off+.01); g.gain.exponentialRampToValueAtTime(.0001,t+off+.1);
+    o.connect(g); g.connect(master); o.start(t+off); o.stop(t+off+.12);
+  });
+  const sub=AC.createOscillator(); sub.type='sine'; sub.frequency.setValueAtTime(70,t); sub.frequency.exponentialRampToValueAtTime(40,t+.4);
+  const sg=AC.createGain(); sg.gain.setValueAtTime(.0001,t); sg.gain.exponentialRampToValueAtTime(.5,t+.02); sg.gain.exponentialRampToValueAtTime(.0001,t+.45);
+  sub.connect(sg); sg.connect(master); sub.start(t); sub.stop(t+.5);
+}
+function sfxWrong(){ // dull botz
+  if(!AC) return; const t=now();
+  const o=AC.createOscillator(); o.type='square'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(70,t+.12);
+  const g=AC.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.16,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+.14);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+.16);
+}
+function sfxOver(){
+  if(!AC) return; const t=now();
+  [330,247,196,131].forEach((f,i)=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f;
+    const g=AC.createGain();g.gain.setValueAtTime(.0001,t+i*.12);g.gain.exponentialRampToValueAtTime(.2,t+i*.12+.02);g.gain.exponentialRampToValueAtTime(.0001,t+i*.12+.5);
+    o.connect(g);g.connect(master);o.start(t+i*.12);o.stop(t+i*.12+.55);});
+}
+function vibe(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} }
+
+/* ---------- state ---------- */
+const ST={title:0,play:1,over:2}; let mode=ST.title;
+let cards=[], particles=[], flying=[];
+let t0=0, elapsed=0, spawnT=0, leaked=0, saved=0, wrong=0, combo=0, maxCombo=0, score=0;
+let flash=0; // red leak flash
+let lanes=[], laneCount=4;
+let last=0;
+
+function computeLanes(){
+  laneCount = W<360?3:4;
+  lanes=[]; const m=W*0.07; const usable=W-m*2; const step=usable/laneCount;
+  for(let i=0;i<laneCount;i++) lanes.push(m+step*(i+0.5));
+}
+const ICONS=['heart','finger','pin','dna','eye']; // sensitive icon variety
+function spawnCard(){
+  computeLaneIfNeeded();
+  const lane = lanes[(Math.random()*lanes.length)|0];
+  // type probability ramps: 0-9s all sensitive; later mix anon in
+  let pAnon = elapsed<9 ? 0 : Math.min(0.45, (elapsed-9)*0.02);
+  const type = Math.random()<pAnon ? 'anon':'sens';
+  const w=Math.min(W*0.22, 96), h=w*0.74;
+  const speed = (H*0.16) * (1 + elapsed*0.035); // px/s, ramps
+  cards.push({x:lane, y:-h, w, h, vy:speed*(0.92+Math.random()*0.2), type,
+    icon:ICONS[(Math.random()*ICONS.length)|0], born:elapsed, wob:Math.random()*6.28});
+}
+let lanesReady=false;
+function computeLaneIfNeeded(){ if(!lanesReady){computeLanes(); lanesReady=true;} }
+
+function reset(){
+  cards=[];particles=[];flying=[];
+  elapsed=0; spawnT=0; leaked=0; saved=0; wrong=0; combo=0; maxCombo=0; score=0; flash=0;
+  lanesReady=false; computeLanes(); lanesReady=true;
+  t0=performance.now(); last=t0;
+}
+
+/* ---------- input: horizontal flick saves nearest card ---------- */
+let ptr=null;
+function xy(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+function down(e){ if(mode!==ST.play)return; const p=xy(e); ptr={sx:p.x,sy:p.y,t:performance.now()}; e.preventDefault();}
+function move(e){ if(mode!==ST.play||!ptr)return; e.preventDefault();
+  const p=xy(e); const dx=p.x-ptr.sx, dy=p.y-ptr.sy;
+  if(Math.abs(dx)>26 && Math.abs(dx)>Math.abs(dy)*1.1){ tryFlick(ptr.sx,ptr.sy,Math.sign(dx)); ptr=null; }
+}
+function up(e){ if(mode!==ST.play){ptr=null;return;} if(!ptr){return;}
+  const p=xy(e.changedTouches?{touches:[e.changedTouches[0]]}:e); const dx=p.x-ptr.sx, dy=p.y-ptr.sy;
+  if(Math.abs(dx)>22 && Math.abs(dx)>Math.abs(dy)){ tryFlick(ptr.sx,ptr.sy,Math.sign(dx)); }
+  ptr=null;
+}
+function tryFlick(sx,sy,dir){
+  // nearest active card to start point within radius
+  let best=-1, bd=1e9; const R=Math.max(160,W*0.4);
+  for(let i=0;i<cards.length;i++){ const c=cards[i]; const d=Math.hypot(c.x-sx,c.y-sy);
+    if(d<bd && d<R){bd=d;best=i;} }
+  if(best<0) return;
+  const c=cards.splice(best,1)[0];
+  if(c.type==='sens'){
+    saved++; combo++; maxCombo=Math.max(maxCombo,combo);
+    score += 100*(1+Math.min(combo,20)*0.1);
+    sfxSave(); vibe(14); showCombo();
+    spawnParticles(c.x,c.y,'var', 14);
+  }else{
+    wrong++; combo=0; sfxWrong(); vibe([8,30,8]);
+  }
+  flying.push({x:c.x,y:c.y,w:c.w,h:c.h,vx:dir*Math.max(W*1.4,900),vy:-60,a:1,type:c.type,icon:c.icon,rot:0,vr:dir*6});
+}
+cv.addEventListener('touchstart',down,{passive:false});
+cv.addEventListener('touchmove',move,{passive:false});
+cv.addEventListener('touchend',up,{passive:false});
+cv.addEventListener('mousedown',down); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+
+function spawnParticles(x,y,col,n){
+  for(let i=0;i<n;i++){const a=Math.random()*6.28, s=60+Math.random()*220;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,a:1,r:2+Math.random()*3});}
+}
+const comboEl=document.getElementById('combo');
+let comboHideT=0;
+function showCombo(){ if(combo<2)return; comboEl.textContent=combo+' CHAIN'; comboEl.classList.remove('hidden');
+  comboEl.style.opacity='1'; comboHideT=performance.now()+700; }
+
+/* ---------- update ---------- */
+function update(dt){
+  elapsed += dt;
+  // spawn cadence ramps down
+  const interval = Math.max(0.42, 1.15 - elapsed*0.012);
+  spawnT -= dt; if(spawnT<=0){ spawnCard(); spawnT=interval; }
+  const intakeY = H - intakeH();
+  for(let i=cards.length-1;i>=0;i--){ const c=cards[i]; c.y += c.vy*dt; c.wob+=dt*4;
+    if(c.y + c.h*0.30 >= intakeY){ // ingest
+      if(c.type==='sens'){ leaked++; flash=1; sfxLeak(); vibe([40,30,40]); combo=0;
+        spawnParticles(c.x,intakeY,'r',10);
+        if(leaked>=10){ gameOver(); }
+      } else { // anon legally consumed - subtle ok
+        spawnParticles(c.x,intakeY,'b',5);
+      }
+      cards.splice(i,1);
+    }
+  }
+  for(let i=flying.length-1;i>=0;i--){ const f=flying[i]; f.x+=f.vx*dt; f.y+=f.vy*dt; f.vy+=400*dt; f.rot+=f.vr*dt; f.a-=dt*1.6; if(f.a<=0)flying.splice(i,1); }
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=240*dt; p.a-=dt*1.8; if(p.a<=0)particles.splice(i,1); }
+  if(flash>0) flash=Math.max(0,flash-dt*2.2);
+  lfoVal=0.5+0.5*Math.sin(elapsed*2.0);
+  // hud
+  hTime.textContent=elapsed.toFixed(1); hSave.textContent=saved; hLeak.textContent=leaked+' / 10';
+  if(comboHideT && performance.now()>comboHideT){ comboEl.style.opacity='0'; comboHideT=0; }
+}
+function intakeH(){ return Math.max(96, H*0.16); }
+
+/* ---------- draw ---------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function drawIcon(name,x,y,s,col){
+  ctx.save(); ctx.translate(x,y); ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=Math.max(1.6,s*0.09); ctx.lineJoin='round'; ctx.lineCap='round';
+  const u=s*0.5;
+  if(name==='heart'){ ctx.beginPath(); ctx.moveTo(0,u*0.55); ctx.bezierCurveTo(u*0.1,-u*0.4,u*1.1,-u*0.1,0,u*0.85); ctx.bezierCurveTo(-u*1.1,-u*0.1,-u*0.1,-u*0.4,0,u*0.55); ctx.fill(); }
+  else if(name==='finger'){ for(let i=-2;i<=2;i++){ctx.beginPath();ctx.ellipse(0,0,u*0.7-Math.abs(i)*u*0.12,u*0.85-Math.abs(i)*u*0.1,0,0,6.28);ctx.stroke();} }
+  else if(name==='pin'){ ctx.beginPath(); ctx.arc(0,-u*0.15,u*0.5,Math.PI,0); ctx.lineTo(0,u*0.8); ctx.closePath(); ctx.fill(); ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(0,-u*0.15,u*0.2,0,6.28); ctx.fill(); }
+  else if(name==='dna'){ for(let k=0;k<2;k++){ctx.beginPath(); for(let a=-1;a<=1;a+=0.1){ctx.lineTo((k?1:-1)*Math.cos(a*3.14)*u*0.45, a*u*0.85);} ctx.stroke();} for(let j=-2;j<=2;j++){ctx.beginPath();ctx.moveTo(-Math.cos(j*0.5*3.14)*u*0.45,j*0.34*u);ctx.lineTo(Math.cos(j*0.5*3.14)*u*0.45,j*0.34*u);ctx.stroke();} }
+  else { ctx.beginPath(); ctx.ellipse(0,0,u*0.85,u*0.55,0,0,6.28); ctx.stroke(); ctx.beginPath(); ctx.arc(0,0,u*0.28,0,6.28); ctx.fill(); }
+  ctx.restore();
+}
+function drawCardShape(c,glow,alpha){
+  const half=c.w/2, x=c.x-half, y=c.y-c.h/2;
+  ctx.save(); ctx.globalAlpha=alpha??1;
+  const sens=c.type==='sens';
+  const pulse = sens? (0.6+0.4*Math.sin((elapsed||0)*6+c.wob)) : 0;
+  ctx.shadowColor= sens? 'rgba(255,45,85,'+(0.5+pulse*0.5)+')':'rgba(120,140,170,0.25)';
+  ctx.shadowBlur= sens? (14+glow*18+pulse*10): 6;
+  const g=ctx.createLinearGradient(x,y,x,y+c.h);
+  if(sens){ g.addColorStop(0,'#ff5c84'); g.addColorStop(1,'#c0103a'); }
+  else { g.addColorStop(0,'#454d62'); g.addColorStop(1,'#2a3142'); }
+  ctx.fillStyle=g; rr(x,y,c.w,c.h,10); ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle= sens? 'rgba(255,180,200,'+(0.5+pulse*0.5)+')':'rgba(160,175,200,0.4)';
+  ctx.lineWidth=1.4; rr(x+1,y+1,c.w-2,c.h-2,9); ctx.stroke();
+  // icon
+  drawIcon(c.icon, c.x, c.y-c.h*0.06, c.w*0.42, sens?'#fff':'#aeb8cf');
+  // label bars
+  ctx.fillStyle= sens?'rgba(255,255,255,.85)':'rgba(174,184,207,.6)';
+  ctx.font='700 '+Math.round(c.w*0.13)+'px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(sens?'機微':'匿名化済', c.x, y+c.h-c.h*0.13);
+  ctx.restore();
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg
+  const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0b0716'); bg.addColorStop(1,'#06030d');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  // faint lane guides
+  if(mode===ST.play){ ctx.save(); ctx.globalAlpha=0.06; ctx.strokeStyle='#fff'; ctx.lineWidth=1;
+    for(const lx of lanes){ ctx.beginPath(); ctx.moveTo(lx,0); ctx.lineTo(lx,H); ctx.stroke(); } ctx.restore(); }
+  // cards
+  for(const c of cards) drawCardShape(c,0,1);
+  for(const f of flying){ ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.rot); ctx.translate(-f.x,-f.y); drawCardShape(f,0.4,Math.max(0,f.a)); ctx.restore(); }
+  // particles
+  for(const p of particles){ ctx.globalAlpha=Math.max(0,p.a); ctx.fillStyle='#ff8fb6'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.28); ctx.fill(); }
+  ctx.globalAlpha=1;
+  // intake
+  drawIntake();
+  // leak flash
+  if(flash>0){ ctx.fillStyle='rgba(255,20,20,'+(flash*0.5)+')'; ctx.fillRect(0,0,W,H); }
+}
+function drawIntake(){
+  const ih=intakeH(), y=H-ih;
+  const pulse=0.5+0.5*Math.sin((elapsed||performance.now()/1000)*2.0);
+  const g=ctx.createLinearGradient(0,y,0,H);
+  g.addColorStop(0,'rgba(255,31,107,0)'); g.addColorStop(0.5,'rgba(255,31,107,'+(0.12+pulse*0.12)+')'); g.addColorStop(1,'rgba(122,14,224,'+(0.4+pulse*0.25)+')');
+  ctx.fillStyle=g; ctx.fillRect(0,y,W,ih);
+  // mouth line
+  ctx.save(); ctx.shadowColor='rgba(255,31,107,'+(0.6+pulse*0.4)+')'; ctx.shadowBlur=20+pulse*16;
+  ctx.strokeStyle='rgba(255,143,182,'+(0.7+pulse*0.3)+')'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  // teeth pattern
+  ctx.shadowBlur=0; ctx.fillStyle='rgba(255,255,255,'+(0.12+pulse*0.08)+')';
+  const tw=W/16; for(let i=0;i<16;i++){ if(i%2){ ctx.beginPath(); ctx.moveTo(i*tw,y); ctx.lineTo((i+1)*tw,y); ctx.lineTo(i*tw+tw/2,y+12); ctx.closePath(); ctx.fill(); } }
+  ctx.restore();
+  ctx.fillStyle='rgba(234,240,248,'+(0.45+pulse*0.25)+')'; ctx.font='800 12px sans-serif'; ctx.textAlign='center'; ctx.letterSpacing='4px';
+  ctx.fillText('A I   学 習   取 り 込 み 口', W/2, y+ih*0.55);
+  ctx.letterSpacing='0px';
+}
+
+/* ---------- tutorial ghost hand (first 3.2s) ---------- */
+let tut=0;
+function drawTutorial(){
+  if(tut<=0) return; tut-=1/60;
+  const a=Math.min(1,tut); const ph=(performance.now()/700)%1;
+  const y=H*0.45, x=W*0.28 + ph*W*0.42;
+  ctx.save(); ctx.globalAlpha=0.6*a;
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,18,0,6.28); ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,'+(0.5*a)+')'; ctx.beginPath(); ctx.arc(x,y,7,0,6.28); ctx.fill();
+  ctx.globalAlpha=0.85*a; ctx.fillStyle='#fff'; ctx.font='800 15px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('← 横フリックで抜き取る →', W/2, H*0.55);
+  ctx.restore();
+}
+
+/* ---------- loop ---------- */
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(mode!==ST.play){ if(mode===ST.title) drawIdle(); return; }
+  let dt=(ts-last)/1000; last=ts; if(dt>0.05)dt=0.05;
+  update(dt); draw(); drawTutorial();
+}
+function drawIdle(){
+  // soft animated intake behind title
+  ctx.clearRect(0,0,W,H);
+  const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0b0716'); bg.addColorStop(1,'#06030d');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  drawIntake();
+}
+requestAnimationFrame(loop);
+
+/* ---------- flow control ---------- */
+const hud=document.getElementById('hud'), titleEl=document.getElementById('title'), resultEl=document.getElementById('result');
+const hTime=document.getElementById('hTime'), hSave=document.getElementById('hSave'), hLeak=document.getElementById('hLeak');
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('againBtn').addEventListener('click',start);
+function start(){
+  initAudio(); if(AC&&AC.state==='suspended')AC.resume(); droneOn(true);
+  titleEl.classList.add('hidden'); resultEl.classList.add('hidden');
+  hud.classList.remove('hidden'); comboEl.classList.remove('hidden'); comboEl.style.opacity='0';
+  reset(); tut=3.2; mode=ST.play; last=performance.now();
+}
+function gameOver(){
+  mode=ST.over; droneOn(false); sfxOver(); vibe([60,40,60,40,120]);
+  hud.classList.add('hidden'); comboEl.classList.add('hidden');
+  renderShare(); resultEl.classList.remove('hidden');
+}
+
+/* ---------- share card 9:16 ---------- */
+const shareCanvas=document.getElementById('shareCanvas'), sctx=shareCanvas.getContext('2d');
+function renderShare(){
+  const w=shareCanvas.width, h=shareCanvas.height;
+  const g=sctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'#120a22'); g.addColorStop(1,'#06030d');
+  sctx.fillStyle=g; sctx.fillRect(0,0,w,h);
+  // glow top
+  let rg=sctx.createRadialGradient(w/2,h*0.16,10,w/2,h*0.16,w*0.7); rg.addColorStop(0,'rgba(255,31,107,.30)'); rg.addColorStop(1,'rgba(255,31,107,0)');
+  sctx.fillStyle=rg; sctx.fillRect(0,0,w,h);
+  sctx.textAlign='center';
+  sctx.fillStyle='#fff'; sctx.font='900 92px sans-serif';
+  sctx.shadowColor='rgba(255,31,107,.6)'; sctx.shadowBlur=30; sctx.fillText('抜き取り',w/2,170); sctx.shadowBlur=0;
+  sctx.fillStyle='#9aa3bf'; sctx.font='700 26px sans-serif'; sctx.fillText('N U K I D O R I',w/2,212);
+
+  // big: survived time
+  sctx.fillStyle='#9aa3bf'; sctx.font='700 28px sans-serif'; sctx.fillText('抗った時間',w/2,330);
+  sctx.fillStyle='#EAF0F8'; sctx.font='900 130px sans-serif';
+  sctx.shadowColor='rgba(122,14,224,.5)'; sctx.shadowBlur=24;
+  sctx.fillText(elapsed.toFixed(1)+'s',w/2,448); sctx.shadowBlur=0;
+
+  // stat row
+  function stat(x,label,val,col){ sctx.fillStyle='#9aa3bf'; sctx.font='700 24px sans-serif'; sctx.fillText(label,x,560);
+    sctx.fillStyle=col; sctx.font='900 64px sans-serif'; sctx.fillText(val,x,628); }
+  stat(w*0.27,'救った',String(saved),'#39E0A8');
+  stat(w*0.73,'流出',String(leaked),'#FF3b3b');
+  sctx.fillStyle='#9aa3bf'; sctx.font='700 22px sans-serif'; sctx.fillText('最大チェーン '+maxCombo,w/2,690);
+
+  // satire line box
+  sctx.fillStyle='rgba(255,31,107,.12)'; rrS(w*0.1,740,w*0.8,150,18); sctx.fill();
+  sctx.strokeStyle='rgba(255,143,182,.5)'; sctx.lineWidth=2; rrS(w*0.1,740,w*0.8,150,18); sctx.stroke();
+  sctx.fillStyle='#FF8FB6'; sctx.font='800 30px sans-serif';
+  sctx.fillText('Japan:', w/2, 792);
+  sctx.fillStyle='#EAF0F8'; sctx.font='700 27px sans-serif';
+  sctx.fillText('世界で最も', w/2, 832);
+  sctx.fillText('AIを作りやすい国', w/2, 870);
+
+  sctx.fillStyle='#5a6280'; sctx.font='600 20px sans-serif';
+  sctx.fillText('改正APPI 2026 / 完全オンデバイス', w/2, 925);
+}
+function rrS(x,y,w,h,r){ sctx.beginPath(); sctx.moveTo(x+r,y); sctx.arcTo(x+w,y,x+w,y+h,r); sctx.arcTo(x+w,y+h,x,y+h,r); sctx.arcTo(x,y+h,x,y,r); sctx.arcTo(x,y,x+w,y,r); sctx.closePath(); }
+
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  shareCanvas.toBlob(async(blob)=>{
+    const file=new File([blob],'nukidori.png',{type:'image/png'});
+    const data={files:[file],title:'抜き取り Nukidori',text:'改正APPIで'+elapsed.toFixed(1)+'秒抗った。流出'+leaked+'件。 #Nukidori #抜き取り'};
+    try{ if(navigator.canShare&&navigator.canShare(data)){ await navigator.share(data); return; } }catch(e){}
+    const a=document.createElement('a'); a.href=shareCanvas.toDataURL('image/png'); a.download='nukidori.png'; a.click();
+  },'image/png');
+});
+})();
+</script>
+</body>
+</html>
