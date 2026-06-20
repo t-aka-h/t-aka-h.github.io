@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060E">
+<title>変形 Henkei — 月面トランスフォーム</title>
+<meta name="description" content="球から探査車へ。クレーターが迫る一瞬にタップして変形、月面を走破せよ。SORA-Q に着想を得たワンタップ反射トイ。">
+<style>
+  :root{ --bg:#05060E; --bg2:#0B1026; --cyan:#22E0FF; --mag:#FF2D87; --gold:#FFC83D; --txt:#EAF2FF; }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;color:var(--txt);}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 0%,#0B1026 0%,#05060E 70%);}
+  canvas{display:block;touch-action:none;}
+  #hint{position:fixed;left:0;right:0;bottom:env(safe-area-inset-bottom,14px);text-align:center;font-size:12px;letter-spacing:.12em;color:#6f7da0;pointer-events:none;user-select:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="hint">tap to transform · 単一HTMLライブデモ</div>
+<script>
+(function(){
+"use strict";
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let DPR=1, W=0, H=0;
+
+// ---------- layout ----------
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  // portrait-first, cap aspect to 9:16-ish
+  let vw = window.innerWidth, vh = window.innerHeight;
+  let ar = vw/vh;
+  if(ar > 0.62){ vw = Math.round(vh*0.62); } // letterbox very wide
+  W = vw; H = vh;
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- audio (all synthesized, no files) ----------
+let AC=null, master=null, bgmGain=null, bgmTimer=null, bgmStep=0;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    bgmGain = AC.createGain(); bgmGain.gain.value=0.0; bgmGain.connect(master);
+  }catch(e){ AC=null; }
+}
+function now(){ return AC?AC.currentTime:0; }
+// missing-fundamental sub bass: stack 2F..6F of a low base
+function subBass(base, dur, vol){
+  if(!AC) return;
+  const t=now(); const g=AC.createGain(); g.connect(master);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  [2,3,4,5,6].forEach((m,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=base*m;
+    const og=AC.createGain(); og.gain.value=(1/(i+1.4));
+    o.connect(og); og.connect(g); o.start(t); o.stop(t+dur+0.05);
+  });
+}
+function clank(intensity){ // metallic FM "kachan"
+  if(!AC) return;
+  const t=now();
+  const carrier=AC.createOscillator(); carrier.type='square';
+  const mod=AC.createOscillator(); mod.type='sawtooth';
+  const mg=AC.createGain();
+  carrier.frequency.setValueAtTime(420+intensity*120,t);
+  carrier.frequency.exponentialRampToValueAtTime(180,t+0.09);
+  mod.frequency.setValueAtTime(1100,t); mod.frequency.exponentialRampToValueAtTime(300,t+0.08);
+  mg.gain.value=620; mod.connect(mg); mg.connect(carrier.frequency);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(0.5,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+  carrier.connect(g); g.connect(master);
+  carrier.start(t); mod.start(t); carrier.stop(t+0.14); mod.stop(t+0.14);
+}
+function arpUp(){
+  if(!AC) return; const t=now();
+  [0,4,7,12,16].forEach((semi,i)=>{
+    const f=523.25*Math.pow(2,semi/12);
+    const o=AC.createOscillator(); o.type='triangle'; o.frequency.value=f;
+    const g=AC.createGain(); const tt=t+i*0.045;
+    g.gain.setValueAtTime(0.0001,tt); g.gain.linearRampToValueAtTime(0.22,tt+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,tt+0.18);
+    o.connect(g); g.connect(master); o.start(tt); o.stop(tt+0.2);
+  });
+}
+function tick(f,vol){ // tiny confirm
+  if(!AC) return; const t=now();
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+  const g=AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.1);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.12);
+}
+function crashSound(){
+  if(!AC) return; const t=now();
+  // noise burst
+  const len=Math.floor(AC.sampleRate*0.4);
+  const buf=AC.createBuffer(1,len,AC.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2); }
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=900;
+  const g=AC.createGain(); g.gain.value=0.5; src.connect(f); f.connect(g); g.connect(master);
+  src.start(t);
+  subBass(38,0.5,0.5);
+}
+function startBGM(){
+  if(!AC || bgmTimer) return;
+  bgmGain.gain.setTargetAtTime(0.5,now(),0.5);
+  bgmStep=0;
+  const beat=0.30;
+  bgmTimer=setInterval(()=>{
+    if(!AC) return; const t=now();
+    // kick on each step
+    const o=AC.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(42,t+0.12);
+    const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.6,t+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+    o.connect(g); g.connect(bgmGain); o.start(t); o.stop(t+0.2);
+    // hat on offbeat
+    if(bgmStep%2===1){
+      const len=Math.floor(AC.sampleRate*0.04); const b=AC.createBuffer(1,len,AC.sampleRate); const dd=b.getChannelData(0);
+      for(let i=0;i<len;i++) dd[i]=(Math.random()*2-1)*(1-i/len);
+      const s=AC.createBufferSource(); s.buffer=b; const hf=AC.createBiquadFilter(); hf.type='highpass'; hf.frequency.value=7000;
+      const hg=AC.createGain(); hg.gain.value=0.18; s.connect(hf); hf.connect(hg); hg.connect(bgmGain); s.start(t); s.stop(t+0.05);
+    }
+    bgmStep++;
+  }, beat*1000);
+}
+function stopBGM(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } if(AC) bgmGain.gain.setTargetAtTime(0.0,now(),0.2); }
+
+function vibrate(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+// ---------- game state ----------
+const ST={TITLE:0,PLAY:1,OVER:2};
+let state=ST.TITLE;
+let dist=0;          // world px travelled (== score basis)
+let speed=0;         // world px / sec
+let baseSpeed=300;
+let timeScale=1;     // for transform slow-mo
+let slowT=0;
+let obstacles=[];
+let lastObsWx=0;     // world x of furthest spawned obstacle
+let combo=0, maxCombo=0, perfects=0, transforms=0;
+let morph=0;         // 0 ball .. 1 rover
+let morphTarget=0;
+let shards=[];
+let dustP=[];
+let stars=[];
+let flash=0;
+let shake=0;
+let popups=[];       // floating PERFECT/GOOD text
+let tutorialDone=false;
+let zoom=1, zoomTarget=1;
+let crashedObs=null;
+let earthPhase=Math.random()*6.28;
+let last=performance.now();
+
+const RX_FRAC=0.30;  // rover screen x fraction
+function RX(){ return W*RX_FRAC; }
+function groundY(){ return H*0.74; }
+
+function makeStars(){
+  stars=[];
+  for(let i=0;i<70;i++){ stars.push({x:Math.random(),y:Math.random()*0.55,r:Math.random()*1.4+0.3,tw:Math.random()*6.28}); }
+}
+makeStars();
+
+function resetGame(){
+  dist=0; speed=baseSpeed; timeScale=1; slowT=0; obstacles=[]; combo=0; maxCombo=0; perfects=0; transforms=0;
+  morph=0; morphTarget=0; shards=[]; dustP=[]; flash=0; shake=0; popups=[]; tutorialDone=false; zoom=1; zoomTarget=1; crashedObs=null;
+  lastObsWx = dist + 540; // first obstacle ~540px ahead (arrives quickly)
+  obstacles.push(mkObs(lastObsWx));
+}
+
+const OBT=['crater','rock','ridge'];
+function mkObs(wx){
+  const type = OBT[(Math.random()*OBT.length)|0];
+  return { wx, type, cleared:false, w: type==='crater'?(70+Math.random()*40):(34+Math.random()*22) };
+}
+function spawnObstacle(){
+  // gap scales a touch with speed so it stays playable
+  const gap = 480 + Math.random()*250 + Math.max(0,(speed-baseSpeed))*0.5;
+  lastObsWx += gap;
+  obstacles.push(mkObs(lastObsWx));
+}
+
+// timing windows (world px)
+function perfW(){ return 30; }
+function goodW(){ return 88; }
+function hitMargin(){ return 26; }
+
+function tryTransform(){
+  // find nearest un-cleared obstacle around rover
+  let best=null, bestAbs=1e9;
+  for(const o of obstacles){
+    if(o.cleared) continue;
+    const d = o.wx - dist; // >0 ahead, ~0 at rover
+    if(d < -hitMargin()-40) continue;
+    const a=Math.abs(d);
+    if(a<bestAbs){ bestAbs=a; best=o; }
+  }
+  // trigger morph regardless (feels responsive)
+  morphTarget=1;
+  if(best && bestAbs<=goodW()){
+    best.cleared=true;
+    transforms++;
+    const isPerf = bestAbs<=perfW();
+    if(isPerf){ perfects++; combo++; }
+    else { combo++; }
+    maxCombo=Math.max(maxCombo,combo);
+    // slow-mo + zoom punch
+    slowT = isPerf?0.26:0.16;
+    zoomTarget = isPerf?1.16:1.10;
+    flash = isPerf?1.0:0.5;
+    shake = isPerf?7:4;
+    // boost
+    speed += isPerf?70:30;
+    // shards
+    spawnShards(RX(), groundY()-26, isPerf?10:7, isPerf?'#FF2D87':'#22E0FF');
+    spawnDust(RX(), groundY());
+    // fx
+    clank(isPerf?1:0.6);
+    if(isPerf){ arpUp(); }
+    subBass(isPerf?44:40, isPerf?0.34:0.22, isPerf?0.55:0.4);
+    popups.push({x:RX(),y:groundY()-90,txt:isPerf?'PERFECT':'GOOD',col:isPerf?'#FF2D87':'#22E0FF',t:0,life:0.9,vy:-46});
+    if(combo>=3) popups.push({x:RX(),y:groundY()-128,txt:'×'+combo,col:'#FFC83D',t:0,life:0.8,vy:-30});
+    vibrate(isPerf?[0,18,40,12]:[0,12]);
+  } else {
+    // stray transform: tiny harmless hop
+    clank(0.3);
+    slowT=Math.max(slowT,0.06);
+  }
+}
+
+function spawnShards(x,y,n,col){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.28, sp=80+Math.random()*220;
+    shards.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-120,r:2+Math.random()*4,life:0.6+Math.random()*0.3,t:0,col,rot:Math.random()*6.28,vr:(Math.random()-0.5)*12});
+  }
+}
+function spawnDust(x,y){
+  for(let i=0;i<10;i++){
+    const a=-Math.PI/2 + (Math.random()-0.5)*1.6, sp=40+Math.random()*120;
+    dustP.push({x:x+(Math.random()-0.5)*20,y,vx:Math.cos(a)*sp*0.5,vy:Math.sin(a)*sp,r:2+Math.random()*5,life:0.5+Math.random()*0.4,t:0});
+  }
+}
+
+function gameOver(o){
+  state=ST.OVER; crashedObs=o||null; shake=14; flash=1; zoomTarget=1;
+  crashSound(); vibrate([0,60,30,90]); stopBGM();
+  buildCard();
+}
+
+// ---------- update ----------
+function update(dt){
+  if(state===ST.PLAY){
+    // slow-mo decay
+    if(slowT>0){ slowT-=dt; }
+    const ts = slowT>0 ? 0.34 : 1;
+    timeScale += (ts-timeScale)*Math.min(1,dt*14);
+    const sdt = dt*timeScale;
+
+    // accelerate slowly
+    speed += sdt*4.5;
+    dist += speed*sdt;
+
+    // morph ease
+    morph += (morphTarget-morph)*Math.min(1,sdt*16);
+    if(morphTarget===1 && morph>0.85) morphTarget=0; // auto fold back
+
+    // keep a buffer of obstacles ahead within ~1.6 screens
+    let guard=0;
+    while(lastObsWx - dist < W*1.6 && guard++<20){ spawnObstacle(); }
+
+    // crash check & cull
+    for(let i=obstacles.length-1;i>=0;i--){
+      const o=obstacles[i]; const d=o.wx-dist;
+      if(!o.cleared && d < -hitMargin()){ gameOver(o); return; }
+      if(d < -W){ obstacles.splice(i,1); }
+    }
+
+    // zoom ease
+    zoomTarget += (1-zoomTarget)*Math.min(1,dt*4);
+    zoom += (zoomTarget-zoom)*Math.min(1,dt*10);
+
+    // tutorial hint clear
+    if(transforms>0) tutorialDone=true;
+  } else {
+    zoom += (1-zoom)*Math.min(1,dt*8);
+    timeScale += (1-timeScale)*Math.min(1,dt*8);
+    morph += (0-morph)*Math.min(1,dt*8);
+  }
+
+  // particles (real time, not slowed, feels punchy)
+  for(let i=shards.length-1;i>=0;i--){ const s=shards[i]; s.t+=dt; s.vy+=420*dt; s.x+=s.vx*dt; s.y+=s.vy*dt; s.rot+=s.vr*dt; if(s.t>s.life) shards.splice(i,1); }
+  for(let i=dustP.length-1;i>=0;i--){ const p=dustP[i]; p.t+=dt; p.vy+=160*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.t>p.life) dustP.splice(i,1); }
+  for(let i=popups.length-1;i>=0;i--){ const p=popups[i]; p.t+=dt; p.y+=p.vy*dt; p.vy*=0.92; if(p.t>p.life) popups.splice(i,1); }
+  if(flash>0) flash-=dt*2.4; if(flash<0) flash=0;
+  if(shake>0) shake-=dt*30; if(shake<0) shake=0;
+  earthPhase+=dt*0.05;
+}
+
+// ---------- draw ----------
+function drawBG(){
+  // sky gradient
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0B1026'); g.addColorStop(0.55,'#070A18'); g.addColorStop(1,'#04050C');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // stars
+  for(const s of stars){
+    const tw=0.5+0.5*Math.sin(earthPhase*6+s.tw);
+    ctx.globalAlpha=0.3+0.6*tw; ctx.fillStyle='#cfe3ff';
+    ctx.beginPath(); ctx.arc(s.x*W,s.y*H,s.r,0,6.28); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // blue earth top-right, slow parallax
+  const ex=W*0.78 - (dist*0.012)%(W*1.6); // drifts slowly
+  const ey=H*0.16, er=Math.min(W,H)*0.13;
+  const eg=ctx.createRadialGradient(ex-er*0.3,ey-er*0.3,er*0.2,ex,ey,er*1.15);
+  eg.addColorStop(0,'#7fd0ff'); eg.addColorStop(0.5,'#2f7fe0'); eg.addColorStop(1,'#0a2a6b');
+  ctx.save();
+  ctx.shadowColor='rgba(60,150,255,0.6)'; ctx.shadowBlur=40;
+  ctx.fillStyle=eg; ctx.beginPath(); ctx.arc(ex,ey,er,0,6.28); ctx.fill();
+  ctx.restore();
+  // simple continents
+  ctx.save(); ctx.beginPath(); ctx.arc(ex,ey,er,0,6.28); ctx.clip();
+  ctx.fillStyle='rgba(80,200,150,0.55)';
+  ctx.beginPath(); ctx.ellipse(ex-er*0.2,ey-er*0.1,er*0.4,er*0.25,0.4,0,6.28); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ex+er*0.35,ey+er*0.3,er*0.3,er*0.2,-0.3,0,6.28); ctx.fill();
+  ctx.restore();
+}
+
+function ridge(yBase, amp, col, par, seed){
+  const off = (dist*par)%600;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(-10,H);
+  ctx.lineTo(-10,yBase);
+  for(let x=-10;x<=W+10;x+=24){
+    const wx=x+off;
+    const y=yBase + Math.sin((wx+seed)*0.012)*amp + Math.sin((wx+seed)*0.031)*amp*0.4;
+    ctx.lineTo(x,y);
+  }
+  ctx.lineTo(W+10,H); ctx.closePath(); ctx.fill();
+}
+
+function drawGround(){
+  // mid ridge silhouette
+  ridge(groundY()-90, 26, '#0c1330', 0.18, 120);
+  ridge(groundY()-40, 16, '#10183a', 0.34, 800);
+  // foreground regolith
+  const gy=groundY();
+  const gg=ctx.createLinearGradient(0,gy-10,0,H);
+  gg.addColorStop(0,'#1a2348'); gg.addColorStop(1,'#0a0f24');
+  ctx.fillStyle=gg; ctx.fillRect(0,gy,W,H-gy);
+  // neon ground line
+  ctx.strokeStyle='rgba(34,224,255,0.5)'; ctx.lineWidth=2;
+  ctx.shadowColor='rgba(34,224,255,0.6)'; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke();
+  ctx.shadowBlur=0;
+  // surface texture dots scrolling
+  ctx.fillStyle='rgba(120,150,220,0.15)';
+  const so=(dist*1)%40;
+  for(let x=-40;x<W+40;x+=40){ for(let k=0;k<3;k++){ const px=x-so+ (k*13); const py=gy+18+k*22; ctx.fillRect(px,py,3,3);} }
+}
+
+function drawObstacles(){
+  const gy=groundY();
+  for(const o of obstacles){
+    const sx = RX() + (o.wx - dist);
+    if(sx< -120 || sx>W+120) continue;
+    const faded = o.cleared?0.32:1;
+    ctx.globalAlpha=faded;
+    if(o.type==='crater'){
+      // a dark gap in the ground
+      ctx.fillStyle='#04060f';
+      ctx.beginPath(); ctx.ellipse(sx,gy+4,o.w*0.9,18,0,0,6.28); ctx.fill();
+      ctx.strokeStyle=o.cleared?'rgba(34,224,255,0.4)':'#3a4a80'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(sx,gy,o.w*0.9,14,0,Math.PI,0); ctx.stroke();
+    } else if(o.type==='rock'){
+      ctx.fillStyle=o.cleared?'#1b2548':'#26315e';
+      ctx.strokeStyle=o.cleared?'rgba(34,224,255,0.5)':'#48589a'; ctx.lineWidth=2;
+      ctx.beginPath();
+      const r=o.w;
+      ctx.moveTo(sx-r,gy);
+      ctx.lineTo(sx-r*0.5,gy-r*0.9);
+      ctx.lineTo(sx+r*0.1,gy-r*1.2);
+      ctx.lineTo(sx+r*0.6,gy-r*0.7);
+      ctx.lineTo(sx+r,gy);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else { // ridge bump
+      ctx.fillStyle=o.cleared?'#1b2548':'#222c55';
+      ctx.strokeStyle=o.cleared?'rgba(34,224,255,0.5)':'#43528f'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(sx-o.w,gy);
+      ctx.quadraticCurveTo(sx,gy-o.w*1.5,sx+o.w,gy); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // timing ring when approaching & not cleared
+    if(!o.cleared){
+      const d=o.wx-dist;
+      if(d<goodW()+60 && d>-hitMargin()-10){
+        const close=1-Math.min(1,Math.abs(d)/(goodW()+60));
+        ctx.globalAlpha=0.25+0.55*close;
+        ctx.strokeStyle = Math.abs(d)<=perfW()?'#FF2D87':'#22E0FF';
+        ctx.lineWidth=3; ctx.shadowColor=ctx.strokeStyle; ctx.shadowBlur=14;
+        ctx.beginPath(); ctx.arc(sx,gy-30,18+ (1-close)*40,0,6.28); ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawRover(){
+  const x=RX(), gy=groundY();
+  const roll = dist*0.06; // spin
+  const r=20;
+  const cy=gy-r-2;
+  ctx.save();
+  ctx.translate(x,cy);
+  // glow
+  ctx.shadowColor='rgba(34,224,255,0.8)'; ctx.shadowBlur=18;
+  const m=morph; // 0 ball, 1 rover
+  if(m<0.5){
+    // BALL form (rolling sphere)
+    const a=1-m*2; // 1..0
+    ctx.globalAlpha=1;
+    const bg=ctx.createRadialGradient(-r*0.3,-r*0.3,2,0,0,r);
+    bg.addColorStop(0,'#bff6ff'); bg.addColorStop(0.5,'#22E0FF'); bg.addColorStop(1,'#0b6f8a');
+    ctx.fillStyle=bg;
+    ctx.beginPath(); ctx.arc(0,0,r,0,6.28); ctx.fill();
+    // seam lines that rotate
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(5,10,25,0.6)'; ctx.lineWidth=2;
+    ctx.save(); ctx.rotate(roll);
+    ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.5,r,0,0,6.28); ctx.stroke();
+    ctx.restore();
+  } else {
+    // ROVER form: two hemisphere wheels + body + raised camera + tail
+    const e=(m-0.5)*2; // 0..1 unfold
+    ctx.shadowBlur=14;
+    // body
+    ctx.fillStyle='#15314a';
+    ctx.strokeStyle='#22E0FF'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(-r*0.8,-r*0.5,r*1.6,r*0.9,5); ctx.fill(); ctx.stroke();
+    // wheels (hemispheres)
+    ctx.fillStyle='#22E0FF';
+    for(const sgn of [-1,1]){
+      ctx.save(); ctx.translate(sgn*r*0.7,r*0.2);
+      const wg=ctx.createRadialGradient(0,0,2,0,0,r*0.7);
+      wg.addColorStop(0,'#bff6ff'); wg.addColorStop(1,'#0b6f8a'); ctx.fillStyle=wg;
+      ctx.beginPath(); ctx.arc(0,0,r*0.7,0,6.28); ctx.fill();
+      ctx.strokeStyle='rgba(5,10,25,0.5)'; ctx.lineWidth=2;
+      ctx.save(); ctx.rotate(roll*1.4); ctx.beginPath(); ctx.moveTo(-r*0.7,0); ctx.lineTo(r*0.7,0); ctx.stroke(); ctx.restore();
+      ctx.restore();
+    }
+    // camera mast (rises with e)
+    ctx.strokeStyle='#FF2D87'; ctx.lineWidth=3; ctx.shadowColor='rgba(255,45,135,0.8)'; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.moveTo(0,-r*0.4); ctx.lineTo(0,-r*0.4-e*r*0.9); ctx.stroke();
+    ctx.fillStyle='#FF2D87'; ctx.beginPath(); ctx.arc(0,-r*0.4-e*r*0.9,4,0,6.28); ctx.fill();
+    // tail stabilizer
+    ctx.shadowBlur=0; ctx.strokeStyle='#22E0FF'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-r*0.7,r*0.1); ctx.lineTo(-r*0.7-e*r*0.7,r*0.5); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawParticles(){
+  for(const s of shards){
+    const a=Math.max(0,1-s.t/s.life);
+    ctx.globalAlpha=a; ctx.fillStyle=s.col;
+    ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.rot);
+    ctx.fillRect(-s.r,-s.r*0.6,s.r*2,s.r*1.2); ctx.restore();
+  }
+  ctx.globalAlpha=1;
+  for(const p of dustP){
+    const a=Math.max(0,1-p.t/p.life);
+    ctx.globalAlpha=a*0.7; ctx.fillStyle='#9fb4e0';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.28); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPopups(){
+  for(const p of popups){
+    const a=Math.max(0,1-p.t/p.life);
+    ctx.globalAlpha=a; ctx.fillStyle=p.col;
+    ctx.font='800 '+(p.txt.length>4?26:30)+'px -apple-system,system-ui,sans-serif';
+    ctx.textAlign='center'; ctx.shadowColor=p.col; ctx.shadowBlur=16;
+    ctx.fillText(p.txt,p.x,p.y); ctx.shadowBlur=0;
+  }
+  ctx.globalAlpha=1; ctx.textAlign='left';
+}
+
+function drawHUD(){
+  ctx.fillStyle='#eaf2ff'; ctx.textAlign='left';
+  ctx.font='800 30px -apple-system,system-ui,sans-serif';
+  ctx.fillText(Math.floor(dist/10)+'m', 18, 48);
+  ctx.font='600 13px -apple-system,system-ui,sans-serif'; ctx.fillStyle='#7f8db0';
+  ctx.fillText('走破距離', 18, 64);
+  if(combo>=2){
+    ctx.textAlign='right'; ctx.fillStyle='#FFC83D';
+    ctx.font='800 22px -apple-system,system-ui,sans-serif';
+    ctx.fillText('×'+combo+' combo', W-18, 44);
+  }
+  ctx.textAlign='left';
+}
+
+function drawTitle(){
+  ctx.textAlign='center';
+  // big logo
+  ctx.fillStyle='#eaf2ff'; ctx.font='900 64px -apple-system,system-ui,sans-serif';
+  ctx.shadowColor='rgba(34,224,255,0.7)'; ctx.shadowBlur=24;
+  ctx.fillText('変形', W/2, H*0.34);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#22E0FF'; ctx.font='700 20px -apple-system,system-ui,sans-serif';
+  ctx.fillText('H E N K E I', W/2, H*0.34+34);
+  ctx.fillStyle='#9fb0d8'; ctx.font='500 14px -apple-system,system-ui,sans-serif';
+  ctx.fillText('クレーターが迫る一瞬にタップ。', W/2, H*0.44);
+  ctx.fillText('球から探査車へ変形して月面を走破せよ。', W/2, H*0.44+22);
+  // pulsing start
+  const pl=0.5+0.5*Math.sin(performance.now()/300);
+  ctx.globalAlpha=0.5+0.5*pl; ctx.fillStyle='#FF2D87';
+  ctx.font='800 26px -apple-system,system-ui,sans-serif';
+  ctx.shadowColor='rgba(255,45,135,0.8)'; ctx.shadowBlur=18;
+  ctx.fillText('TAP TO START', W/2, H*0.62);
+  ctx.shadowBlur=0; ctx.globalAlpha=1;
+  ctx.fillStyle='#5c6a90'; ctx.font='500 12px -apple-system,system-ui,sans-serif';
+  ctx.fillText('SORA-Q（JAXA×ソニー×タカラトミー）に着想', W/2, H*0.7);
+  ctx.fillText('Idea Radar — L01/ワイルドカード', W/2, H*0.7+18);
+  ctx.textAlign='left';
+}
+
+function drawTutorialArrow(){
+  if(tutorialDone || obstacles.length===0) return;
+  const o=obstacles.find(o=>!o.cleared);
+  if(!o) return;
+  const d=o.wx-dist;
+  if(d<goodW()+120 && d>0){
+    const sx=RX()+(o.wx-dist), gy=groundY();
+    const pl=0.5+0.5*Math.sin(performance.now()/200);
+    ctx.globalAlpha=0.6+0.4*pl; ctx.fillStyle='#FF2D87';
+    ctx.textAlign='center'; ctx.font='800 24px -apple-system,system-ui,sans-serif';
+    ctx.shadowColor='rgba(255,45,135,0.8)'; ctx.shadowBlur=14;
+    ctx.fillText('TAP!', sx, gy-90);
+    ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left';
+  }
+}
+
+// ---------- result card ----------
+let cardCanvas=null, cardURL=null, shareRect=null, againRect=null;
+function tierFor(m){
+  if(m>=1200) return {name:'虹', cols:['#FF2D87','#FFC83D','#22E0FF'], rank:'RAINBOW'};
+  if(m>=700) return {name:'金', cols:['#FFC83D','#FF9A1f'], rank:'GOLD'};
+  if(m>=350) return {name:'銀', cols:['#cfe0ff','#8aa0c8'], rank:'SILVER'};
+  return {name:'銅', cols:['#d98a4a','#9a5a2a'], rank:'COPPER'};
+}
+function titleFor(m,perf){
+  if(m>=1200) return '月面の支配者';
+  if(perf>=10) return '低重力の達人';
+  if(m>=700) return '月面の整備士';
+  if(m>=350) return '変形ルーキー';
+  return '着陸したて';
+}
+function buildCard(){
+  const m=Math.floor(dist/10);
+  const cw=540, ch=960;
+  const cc=document.createElement('canvas'); cc.width=cw; cc.height=ch;
+  const x=cc.getContext('2d');
+  // bg
+  const g=x.createLinearGradient(0,0,0,ch); g.addColorStop(0,'#0B1026'); g.addColorStop(1,'#04050C');
+  x.fillStyle=g; x.fillRect(0,0,cw,ch);
+  // stars
+  for(let i=0;i<80;i++){ x.globalAlpha=Math.random()*0.7+0.2; x.fillStyle='#cfe3ff'; x.beginPath(); x.arc(Math.random()*cw,Math.random()*ch*0.5,Math.random()*1.6,0,6.28); x.fill(); }
+  x.globalAlpha=1;
+  // earth
+  const eg=x.createRadialGradient(cw*0.7-20,150,20,cw*0.7,170,120);
+  eg.addColorStop(0,'#7fd0ff'); eg.addColorStop(0.5,'#2f7fe0'); eg.addColorStop(1,'#0a2a6b');
+  x.save(); x.shadowColor='rgba(60,150,255,0.6)'; x.shadowBlur=50; x.fillStyle=eg;
+  x.beginPath(); x.arc(cw*0.7,170,110,0,6.28); x.fill(); x.restore();
+  const tier=tierFor(m);
+  // foil frame
+  const fg=x.createLinearGradient(0,0,cw,ch);
+  tier.cols.forEach((c,i)=> fg.addColorStop(i/(tier.cols.length-1),c));
+  x.strokeStyle=fg; x.lineWidth=8; x.strokeRect(20,20,cw-40,ch-40);
+  x.lineWidth=2; x.strokeRect(34,34,cw-68,ch-68);
+  // logo
+  x.textAlign='center'; x.fillStyle='#eaf2ff';
+  x.font='900 64px -apple-system,system-ui,sans-serif';
+  x.shadowColor='rgba(34,224,255,0.7)'; x.shadowBlur=20;
+  x.fillText('変形', cw/2, 330); x.shadowBlur=0;
+  x.fillStyle='#22E0FF'; x.font='700 22px -apple-system,system-ui,sans-serif';
+  x.fillText('H E N K E I', cw/2, 364);
+  // title
+  x.font='800 34px -apple-system,system-ui,sans-serif'; x.fillStyle=fg;
+  x.shadowColor=tier.cols[0]; x.shadowBlur=16;
+  x.fillText(titleFor(m,perfects), cw/2, 440); x.shadowBlur=0;
+  // distance big
+  x.fillStyle='#eaf2ff'; x.font='900 130px -apple-system,system-ui,sans-serif';
+  x.fillText(m, cw/2, 580);
+  x.fillStyle='#7f8db0'; x.font='600 22px -apple-system,system-ui,sans-serif';
+  x.fillText('m  走破距離', cw/2, 616);
+  // stats row
+  function stat(cx,val,lab,col){
+    x.fillStyle=col; x.font='900 40px -apple-system,system-ui,sans-serif'; x.fillText(val,cx,700);
+    x.fillStyle='#7f8db0'; x.font='600 16px -apple-system,system-ui,sans-serif'; x.fillText(lab,cx,724);
+  }
+  stat(cw*0.28, '×'+maxCombo, 'MAX COMBO', '#FFC83D');
+  stat(cw*0.5, ''+perfects, 'PERFECT', '#FF2D87');
+  stat(cw*0.72, ''+transforms, '変形', '#22E0FF');
+  // mini trajectory
+  x.strokeStyle='rgba(34,224,255,0.6)'; x.lineWidth=3; x.shadowColor='rgba(34,224,255,0.5)'; x.shadowBlur=8;
+  x.beginPath();
+  for(let i=0;i<=40;i++){ const px=70+(cw-140)*(i/40); const py=820 - Math.abs(Math.sin(i*0.5))*30 - (i/40)*0; x.lineTo(px,py-10); }
+  x.stroke(); x.shadowBlur=0;
+  // foot drag dots
+  x.fillStyle='rgba(159,180,224,0.5)';
+  for(let i=0;i<14;i++){ x.beginPath(); x.arc(70+i*32,832,2.5,0,6.28); x.fill(); }
+  // rank chip + url
+  x.fillStyle=fg; x.font='800 24px -apple-system,system-ui,sans-serif'; x.fillText(tier.rank+' RANK', cw/2, 884);
+  x.fillStyle='#5c6a90'; x.font='600 16px -apple-system,system-ui,sans-serif';
+  x.fillText('t-aka-h.github.io/idea-radar/henkei', cw/2, 918);
+  x.textAlign='left';
+  cardCanvas=cc;
+  try{ cc.toBlob(b=>{ if(cardURL) URL.revokeObjectURL(cardURL); cardURL=b?URL.createObjectURL(b):null; }); }catch(e){}
+}
+
+function drawOver(){
+  // draw card scaled to fit
+  if(!cardCanvas) return;
+  const cw=cardCanvas.width, ch=cardCanvas.height;
+  const scale=Math.min((W*0.86)/cw,(H*0.7)/ch);
+  const dw=cw*scale, dh=ch*scale;
+  const dx=(W-dw)/2, dy=H*0.06;
+  ctx.drawImage(cardCanvas,dx,dy,dw,dh);
+  // buttons
+  const by=dy+dh+18, bw=Math.min(W*0.86,360), bx=(W-bw)/2;
+  shareRect={x:bx,y:by,w:bw,h:50};
+  ctx.fillStyle='#22E0FF'; roundRect(bx,by,bw,50,12); ctx.fill();
+  ctx.fillStyle='#04060f'; ctx.font='800 18px -apple-system,system-ui,sans-serif'; ctx.textAlign='center';
+  ctx.fillText('結果をシェア / 保存', W/2, by+32);
+  const ay=by+60; againRect={x:bx,y:ay,w:bw,h:48};
+  ctx.strokeStyle='#FF2D87'; ctx.lineWidth=2; roundRect(bx,ay,bw,48,12); ctx.stroke();
+  ctx.fillStyle='#FF2D87'; ctx.fillText('もう一度', W/2, ay+31);
+  ctx.textAlign='left';
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+// ---------- main loop ----------
+function frame(t){
+  let dt=(t-last)/1000; last=t; if(dt>0.05) dt=0.05;
+  update(dt);
+  // camera transform (zoom + shake)
+  ctx.save();
+  const sx=(Math.random()-0.5)*shake, sy=(Math.random()-0.5)*shake;
+  ctx.translate(W/2+sx,H/2+sy); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
+  drawBG();
+  drawGround();
+  drawObstacles();
+  drawParticles();
+  if(state!==ST.TITLE) drawRover();
+  drawPopups();
+  if(state===ST.PLAY) drawTutorialArrow();
+  ctx.restore();
+  // flash overlay
+  if(flash>0){ ctx.globalAlpha=flash*0.5; ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+  // UI (no zoom)
+  if(state===ST.PLAY) drawHUD();
+  if(state===ST.TITLE) drawTitle();
+  if(state===ST.OVER) drawOver();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- input ----------
+function shareCard(){
+  if(!cardCanvas) return;
+  const done=()=>{};
+  if(navigator.canShare && cardURL){
+    fetch(cardURL).then(r=>r.blob()).then(b=>{
+      const file=new File([b],'henkei.png',{type:'image/png'});
+      if(navigator.canShare({files:[file]})){
+        navigator.share({files:[file],title:'変形 Henkei',text:'月面を '+Math.floor(dist/10)+'m 走破！ #変形 #Henkei'}).catch(done);
+      } else fallbackSave();
+    }).catch(fallbackSave);
+  } else fallbackSave();
+}
+function fallbackSave(){
+  if(!cardCanvas) return;
+  try{
+    const a=document.createElement('a'); a.download='henkei.png'; a.href=cardCanvas.toDataURL('image/png'); a.click();
+  }catch(e){}
+}
+
+function onDown(e){
+  e.preventDefault();
+  initAudio(); if(AC && AC.state==='suspended') AC.resume();
+  const rect=cv.getBoundingClientRect();
+  const px=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+  const py=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+  if(state===ST.TITLE){
+    resetGame(); state=ST.PLAY; startBGM(); tick(660,0.2);
+    return;
+  }
+  if(state===ST.OVER){
+    if(shareRect && py>=shareRect.y && py<=shareRect.y+shareRect.h){ shareCard(); return; }
+    if(againRect && py>=againRect.y && py<=againRect.y+againRect.h){ resetGame(); state=ST.PLAY; startBGM(); tick(660,0.2); return; }
+    return;
+  }
+  if(state===ST.PLAY){ tryTransform(); }
+}
+cv.addEventListener('pointerdown', onDown, {passive:false});
+cv.addEventListener('touchstart', function(e){ if(e.cancelable) e.preventDefault(); }, {passive:false});
+// visibility -> pause bgm
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopBGM(); else if(state===ST.PLAY) startBGM(); });
+})();
+</script>
+</body>
+</html>
