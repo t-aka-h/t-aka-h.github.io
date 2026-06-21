@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>税剥がし — Zei-Hagashi</title>
+<style>
+  :root{
+    --bg0:#0B0D12; --bg1:#11131c; --ink:#EAF0F8; --sub:#8b93a7;
+    --red:#FF3B30; --orange:#FF9500; --emerald:#34D399; --cyan:#3BE1FF;
+    --gold:#E8C45A;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:#000; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    overflow:hidden; display:flex; align-items:center; justify-content:center;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+  }
+  #app{
+    position:relative; width:100vw; height:100vh; max-width:calc(100vh * 9 / 16);
+    margin:0 auto; background:radial-gradient(120% 80% at 50% -10%, #1a1d2b 0%, var(--bg1) 45%, var(--bg0) 100%);
+    overflow:hidden;
+  }
+  .screen{position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:24px; text-align:center;
+    transition:opacity .3s; }
+  .hidden{opacity:0; pointer-events:none;}
+  /* vignette */
+  #app::after{content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55) 100%);}
+
+  /* TITLE */
+  .logo{font-size:13vw; font-weight:900; letter-spacing:.06em; line-height:1;
+    background:linear-gradient(180deg,#fff,var(--cyan)); -webkit-background-clip:text;
+    background-clip:text; color:transparent; text-shadow:0 0 30px rgba(59,225,255,.25);}
+  .logo small{display:block; font-size:.32em; letter-spacing:.5em; color:var(--cyan);
+    -webkit-text-fill-color:var(--cyan); margin-top:8px; opacity:.9;}
+  .tag{margin-top:18px; color:var(--sub); font-size:3.6vw; line-height:1.7; max-width:88%;}
+  .stamp{display:inline-block; margin-top:22px; padding:5px 14px; border:1.5px solid var(--gold);
+    color:var(--gold); border-radius:30px; font-size:3vw; letter-spacing:.12em;}
+  .btn{margin-top:30px; padding:16px 42px; border:none; border-radius:40px;
+    font-size:5.2vw; font-weight:800; color:#06210f; letter-spacing:.1em;
+    background:linear-gradient(180deg,#5ff0b0,var(--emerald)); cursor:pointer;
+    box-shadow:0 0 26px rgba(52,211,153,.5); }
+  .btn:active{transform:scale(.96);}
+  .hint{margin-top:18px; color:var(--sub); font-size:3vw;}
+
+  /* PLAY HUD */
+  #hud{position:absolute; top:0; left:0; right:0; padding:14px 18px 6px;
+    display:flex; justify-content:space-between; align-items:flex-start; z-index:5;}
+  .hudL{font-size:3.2vw; color:var(--sub); letter-spacing:.08em;}
+  .saved{font-size:6.4vw; font-weight:900; color:var(--emerald);
+    text-shadow:0 0 16px rgba(52,211,153,.4); line-height:1;}
+  .savedLbl{font-size:2.8vw; color:var(--sub); letter-spacing:.12em;}
+  .timeWrap{width:36%; }
+  .timeBar{height:8px; border-radius:6px; background:rgba(255,255,255,.12); overflow:hidden;}
+  .timeFill{height:100%; width:100%; border-radius:6px;
+    background:linear-gradient(90deg,var(--cyan),var(--emerald)); transition:width .1s linear;}
+  .basket{margin-top:7px; font-size:3vw; color:var(--sub); text-align:right; letter-spacing:.08em;}
+  #game{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  #coach{position:absolute; left:0; right:0; bottom:9%; text-align:center;
+    color:var(--cyan); font-size:3.4vw; letter-spacing:.06em; z-index:5;
+    text-shadow:0 0 12px rgba(59,225,255,.4); animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* RESULT */
+  #result{gap:0;}
+  #cardCanvas{width:auto; height:auto; max-width:84vw; max-height:62vh;
+    aspect-ratio:540/960; border-radius:18px;
+    box-shadow:0 14px 40px rgba(0,0,0,.6); }
+  .rbtns{display:flex; gap:14px; margin-top:22px; flex-wrap:wrap; justify-content:center;}
+  .btn2{padding:13px 26px; border-radius:34px; font-size:4.2vw; font-weight:800;
+    border:1.5px solid rgba(255,255,255,.25); background:rgba(255,255,255,.06);
+    color:var(--ink); cursor:pointer; letter-spacing:.06em;}
+  .btn2.primary{border:none; color:#06210f; background:linear-gradient(180deg,#5ff0b0,var(--emerald));
+    box-shadow:0 0 20px rgba(52,211,153,.45);}
+  .btn2:active{transform:scale(.95);}
+  .credit{position:absolute; bottom:10px; left:0; right:0; text-align:center;
+    color:#4b5266; font-size:2.4vw; letter-spacing:.05em; z-index:6;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE -->
+  <div id="title" class="screen">
+    <div class="logo">税剥がし<small>Z E I — H A G A S H I</small></div>
+    <div class="tag">食料品にのしかかる重い「+8%」の税シール。<br>指でつまんで一気にペリッと剥がし、<br>1%まで軽くしよう。値上げ疲れの、逆。</div>
+    <div class="stamp">食料品 消費税 8% → 1%</div>
+    <button class="btn" id="startBtn">はがす</button>
+    <div class="hint">シールの上を下へスワイプ。速すぎると千切れる。</div>
+  </div>
+
+  <!-- PLAY -->
+  <div id="play" class="screen hidden">
+    <div id="hud">
+      <div>
+        <div class="savedLbl">浮いた金額</div>
+        <div class="saved" id="savedVal">¥0</div>
+      </div>
+      <div class="timeWrap">
+        <div class="timeBar"><div class="timeFill" id="timeFill"></div></div>
+        <div class="basket" id="basket">カゴ 0 / 8</div>
+      </div>
+    </div>
+    <canvas id="game"></canvas>
+    <div id="coach">↓ ゆっくり剥がす ↓</div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result" class="screen hidden">
+    <canvas id="cardCanvas" width="540" height="960"></canvas>
+    <div class="rbtns">
+      <button class="btn2 primary" id="shareBtn">シェア / 保存</button>
+      <button class="btn2" id="againBtn">もう一度</button>
+    </div>
+  </div>
+
+  <div class="credit">Idea Radar 自動生成アプリ · 完全オンデバイス</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const $ = id => document.getElementById(id);
+  const app = $("app"), titleS = $("title"), playS = $("play"), resultS = $("result");
+  const cv = $("game"), ctx = cv.getContext("2d");
+  const savedVal = $("savedVal"), timeFill = $("timeFill"), basket = $("basket"), coach = $("coach");
+
+  // ---------- AUDIO (synth only) ----------
+  let AC=null, noiseBuf=null, master=null;
+  function initAudio(){
+    if(AC) return;
+    try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    const len = AC.sampleRate*1.0;
+    noiseBuf = AC.createBuffer(1,len,AC.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  }
+  function noiseSource(){ const s=AC.createBufferSource(); s.buffer=noiseBuf; s.loop=true; return s; }
+
+  // continuous crackle while peeling
+  let crackle=null, crackleGain=null, crackleFilt=null;
+  function startCrackle(){
+    if(!AC) return; if(crackle) return;
+    crackle=noiseSource(); crackleFilt=AC.createBiquadFilter(); crackleFilt.type="bandpass";
+    crackleFilt.frequency.value=2600; crackleFilt.Q.value=0.8;
+    crackleGain=AC.createGain(); crackleGain.gain.value=0.0001;
+    crackle.connect(crackleFilt); crackleFilt.connect(crackleGain); crackleGain.connect(master);
+    crackle.start();
+  }
+  function setCrackle(speed){ // speed ~ 0..1
+    if(!crackleGain||!AC) return;
+    const g = Math.min(0.5, speed*0.7);
+    crackleGain.gain.setTargetAtTime(g, AC.currentTime, 0.02);
+    crackleFilt.frequency.setTargetAtTime(1500+speed*3500, AC.currentTime, 0.03);
+  }
+  function stopCrackle(){
+    if(!crackle) return;
+    try{ crackleGain.gain.setTargetAtTime(0.0001, AC.currentTime, 0.03);
+      const c=crackle; setTimeout(()=>{try{c.stop()}catch(e){}}, 120);
+    }catch(e){}
+    crackle=null;
+  }
+  // "ペリッ" + 55Hz missing-fundamental thunk on complete
+  function sndComplete(){
+    if(!AC) return; const t=AC.currentTime;
+    // rising peel rip
+    const n=noiseSource(); const f=AC.createBiquadFilter(); f.type="highpass";
+    const g=AC.createGain();
+    f.frequency.setValueAtTime(800,t); f.frequency.exponentialRampToValueAtTime(6000,t+0.14);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+    n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t+0.2);
+    // thunk: 55/110/165 Hz
+    [55,110,165].forEach((fr,i)=>{
+      const o=AC.createOscillator(), og=AC.createGain();
+      o.type="sine"; o.frequency.setValueAtTime(fr,t+0.05);
+      o.frequency.exponentialRampToValueAtTime(fr*0.7,t+0.4);
+      const amp=[0.9,0.5,0.3][i];
+      og.gain.setValueAtTime(0.0001,t+0.05);
+      og.gain.exponentialRampToValueAtTime(amp,t+0.09);
+      og.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+      o.connect(og); og.connect(master); o.start(t+0.05); o.stop(t+0.6);
+    });
+  }
+  function sndTear(){
+    if(!AC) return; const t=AC.currentTime;
+    const n=noiseSource(); const f=AC.createBiquadFilter(); f.type="lowpass";
+    const g=AC.createGain();
+    f.frequency.setValueAtTime(2400,t); f.frequency.exponentialRampToValueAtTime(300,t+0.22);
+    g.gain.setValueAtTime(0.4,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+    n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t+0.26);
+    const o=AC.createOscillator(), og=AC.createGain(); o.type="sawtooth";
+    o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(70,t+0.2);
+    og.gain.setValueAtTime(0.15,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+    o.connect(og); og.connect(master); o.start(t); o.stop(t+0.22);
+  }
+  function sndFinish(){
+    if(!AC) return; const t=AC.currentTime;
+    [523,659,784,1047].forEach((fr,i)=>{
+      const o=AC.createOscillator(), g=AC.createGain(); o.type="triangle";
+      o.frequency.value=fr; const tt=t+i*0.08;
+      g.gain.setValueAtTime(0.0001,tt); g.gain.exponentialRampToValueAtTime(0.3,tt+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001,tt+0.5);
+      o.connect(g); g.connect(master); o.start(tt); o.stop(tt+0.55);
+    });
+  }
+  function vib(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+  // ---------- LAYOUT ----------
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    const r=cv.getBoundingClientRect(); W=r.width; H=r.height;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",resize);
+
+  // ---------- GAME STATE ----------
+  const ITEMS=[
+    {emoji:"🥛",name:"牛乳",base:240},{emoji:"🥚",name:"たまご",base:298},
+    {emoji:"🍞",name:"食パン",base:188},{emoji:"🍚",name:"お米",base:2480},
+    {emoji:"🍌",name:"バナナ",base:158},{emoji:"🧈",name:"バター",base:430},
+    {emoji:"🍗",name:"とり肉",base:520},{emoji:"🐟",name:"さかな",base:680},
+    {emoji:"🥬",name:"やさい",base:198},{emoji:"☕",name:"コーヒー",base:880},
+    {emoji:"🍫",name:"チョコ",base:248},{emoji:"🧀",name:"チーズ",base:398},
+  ];
+  let state="title";
+  let round=1, saved=0, cleared=0, tears=0, totalPeels=0;
+  const GOAL=8, ROUND_TIME=34;
+  let timeLeft=ROUND_TIME, lastTS=0;
+  let cur=null;          // current item card
+  let flyers=[];         // flying sticker pieces / confetti
+
+  function newCard(){
+    const it = ITEMS[Math.floor(Math.random()*ITEMS.length)];
+    const base = it.base;
+    const sw = Math.min(W*0.62, 260), sh = sw*0.86;
+    const sx = (W-sw)/2, sy = H*0.30;
+    cur = {
+      it, base, tax8:Math.round(base*1.08), tax1:Math.round(base*1.01),
+      sx,sy,sw,sh, peel:0, peelDisp:0, dragging:false,
+      startX:0,startY:0, lastX:0,lastY:0, speed:0, badDir:0,
+      stick: 0.55 + (round-1)*0.10, // higher = needs slower peeling
+      done:false, priceShown:Math.round(base*1.08), priceTarget:Math.round(base*1.08),
+      shake:0, flashTear:0, glow:0
+    };
+  }
+
+  function start(){
+    initAudio(); if(AC&&AC.state==="suspended") AC.resume();
+    round=1; saved=0; cleared=0; tears=0; totalPeels=0; timeLeft=ROUND_TIME;
+    flyers=[]; state="playing"; coach.style.display="block";
+    titleS.classList.add("hidden"); resultS.classList.add("hidden"); playS.classList.remove("hidden");
+    resize(); newCard(); updateHud(); lastTS=performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function updateHud(){
+    savedVal.textContent="¥"+saved.toLocaleString();
+    basket.textContent="カゴ "+cleared+" / "+GOAL;
+    timeFill.style.width=Math.max(0,(timeLeft/ROUND_TIME)*100)+"%";
+  }
+
+  // ---------- INPUT ----------
+  function pos(e){
+    const r=cv.getBoundingClientRect();
+    const p = e.touches? e.touches[0] : e;
+    return {x:p.clientX-r.left, y:p.clientY-r.top};
+  }
+  function onDown(e){
+    if(state!=="playing"||!cur||cur.done) return;
+    const {x,y}=pos(e);
+    // must press on the still-stuck portion of the sticker
+    const peelY = cur.sy + cur.peel*cur.sh;
+    if(x>cur.sx-20 && x<cur.sx+cur.sw+20 && y>cur.sy-30 && y<cur.sy+cur.sh+30){
+      cur.dragging=true; cur.startX=x; cur.startY=y; cur.lastX=x; cur.lastY=y;
+      cur.badDir=0; coach.style.display="none";
+      startCrackle(); vib(8);
+      e.preventDefault();
+    }
+  }
+  function onMove(e){
+    if(!cur||!cur.dragging||cur.done) return;
+    const {x,y}=pos(e);
+    const dy=y-cur.lastY, dx=x-cur.lastX;
+    const dist=Math.hypot(dx,dy);
+    const inst=dist; // px this frame
+    cur.speed = cur.speed*0.6 + inst*0.4;
+    // peel progresses with downward movement, scaled
+    if(dy>0){
+      cur.peel = Math.min(1, cur.peel + dy/(cur.sh*1.15));
+    }
+    // tear detection: too fast OR too sideways
+    const sideways = Math.abs(dx) - Math.abs(dy);
+    if(inst > (16 - cur.stick*6)) cur.badDir += inst*0.4;
+    if(sideways > 6) cur.badDir += sideways*0.5;
+    if(cur.badDir > 26){ tearCard(); }
+    setCrackle(Math.min(1, cur.speed/14));
+    cur.lastX=x; cur.lastY=y;
+    if(cur.peel>=0.985 && !cur.done) completeCard();
+    e.preventDefault();
+  }
+  function onUp(){
+    if(!cur) return;
+    cur.dragging=false; cur.speed=0; stopCrackle();
+  }
+  function tearCard(){
+    if(!cur||cur.done) return;
+    tears++; totalPeels++;
+    cur.peel=Math.max(0, cur.peel*0.35);
+    cur.badDir=0; cur.dragging=false; cur.shake=1; cur.flashTear=1;
+    stopCrackle(); sndTear(); vib([60,30,60]);
+  }
+  function completeCard(){
+    if(cur.done) return;
+    cur.done=true; cur.dragging=false; totalPeels++; cleared++;
+    const gain = cur.tax8 - cur.tax1; saved+=gain;
+    cur.priceTarget=cur.tax1; cur.glow=1;
+    stopCrackle(); sndComplete(); vib([30,40,60]);
+    // sticker flies off
+    spawnStickerFly();
+    spawnSavedPop(gain);
+    updateHud();
+    setTimeout(()=>{
+      if(cleared>=GOAL){ endGame(true); }
+      else { newCard(); }
+    }, 620);
+  }
+
+  cv.addEventListener("touchstart",onDown,{passive:false});
+  cv.addEventListener("touchmove",onMove,{passive:false});
+  cv.addEventListener("touchend",onUp);
+  cv.addEventListener("mousedown",onDown);
+  window.addEventListener("mousemove",e=>{if(cur&&cur.dragging)onMove(e);});
+  window.addEventListener("mouseup",onUp);
+
+  // ---------- PARTICLES ----------
+  function spawnStickerFly(){
+    const c=cur; const cx=c.sx+c.sw/2, cy=c.sy+c.sh/2;
+    flyers.push({type:"sticker", x:cx,y:cy, vx:(Math.random()*2-1)*3, vy:-7-Math.random()*3,
+      rot:0, vr:(Math.random()*2-1)*0.3, w:c.sw, h:c.sh, life:1});
+    for(let i=0;i<16;i++){
+      flyers.push({type:"dust", x:cx+(Math.random()*2-1)*c.sw/2, y:cy,
+        vx:(Math.random()*2-1)*4, vy:-Math.random()*6, life:1, r:2+Math.random()*3,
+        col:Math.random()<.5?"#FF9500":"#FF3B30"});
+    }
+  }
+  function spawnConfetti(){
+    for(let i=0;i<70;i++){
+      flyers.push({type:"conf", x:W*Math.random(), y:-20-Math.random()*H*0.3,
+        vx:(Math.random()*2-1)*2, vy:2+Math.random()*4, life:1, r:3+Math.random()*4,
+        rot:Math.random()*6, vr:(Math.random()*2-1)*0.3,
+        col:["#34D399","#3BE1FF","#E8C45A","#fff"][Math.floor(Math.random()*4)]});
+    }
+  }
+  let savedPops=[];
+  function spawnSavedPop(g){ savedPops.push({txt:"+¥"+g.toLocaleString(), y:0, life:1}); }
+
+  // ---------- DRAW ----------
+  function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  function drawCard(){
+    const c=cur; if(!c) return;
+    let ox=0,oy=0;
+    if(c.shake>0){ c.shake*=0.85; ox=(Math.random()*2-1)*c.shake*10; oy=(Math.random()*2-1)*c.shake*6; if(c.shake<0.02)c.shake=0;}
+    ctx.save(); ctx.translate(ox,oy);
+
+    // product card base
+    const px=c.sx-14, py=c.sy-14, pw=c.sw+28, ph=c.sh+86;
+    ctx.shadowColor="rgba(0,0,0,.5)"; ctx.shadowBlur=24; ctx.shadowOffsetY=10;
+    const cg=ctx.createLinearGradient(0,py,0,py+ph); cg.addColorStop(0,"#1e2233"); cg.addColorStop(1,"#161a27");
+    ctx.fillStyle=cg; rr(px,py,pw,ph,20); ctx.fill();
+    ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    ctx.strokeStyle="rgba(255,255,255,.06)"; ctx.lineWidth=1; rr(px,py,pw,ph,20); ctx.stroke();
+
+    // emoji + name
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font=Math.round(c.sw*0.42)+"px serif";
+    ctx.fillText(c.it.emoji, c.sx+c.sw/2, c.sy+c.sh*0.42);
+    ctx.font="700 "+Math.round(c.sw*0.10)+"px sans-serif"; ctx.fillStyle="#cfd6e6";
+    ctx.fillText(c.it.name, c.sx+c.sw/2, c.sy+c.sh*0.80);
+
+    // price tag
+    c.priceShown += (c.priceTarget-c.priceShown)*0.25;
+    const priceY=c.sy+c.sh+44;
+    const isLow = c.done;
+    ctx.font="800 "+Math.round(c.sw*0.16)+"px sans-serif";
+    ctx.fillStyle=isLow?"#34D399":"#ff6b5e";
+    if(isLow){ ctx.shadowColor="rgba(52,211,153,.5)"; ctx.shadowBlur=16; }
+    ctx.fillText("¥"+Math.round(c.priceShown).toLocaleString(), c.sx+c.sw/2, priceY);
+    ctx.shadowBlur=0;
+    ctx.font="600 "+Math.round(c.sw*0.07)+"px sans-serif"; ctx.fillStyle="#8696a8";
+    ctx.fillText(isLow?"税1%":"税込", c.sx+c.sw/2, priceY+Math.round(c.sw*0.14));
+
+    // glow ring when done
+    if(c.glow>0){ c.glow*=0.93;
+      ctx.strokeStyle="rgba(52,211,153,"+(c.glow*0.8)+")"; ctx.lineWidth=3;
+      rr(px,py,pw,ph,20); ctx.stroke();
+    }
+
+    drawSticker(c);
+    ctx.restore();
+  }
+
+  function drawSticker(c){
+    if(c.done) return;
+    c.peelDisp += (c.peel-c.peelDisp)*0.5;
+    const peelT=c.peelDisp;
+    const sx=c.sx, sy=c.sy, sw=c.sw, sh=c.sh;
+    const peelY=sy+peelT*sh;
+
+    // --- still-stuck part (bottom) with "+8%" ---
+    ctx.save();
+    rr(sx,peelY,sw,sy+sh-peelY,10); ctx.clip();
+    const g=ctx.createLinearGradient(sx,sy,sx,sy+sh);
+    g.addColorStop(0,"#FF3B30"); g.addColorStop(1,"#FF9500");
+    ctx.fillStyle=g; ctx.fillRect(sx-2,sy-2,sw+4,sh+4);
+    // subtle warning stripes
+    ctx.globalAlpha=0.12; ctx.strokeStyle="#fff"; ctx.lineWidth=8;
+    for(let i=-sh;i<sw;i+=26){ ctx.beginPath(); ctx.moveTo(sx+i,sy); ctx.lineTo(sx+i+sh,sy+sh); ctx.stroke(); }
+    ctx.globalAlpha=1;
+    // glow text
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle="#fff"; ctx.shadowColor="rgba(0,0,0,.35)"; ctx.shadowBlur=6; ctx.shadowOffsetY=2;
+    ctx.font="900 "+Math.round(sw*0.40)+"px sans-serif";
+    ctx.fillText("+8%", sx+sw/2, sy+sh*0.52);
+    ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    ctx.font="700 "+Math.round(sw*0.085)+"px sans-serif"; ctx.fillText("TAX", sx+sw/2, sy+sh*0.82);
+    ctx.restore();
+
+    if(peelT<=0.001) return;
+
+    // --- fold shadow on stuck part ---
+    const shg=ctx.createLinearGradient(0,peelY,0,peelY+30);
+    shg.addColorStop(0,"rgba(0,0,0,.45)"); shg.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=shg; ctx.fillRect(sx,peelY,sw,34);
+
+    // --- peeled flap hanging down over the stuck part (curl) ---
+    const flapLen=Math.min(peelT*sh, sh*0.62);
+    const curl=Math.min(20, flapLen*0.35);
+    ctx.save();
+    // flap body: from peelY downward (it folds over toward viewer)
+    const fg=ctx.createLinearGradient(0,peelY,0,peelY+flapLen);
+    fg.addColorStop(0,"#f4f6fb"); fg.addColorStop(0.5,"#d6dbe6"); fg.addColorStop(1,"#aeb6c6");
+    ctx.beginPath();
+    ctx.moveTo(sx,peelY);
+    ctx.lineTo(sx+sw,peelY);
+    ctx.quadraticCurveTo(sx+sw+curl, peelY+flapLen-curl, sx+sw-curl*0.6, peelY+flapLen);
+    ctx.lineTo(sx+curl*0.6, peelY+flapLen);
+    ctx.quadraticCurveTo(sx-curl, peelY+flapLen-curl, sx, peelY);
+    ctx.closePath();
+    ctx.shadowColor="rgba(0,0,0,.4)"; ctx.shadowBlur=16; ctx.shadowOffsetY=8;
+    ctx.fillStyle=fg; ctx.fill();
+    ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    // adhesive sheen dots
+    ctx.globalAlpha=0.5; ctx.fillStyle="#fff";
+    // bright fold ridge
+    ctx.globalAlpha=1; ctx.globalCompositeOperation="lighter";
+    const rg=ctx.createLinearGradient(0,peelY,0,peelY+6);
+    rg.addColorStop(0,"rgba(255,255,255,.9)"); rg.addColorStop(1,"rgba(255,255,255,0)");
+    ctx.fillStyle=rg; ctx.fillRect(sx,peelY-1,sw,7);
+    ctx.globalCompositeOperation="source-over";
+    // ghost of +8% mirrored faint on the back
+    ctx.globalAlpha=0.10; ctx.fillStyle="#FF3B30"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font="900 "+Math.round(sw*0.30)+"px sans-serif";
+    ctx.save(); ctx.translate(sx+sw/2, peelY+flapLen*0.5); ctx.scale(1,-1);
+    ctx.fillText("+8%",0,0); ctx.restore();
+    ctx.globalAlpha=1;
+    ctx.restore();
+
+    // tear flash
+    if(c.flashTear>0){ c.flashTear*=0.85;
+      ctx.fillStyle="rgba(255,59,48,"+(c.flashTear*0.4)+")"; rr(sx,sy,sw,sh,10); ctx.fill();
+      if(c.flashTear<0.02)c.flashTear=0;
+    }
+  }
+
+  function drawFlyers(){
+    for(let i=flyers.length-1;i>=0;i--){
+      const f=flyers[i];
+      f.x+=f.vx; f.y+=f.vy; f.vy+=0.4;
+      if(f.type==="sticker"){ f.rot+=f.vr; f.life-=0.02;
+        ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.rot); ctx.globalAlpha=Math.max(0,f.life);
+        const g=ctx.createLinearGradient(0,-f.h/2,0,f.h/2); g.addColorStop(0,"#FF3B30"); g.addColorStop(1,"#FF9500");
+        ctx.fillStyle=g; rr(-f.w/2,-f.h/2,f.w,f.h,10); ctx.fill();
+        ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.font="900 "+Math.round(f.w*0.4)+"px sans-serif"; ctx.fillText("+8%",0,0);
+        ctx.restore();
+      } else { f.life-=0.02; ctx.globalAlpha=Math.max(0,f.life);
+        if(f.rot!==undefined){ ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.rot+=f.vr);
+          ctx.fillStyle=f.col; ctx.fillRect(-f.r,-f.r,f.r*2,f.r*2); ctx.restore(); }
+        else { ctx.fillStyle=f.col; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
+        ctx.globalAlpha=1;
+      }
+      if(f.life<=0 || f.y>H+60) flyers.splice(i,1);
+    }
+    ctx.globalAlpha=1;
+  }
+  function drawSavedPops(){
+    for(let i=savedPops.length-1;i>=0;i--){ const p=savedPops[i];
+      p.y-=1.4; p.life-=0.018; ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle="#34D399"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.font="800 "+Math.round(W*0.07)+"px sans-serif"; ctx.shadowColor="rgba(52,211,153,.5)"; ctx.shadowBlur=14;
+      ctx.fillText(p.txt, W/2, H*0.26+p.y); ctx.shadowBlur=0; ctx.globalAlpha=1;
+      if(p.life<=0) savedPops.splice(i,1);
+    }
+  }
+
+  // ---------- LOOP ----------
+  function loop(ts){
+    if(state!=="playing") return;
+    const dt=Math.min(0.05,(ts-lastTS)/1000); lastTS=ts;
+    timeLeft-=dt; if(timeLeft<=0){ timeLeft=0; updateHud(); endGame(false); return; }
+    if(Math.random()<0.5) updateHud();
+    ctx.clearRect(0,0,W,H);
+    drawCard();
+    drawFlyers();
+    drawSavedPops();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- END ----------
+  function endGame(win){
+    state="ended";
+    totalPeels=Math.max(totalPeels,1);
+    const acc=Math.round((cleared/(cleared+tears||1))*100);
+    if(win){ sndFinish(); spawnConfetti(); vib([20,40,20,40,80]); }
+    drawResultCard(win, acc);
+    setTimeout(()=>{ playS.classList.add("hidden"); resultS.classList.remove("hidden"); }, win?900:200);
+    lastShare={win,acc};
+  }
+
+  let lastShare={};
+  const cardCv=$("cardCanvas"), cctx=cardCv.getContext("2d");
+  function drawResultCard(win,acc){
+    const w=cardCv.width, h=cardCv.height;
+    const g=cctx.createLinearGradient(0,0,0,h); g.addColorStop(0,"#11131c"); g.addColorStop(1,"#0B0D12");
+    cctx.fillStyle=g; cctx.fillRect(0,0,w,h);
+    // gold foil frame
+    cctx.strokeStyle="#E8C45A"; cctx.lineWidth=4; cctx.strokeRect(22,22,w-44,h-44);
+    cctx.strokeStyle="rgba(232,196,90,.35)"; cctx.lineWidth=1; cctx.strokeRect(34,34,w-68,h-68);
+    cctx.textAlign="center";
+    // header
+    cctx.fillStyle="#3BE1FF"; cctx.font="600 26px sans-serif";
+    cctx.fillText("Z E I — H A G A S H I", w/2, 92);
+    function fitFont(text,maxW,weight,startPx){ let s=startPx;
+      do{ cctx.font=weight+" "+s+"px sans-serif"; if(cctx.measureText(text).width<=maxW) break; s-=2; }while(s>14); return s; }
+    const innerW=w-90;
+    cctx.fillStyle="#EAF0F8"; fitFont("税、剥がしました。",innerW,"900",66);
+    cctx.fillText("税、剥がしました。", w/2, 180);
+    // big saved
+    cctx.fillStyle="#8b93a7"; cctx.font="600 30px sans-serif";
+    cctx.fillText("浮いた金額", w/2, 300);
+    cctx.fillStyle="#34D399"; fitFont("¥"+saved.toLocaleString(),innerW,"900",128);
+    cctx.shadowColor="rgba(52,211,153,.5)"; cctx.shadowBlur=30;
+    cctx.fillText("¥"+saved.toLocaleString(), w/2, 410);
+    cctx.shadowBlur=0;
+    // stats row
+    function stat(x,lbl,val,col){
+      cctx.fillStyle="#8b93a7"; cctx.font="600 26px sans-serif"; cctx.fillText(lbl,x,540);
+      cctx.fillStyle=col; cctx.font="900 60px sans-serif"; cctx.fillText(val,x,610);
+    }
+    stat(w*0.27,"剥がし精度",acc+"%","#3BE1FF");
+    stat(w*0.73,"剥がした品",cleared+"個","#E8C45A");
+    cctx.fillStyle="#8b93a7"; cctx.font="600 24px sans-serif";
+    cctx.fillText("千切れ "+tears+" 回",w/2,665);
+    // verdict
+    cctx.fillStyle="#EAF0F8"; cctx.font="800 38px sans-serif";
+    let verdict = acc>=95?"神ワザの剥がし師":acc>=80?"なめらか剥がし上手":acc>=60?"そこそこ剥がせた":"千切れ職人…";
+    cctx.fillText(verdict, w/2, 750);
+    // mini items row
+    const ic=Math.min(cleared,8); const sp=w*0.8/8;
+    cctx.font="40px serif"; cctx.textBaseline="middle";
+    for(let i=0;i<ic;i++){ cctx.fillText("🧾", w*0.1+sp*i+sp*0.5, 820); }
+    cctx.textBaseline="alphabetic";
+    // footer
+    cctx.fillStyle="#5b6373"; cctx.font="500 22px sans-serif";
+    cctx.fillText("食料品 消費税 8% → 1% · #税剥がし", w/2, 890);
+    cctx.fillStyle="#4b5266"; cctx.font="500 20px sans-serif";
+    cctx.fillText("t-aka-h.github.io/idea-radar/zei-hagashi", w/2, 922);
+  }
+
+  // ---------- BUTTONS ----------
+  $("startBtn").addEventListener("click", start);
+  $("againBtn").addEventListener("click", start);
+  $("shareBtn").addEventListener("click", async ()=>{
+    cardCv.toBlob(async (blob)=>{
+      const file=new File([blob],"zei-hagashi.png",{type:"image/png"});
+      const text="税、剥がしました。浮いた金額 ¥"+saved.toLocaleString()+"（精度"+lastShare.acc+"%）#税剥がし";
+      if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], text}); return; }catch(e){}
+      }
+      // fallback: download
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+      a.download="zei-hagashi.png"; a.click();
+    },"image/png");
+  });
+
+  resize();
+})();
+</script>
+</body>
+</html>
