@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050308">
+<title>重ね香 Kasaneka — あなただけのシグネチャー香水を調香する</title>
+<meta name="description" content="今日の気分・季節・会う相手から、トップ／ミドル／ベースの3層シグネチャー香水レシピを生成。ネオンの香りピラミッドと箔押し調香証明書を発行。完全オンデバイス。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  :root{
+    --bg:#050308; --ink:#f4eefb; --sub:#a99bc4;
+    --top:#3fe0ff; --mid:#ffb23f; --base:#c060ff;
+    --gold:#ffd86b;
+    --line:rgba(192,96,255,.22);
+  }
+  html,body{height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    overflow:hidden;overscroll-behavior:none;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;padding:max(16px,env(safe-area-inset-top)) 18px max(16px,env(safe-area-inset-bottom));}
+  canvas#fx{position:fixed;inset:0;width:100%;height:100%;z-index:0;}
+  .layer{position:relative;z-index:2;width:100%;max-width:440px;display:none;flex-direction:column;align-items:center;}
+  .layer.on{display:flex;animation:fade .5s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .brand{font-size:13px;letter-spacing:.42em;color:var(--sub);text-transform:uppercase;}
+  .logo{font-size:clamp(40px,13vw,58px);font-weight:800;letter-spacing:.06em;margin:6px 0 2px;
+    background:linear-gradient(105deg,var(--top),var(--base) 55%,var(--mid));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 18px rgba(192,96,255,.35));}
+  .tag{font-size:14px;color:var(--sub);text-align:center;line-height:1.7;margin-bottom:26px;}
+  .hint{font-size:12px;color:var(--sub);opacity:.8;margin-top:18px;text-align:center;line-height:1.7;}
+
+  .btn{appearance:none;border:none;cursor:pointer;font-family:inherit;
+    background:linear-gradient(100deg,var(--base),var(--top));color:#0a0512;font-weight:800;
+    font-size:17px;letter-spacing:.12em;padding:16px 40px;border-radius:40px;
+    box-shadow:0 0 26px rgba(120,120,255,.4);transition:transform .12s;}
+  .btn:active{transform:scale(.95);}
+  .btn.ghost{background:transparent;color:var(--sub);box-shadow:none;border:1px solid var(--line);
+    font-weight:600;letter-spacing:.08em;font-size:14px;padding:12px 26px;}
+
+  /* wizard */
+  .qwrap{width:100%;}
+  .step{font-size:12px;letter-spacing:.3em;color:var(--sub);text-align:center;margin-bottom:6px;}
+  .q{font-size:22px;font-weight:800;text-align:center;margin-bottom:22px;letter-spacing:.04em;}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;}
+  .opt{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.03);
+    color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;padding:18px 10px;
+    border-radius:16px;cursor:pointer;transition:transform .1s,border-color .2s,background .2s;
+    backdrop-filter:blur(4px);}
+  .opt:active{transform:scale(.94);border-color:var(--top);background:rgba(63,224,255,.1);}
+  .dots{display:flex;gap:8px;justify-content:center;margin-top:24px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.16);transition:.3s;}
+  .dot.act{background:var(--top);box-shadow:0 0 10px var(--top);transform:scale(1.25);}
+
+  /* result */
+  #result .rname{font-size:clamp(28px,8.5vw,38px);font-weight:800;text-align:center;letter-spacing:.05em;
+    margin:4px 0 2px;filter:drop-shadow(0 0 14px rgba(255,178,63,.3));}
+  #result .rmeta{font-size:12px;letter-spacing:.32em;color:var(--sub);text-transform:uppercase;margin-bottom:14px;}
+  .rarity{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;letter-spacing:.14em;
+    padding:6px 16px;border-radius:30px;border:1px solid var(--line);margin-bottom:16px;}
+  .layers{width:100%;display:flex;flex-direction:column;gap:10px;margin-bottom:8px;}
+  .lrow{border:1px solid var(--line);border-radius:14px;padding:13px 15px;background:rgba(255,255,255,.025);
+    backdrop-filter:blur(4px);opacity:0;transform:translateX(-12px);}
+  .lrow.show{animation:slidein .45s ease forwards;}
+  @keyframes slidein{to{opacity:1;transform:none}}
+  .lrow .lh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+  .lrow .lk{font-size:11px;letter-spacing:.26em;font-weight:700;text-transform:uppercase;}
+  .lrow .lp{font-size:20px;font-weight:800;}
+  .lrow .ln{font-size:17px;font-weight:700;margin-bottom:3px;}
+  .lrow .ld{font-size:12.5px;color:var(--sub);line-height:1.6;}
+  .lrow.top{border-left:3px solid var(--top);} .lrow.top .lk,.lrow.top .lp{color:var(--top);}
+  .lrow.mid{border-left:3px solid var(--mid);} .lrow.mid .lk,.lrow.mid .lp{color:var(--mid);}
+  .lrow.base{border-left:3px solid var(--base);} .lrow.base .lk,.lrow.base .lp{color:var(--base);}
+  .ractions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;justify-content:center;}
+  .seedline{font-size:10px;color:var(--sub);opacity:.6;margin-top:14px;letter-spacing:.2em;}
+
+  .hidden{display:none!important;}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div id="app">
+
+  <!-- TITLE -->
+  <section class="layer on" id="title">
+    <div class="brand">Idea Radar · Fragrance Layering</div>
+    <div class="logo">重ね香</div>
+    <div class="tag">今日のあなたを、3層の香りに。<br>気分 × 季節 × 会う相手から<br>あなただけのシグネチャーを調香します。</div>
+    <button class="btn" id="startBtn">調香をはじめる</button>
+    <div class="hint">完全オンデバイス・通信なし／音が出ます🔊</div>
+  </section>
+
+  <!-- WIZARD -->
+  <section class="layer" id="wizard">
+    <div class="qwrap">
+      <div class="step" id="qstep">QUESTION 1 / 4</div>
+      <div class="q" id="qtext"></div>
+      <div class="opts" id="qopts"></div>
+      <div class="dots" id="qdots"></div>
+    </div>
+  </section>
+
+  <!-- BLENDING -->
+  <section class="layer" id="blending">
+    <div class="brand" style="margin-bottom:10px;">調香中…</div>
+    <div class="q" id="blendmsg" style="color:var(--sub);font-weight:600;">香料を層に重ねています</div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="layer" id="result">
+    <div class="rmeta">YOUR SIGNATURE</div>
+    <div class="rname" id="rname"></div>
+    <div class="rarity" id="rarity"></div>
+    <div class="layers" id="rlayers"></div>
+    <div class="ractions">
+      <button class="btn" id="shareBtn">証明書を発行</button>
+      <button class="btn ghost" id="againBtn">もう一度調香</button>
+    </div>
+    <div class="seedline" id="seedline"></div>
+  </section>
+
+</div>
+
+<script>
+//=================== utils: PRNG (deterministic) ===================
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+let RND=Math.random;
+const pick=(arr)=>arr[Math.floor(RND()*arr.length)];
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+//=================== data ===================
+const QUESTIONS=[
+ {q:"今日の気分は？", o:["凛とする","ときめく","落ち着く","高揚する","切ない","甘えたい"]},
+ {q:"いまの季節は？", o:["春","夏","秋","冬"]},
+ {q:"今日、誰に会う？", o:["恋人","初対面の人","旧友","自分のため","大切な家族","ライバル"]},
+ {q:"なりたい印象は？", o:["清楚","大人っぽい","ミステリアス","親しみやすい","華やか","凛々しい"]},
+];
+
+const TOP=[ // 柑橘・ハーブ・きらめき
+ {n:"ベルガモット",d:"朝靄を裂く、最初のひと呼吸。"},
+ {n:"ゆず",d:"湯気の向こうに灯る、和の光。"},
+ {n:"ピンクペッパー",d:"舌先で弾ける、いたずらな予感。"},
+ {n:"ネロリ",d:"白い花が開く、清らかな序章。"},
+ {n:"グレープフルーツ",d:"陽だまりを噛む、みずみずしい一閃。"},
+ {n:"ミント",d:"夜風がうなじを撫でる、静かな目覚め。"},
+ {n:"アールグレイ",d:"湯気に揺れる、品のあるはじまり。"},
+ {n:"青りんご",d:"まだ濡れている、無垢な午前。"},
+ {n:"シソ",d:"翠を裂く、清冽なひと滴。"},
+ {n:"アルデヒド",d:"白く弾ける、シャンパンの泡。"},
+ {n:"バジル",d:"陽を浴びた葉の、青い体温。"},
+ {n:"レモンバーベナ",d:"窓辺で乾く、夏の名残。"},
+];
+const MID=[ // フローラル・スパイス・こころ
+ {n:"ローズ",d:"夜更けにほどける、深紅のひとひら。"},
+ {n:"ジャスミン",d:"夜気に滲む、官能のささやき。"},
+ {n:"金木犀",d:"路地の角を曲がる、記憶の甘さ。"},
+ {n:"サフラン",d:"薄暗がりに灯る、金の一線。"},
+ {n:"イランイラン",d:"熱を帯びた花の、濃密な脈。"},
+ {n:"スズラン",d:"鈴の音のような、可憐な気配。"},
+ {n:"カルダモン",d:"喉の奥で揺れる、スパイスの温度。"},
+ {n:"桜",d:"散りぎわに香る、刹那のやさしさ。"},
+ {n:"ピオニー",d:"花びらを重ねる、ふくよかな輪郭。"},
+ {n:"ゼラニウム",d:"緑がかった薔薇、凛とした芯。"},
+ {n:"ヴァイオレット",d:"粉雪のような、はかない甘み。"},
+ {n:"シナモン",d:"指先を温める、琥珀色の鼓動。"},
+];
+const BASE=[ // ウッド・ムスク・樹脂
+ {n:"サンダルウッド",d:"肌に残る、温かい木の祈り。"},
+ {n:"ムスク",d:"素肌に溶ける、ぬくもりの余韻。"},
+ {n:"アンバー",d:"夕陽を閉じ込めた、琥珀の底。"},
+ {n:"ベチバー",d:"雨上がりの土の、深い静けさ。"},
+ {n:"バニラ",d:"夜の終わりに残る、甘い体温。"},
+ {n:"トンカビーン",d:"とろりと落ちる、官能の余白。"},
+ {n:"パチョリ",d:"古書のような、陰影のある記憶。"},
+ {n:"シダーウッド",d:"研ぎ澄まされた、鉛筆のような芯。"},
+ {n:"オークモス",d:"森の奥に沈む、苔むした時間。"},
+ {n:"インセンス",d:"薄煙が立ちのぼる、静謐な祈り。"},
+ {n:"レザー",d:"なめされた革の、艶やかな影。"},
+ {n:"アンブロキサン",d:"潮の記憶を纏う、透明な深淵。"},
+];
+
+const NAME_A=["霜夜","黎明","群青","残響","陽だまり","宵闇","蜜月","余韻","灯火","揺らぎ","終曲","薄明","花筐","紺碧","遠雷","白露","木洩れ","秘色","茜空","凪"];
+const NAME_B=["の祝祭","の手紙","の約束","の余白","の序章","の戯れ","の残り香","の円舞曲","の真昼","の秘密","の標","の宣言","の輪郭","の郷愁","の予感","の足跡"];
+
+const RARITY=[
+ {min:0.00, t:"COMMON",   stars:1, col:"#9aa0b5", g:false},
+ {min:0.46, t:"UNCOMMON", stars:2, col:"#5fd0ff", g:false},
+ {min:0.74, t:"RARE",     stars:3, col:"#b78bff", g:false},
+ {min:0.91, t:"EPIC",     stars:4, col:"#ff9ad1", g:false},
+ {min:0.98, t:"奇跡の調香", stars:5, col:"#ffd86b", g:true},
+];
+function rarityOf(r){let out=RARITY[0];for(const x of RARITY){if(r>=x.min)out=x;}return out;}
+
+//=================== state ===================
+let answers=[], qi=0, current=null;
+const $=(id)=>document.getElementById(id);
+const show=(id)=>{document.querySelectorAll('.layer').forEach(l=>l.classList.remove('on'));$(id).classList.add('on');};
+
+//=================== audio (WebAudio, no files) ===================
+let AC=null;
+function actx(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}return AC;}
+function blip(freq=880,dur=.12,type='sine',gain=.18){
+  const c=actx();if(!c)return;const t=c.currentTime;
+  const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;
+  o.connect(g);g.connect(c.destination);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(gain,t+.012);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.start(t);o.stop(t+dur+.02);
+}
+// missing-fundamental bass: stack harmonics of a low fundamental
+function bass(fund=55,dur=.55,gain=.5){
+  const c=actx();if(!c)return;const t=c.currentTime;
+  const out=c.createGain();out.connect(c.destination);
+  out.gain.setValueAtTime(0,t);out.gain.linearRampToValueAtTime(gain,t+.02);
+  out.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  [2,3,4,5].forEach((h,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fund*h;
+    const g=c.createGain();g.gain.value=[.5,.32,.2,.13][i];o.connect(g);g.connect(out);o.start(t);o.stop(t+dur);});
+  // soft click body
+  const o2=c.createOscillator();o2.type='triangle';o2.frequency.setValueAtTime(180,t);
+  o2.frequency.exponentialRampToValueAtTime(60,t+.12);const g2=c.createGain();
+  g2.gain.setValueAtTime(.25,t);g2.gain.exponentialRampToValueAtTime(.0001,t+.14);
+  o2.connect(g2);g2.connect(out);o2.start(t);o2.stop(t+.16);
+}
+function arp(steps,base=523){const c=actx();if(!c)return;steps.forEach((s,i)=>{setTimeout(()=>blip(base*Math.pow(2,s/12),.16,'sine',.16),i*95);});}
+const vib=(p)=>{try{navigator.vibrate&&navigator.vibrate(p);}catch(e){}};
+
+//=================== canvas particles ===================
+const cv=$('fx'),cx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=cv.width=innerWidth*DPR;H=cv.height=innerHeight*DPR;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';}
+addEventListener('resize',resize);resize();
+
+let particles=[]; // ambient + pyramid
+let mode='ambient';
+let goldMode=false;
+
+function ambientSpawn(){
+  if(particles.length<46 && RND()<.5){
+    particles.push({x:RND()*W,y:H+10,vx:(RND()-.5)*.12*DPR,vy:-(.2+RND()*.4)*DPR,
+      r:(1+RND()*2.4)*DPR,life:1,decay:.0016+RND()*.002,
+      c:pick(['63,224,255','255,178,63','192,96,255']),amb:true});
+  }
+}
+function burst(x,y,col,n=18,spread=3.4){
+  for(let i=0;i<n;i++){const a=RND()*Math.PI*2,sp=(0.6+RND()*spread)*DPR;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-0.4*DPR,r:(1.3+RND()*2.6)*DPR,
+      life:1,decay:.012+RND()*.02,c:col});}
+}
+
+// rising fragrance pyramid: particles flow up from bottom to converge into 3 stacked bands
+let pyramidParts=[];
+function buildPyramid(){
+  pyramidParts=[];
+  const cxp=W/2;
+  // bands target y (base lowest, top highest), drawn as triangle stack
+  const bands=[
+    {key:'base', col:'192,96,255', cy:H*0.66, half:W*0.34, delay:0},
+    {key:'mid',  col:'255,178,63', cy:H*0.52, half:W*0.24, delay:520},
+    {key:'top',  col:'63,224,255', cy:H*0.40, half:W*0.14, delay:1040},
+  ];
+  bands.forEach(b=>{
+    const count=goldMode?150:110;
+    for(let i=0;i<count;i++){
+      const tx=cxp+(RND()-.5)*b.half*2;
+      const ty=b.cy+(RND()-.5)*H*0.045;
+      pyramidParts.push({sx:cxp+(RND()-.5)*W*0.5, sy:H+20+RND()*H*0.2,
+        tx,ty,col:b.col,prog:0,delay:b.delay+RND()*420,
+        r:(1.4+RND()*2.6)*DPR,started:false});
+    }
+  });
+}
+let pyramidT0=0;
+
+function loop(ts){
+  cx.clearRect(0,0,W,H);
+  // bg radial glow
+  const g=cx.createRadialGradient(W/2,H*0.46,0,W/2,H*0.46,Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(40,16,60,0.55)');g.addColorStop(1,'rgba(5,3,8,0)');
+  cx.fillStyle=g;cx.fillRect(0,0,W,H);
+
+  if(mode==='ambient'||mode==='result') ambientSpawn();
+
+  // pyramid
+  if(mode==='pyramid'||mode==='result'){
+    const now=ts-pyramidT0;
+    cx.globalCompositeOperation='lighter';
+    for(const p of pyramidParts){
+      if(now>p.delay){p.prog=clamp(p.prog+0.018,0,1);}
+      const e=1-Math.pow(1-p.prog,3);
+      const x=lerp(p.sx,p.tx,e), y=lerp(p.sy,p.ty,e);
+      const a=p.prog<1?(0.25+0.55*p.prog):(0.5+0.18*Math.sin(now*0.004+p.tx));
+      cx.beginPath();cx.fillStyle='rgba('+p.col+','+a+')';
+      cx.arc(x,y,p.r*(0.7+0.5*p.prog),0,7);cx.fill();
+    }
+    cx.globalCompositeOperation='source-over';
+  }
+
+  // free particles
+  cx.globalCompositeOperation='lighter';
+  for(let i=particles.length-1;i>=0;i--){const p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;if(!p.amb)p.vy+=0.04*DPR;p.life-=p.decay;
+    if(p.life<=0||p.y<-20){particles.splice(i,1);continue;}
+    cx.beginPath();cx.fillStyle='rgba('+p.c+','+(p.life*(p.amb?.5:.85))+')';
+    cx.arc(p.x,p.y,p.r*p.life,0,7);cx.fill();
+  }
+  cx.globalCompositeOperation='source-over';
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+//=================== flow ===================
+$('startBtn').onclick=()=>{actx();bass(60,.4,.4);vib(14);answers=[];qi=0;renderQ();show('wizard');};
+
+function renderQ(){
+  const Q=QUESTIONS[qi];
+  $('qstep').textContent='QUESTION '+(qi+1)+' / 4';
+  $('qtext').textContent=Q.q;
+  const wrap=$('qopts');wrap.innerHTML='';
+  Q.o.forEach(opt=>{const b=document.createElement('button');b.className='opt';b.textContent=opt;
+    b.onclick=()=>{blip(720+qi*60,.1,'sine',.16);vib(10);
+      const r=b.getBoundingClientRect();burst((r.left+r.width/2)*DPR,(r.top+r.height/2)*DPR,'63,224,255',14,2.4);
+      answers[qi]=opt;qi++;if(qi<QUESTIONS.length){setTimeout(renderQ,120);}else{startBlend();}};
+    wrap.appendChild(b);});
+  const dots=$('qdots');dots.innerHTML='';
+  QUESTIONS.forEach((_,i)=>{const d=document.createElement('div');d.className='dot'+(i===qi?' act':'');dots.appendChild(d);});
+}
+
+function startBlend(){
+  show('blending');
+  const msgs=["香料を層に重ねています","トップノートを選んでいます","ミドルの心臓を編んでいます","ベースの余韻を沈めています"];
+  let i=0;$('blendmsg').textContent=msgs[0];blip(900,.1,'sine',.14);vib(8);
+  const iv=setInterval(()=>{i++;if(i<msgs.length){$('blendmsg').textContent=msgs[i];blip(760+i*40,.09,'sine',.13);vib(6);}},420);
+  setTimeout(()=>{clearInterval(iv);generate();},1900);
+}
+
+function generate(){
+  const seedStr=answers.join('|');
+  const seed=xmur3(seedStr)();RND=mulberry32(seed);
+  // rarity
+  const rr=RND();const rar=rarityOf(rr);goldMode=rar.g;
+  // notes
+  const tN=pick(TOP), mN=pick(MID), bN=pick(BASE);
+  // percentages (top/mid/base) normalized to 100
+  let t=30+RND()*12, m=30+RND()*12, b=24+RND()*12;
+  const s=t+m+b; t=Math.round(t/s*100); m=Math.round(m/s*100); b=100-t-m;
+  // name
+  const nm=pick(NAME_A)+pick(NAME_B);
+  current={seedStr,seed,rar,tN,mN,bN,t,m,b,nm,
+    mood:answers[0],season:answers[1],who:answers[2],vibe:answers[3]};
+  // build pyramid + show
+  buildPyramid();pyramidT0=performance.now();mode='pyramid';
+  show('result');
+  renderResult();
+}
+
+function renderResult(){
+  const c=current;
+  $('rname').textContent=c.nm;
+  const rEl=$('rarity');
+  rEl.style.color=c.rar.col;rEl.style.borderColor=c.rar.col+'66';
+  rEl.innerHTML='★'.repeat(c.rar.stars)+'<span style="opacity:.3">'+'★'.repeat(5-c.rar.stars)+'</span> &nbsp;'+c.rar.t;
+  const L=$('rlayers');L.innerHTML='';
+  const rows=[
+    {cls:'top', k:'TOP / 立ち上がり', n:c.tN, p:c.t},
+    {cls:'mid', k:'MIDDLE / 心臓', n:c.mN, p:c.m},
+    {cls:'base',k:'BASE / 余韻', n:c.bN, p:c.b},
+  ];
+  rows.forEach((r,i)=>{const d=document.createElement('div');d.className='lrow '+r.cls;
+    d.innerHTML='<div class="lh"><span class="lk">'+r.k+'</span><span class="lp">'+r.p+'%</span></div>'+
+      '<div class="ln">'+r.n.n+'</div><div class="ld">'+r.n.d+'</div>';
+    L.appendChild(d);
+    setTimeout(()=>{d.classList.add('show');
+      // burst per layer in its color as it appears
+      const col=r.cls==='top'?'63,224,255':r.cls==='mid'?'255,178,63':'192,96,255';
+      blip([523,659,392][i]*( r.cls==='base'?1:1.5),.2,'sine',.15);
+    }, 540*i+560);
+  });
+  $('seedline').textContent='SEED · '+c.seedStr+'  →  '+c.season+'の'+c.mood;
+  // sound: bass + rarity arp
+  setTimeout(()=>{bass(goldMode?44:55,goldMode?.9:.6,goldMode?.6:.5);
+    if(goldMode){arp([0,4,7,12,16,19,24],523);vib([20,40,20,60,30,120]);}
+    else if(c.rar.stars>=3){arp([0,4,7,12],523);vib([16,40,16,80]);}
+    else {arp([0,7],523);vib([14,30,14]);}
+    // gold extra particle rain
+    if(goldMode){for(let k=0;k<60;k++)setTimeout(()=>burst(W*RND(),H*0.2+RND()*H*0.3,'255,216,107',6,2.2),k*22);}
+  },680);
+}
+
+$('againBtn').onclick=()=>{blip(500,.1,'sine',.14);vib(10);mode='ambient';pyramidParts=[];goldMode=false;RND=Math.random;answers=[];qi=0;renderQ();show('wizard');};
+
+//=================== share card (9:16) ===================
+$('shareBtn').onclick=()=>{blip(820,.12,'sine',.16);bass(58,.4,.4);vib([14,30,60]);makeCard();};
+
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function makeCard(){
+  const c=current;const W2=1080,H2=1920;
+  const cn=document.createElement('canvas');cn.width=W2;cn.height=H2;const g=cn.getContext('2d');
+  // bg
+  g.fillStyle='#050308';g.fillRect(0,0,W2,H2);
+  const rg=g.createRadialGradient(W2/2,H2*0.42,0,W2/2,H2*0.42,1200);
+  rg.addColorStop(0,'rgba(48,18,70,0.85)');rg.addColorStop(1,'rgba(5,3,8,0)');g.fillStyle=rg;g.fillRect(0,0,W2,H2);
+  // particle confetti baked
+  const cols=['63,224,255','255,178,63','192,96,255'];
+  for(let i=0;i<170;i++){g.beginPath();g.fillStyle='rgba('+cols[i%3]+','+(0.1+Math.random()*0.5)+')';
+    g.arc(Math.random()*W2,Math.random()*H2,Math.random()*5+1,0,7);g.fill();}
+  // frame
+  const fc=c.rar.g?'#ffd86b':'#b78bff';
+  g.strokeStyle=fc;g.lineWidth=4;roundRect(g,46,46,W2-92,H2-92,40);g.stroke();
+  if(c.rar.g){g.save();g.shadowColor='#ffd86b';g.shadowBlur=40;g.stroke();g.restore();}
+  // header
+  g.textAlign='center';g.fillStyle='#a99bc4';g.font='600 30px -apple-system,"Hiragino Sans",sans-serif';
+  g.fillText('K A S A N E K A   ·   重 ね 香',W2/2,170);
+  g.fillStyle='#a99bc4';g.font='500 26px -apple-system,sans-serif';
+  g.fillText('YOUR SIGNATURE',W2/2,225);
+  // name
+  const grad=g.createLinearGradient(140,0,W2-140,0);grad.addColorStop(0,'#3fe0ff');grad.addColorStop(.55,'#c060ff');grad.addColorStop(1,'#ffb23f');
+  g.fillStyle=grad;g.font='800 78px -apple-system,"Hiragino Sans",sans-serif';
+  g.fillText(c.nm,W2/2,360);
+  // rarity
+  g.fillStyle=c.rar.col;g.font='700 38px -apple-system,sans-serif';
+  g.fillText('★'.repeat(c.rar.stars)+'   '+c.rar.t,W2/2,440);
+
+  // mini pyramid visual
+  const py=560, bands=[
+    {col:'#c060ff',cy:py+330,hw:300,lbl:'BASE'},
+    {col:'#ffb23f',cy:py+200,hw:215,lbl:'MID'},
+    {col:'#3fe0ff',cy:py+80,hw:130,lbl:'TOP'},
+  ];
+  g.globalCompositeOperation='lighter';
+  bands.forEach(b=>{const grd=g.createLinearGradient(0,b.cy-50,0,b.cy+50);
+    grd.addColorStop(0,b.col);grd.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=b.col;g.globalAlpha=.18;roundRect(g,W2/2-b.hw,b.cy-46,b.hw*2,92,46);g.fill();
+    g.globalAlpha=1;g.strokeStyle=b.col;g.lineWidth=2.5;roundRect(g,W2/2-b.hw,b.cy-46,b.hw*2,92,46);g.stroke();});
+  g.globalCompositeOperation='source-over';
+
+  // layer text rows
+  let y=1060;
+  const rows=[
+    {col:'#3fe0ff',k:'TOP',n:c.tN,p:c.t},
+    {col:'#ffb23f',k:'MID',n:c.mN,p:c.m},
+    {col:'#c060ff',k:'BASE',n:c.bN,p:c.b},
+  ];
+  rows.forEach(r=>{
+    g.textAlign='left';
+    g.fillStyle=r.col;g.font='700 30px -apple-system,sans-serif';g.fillText(r.k,90,y);
+    g.fillStyle='#f4eefb';g.font='700 46px -apple-system,"Hiragino Sans",sans-serif';g.fillText(r.n.n,210,y+2);
+    g.textAlign='right';g.fillStyle=r.col;g.font='800 46px -apple-system,sans-serif';g.fillText(r.p+'%',W2-90,y+2);
+    g.textAlign='left';g.fillStyle='#a99bc4';g.font='400 27px -apple-system,"Hiragino Sans",sans-serif';
+    g.fillText(r.n.d,210,y+44);
+    y+=150;
+  });
+
+  // footer
+  g.textAlign='center';g.fillStyle='#a99bc4';g.font='400 25px -apple-system,sans-serif';
+  g.fillText('SEED · '+c.seedStr,W2/2,H2-150);
+  g.fillStyle='#7d7596';g.font='600 28px -apple-system,sans-serif';
+  g.fillText('重ね香 — Idea Radar',W2/2,H2-95);
+  g.fillStyle='#5b5570';g.font='400 23px -apple-system,sans-serif';
+  g.fillText('t-aka-h.github.io/idea-radar',W2/2,H2-58);
+
+  cn.toBlob(async(blob)=>{
+    const file=new File([blob],'kasaneka.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'重ね香',text:'私のシグネチャー「'+c.nm+'」#重ね香'});return;}catch(e){}
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kasaneka_'+c.seed+'.png';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },'image/png');
+}
+</script>
+</body>
+</html>
