@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>落款 Rakkan — これは100%人間が作りました</title>
+<meta name="theme-color" content="#0A0A0E">
+<meta name="description" content="AIが何でも作る時代に「これは100%人間が作りました」を証明する。無AI認証の朱印を捺して箔押し認証状を発行するパロディ・ジェネレーター。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  :root{
+    --bg:#0A0A0E; --bg2:#11131c;
+    --gold:#C9A961; --gold2:#e9d49a; --goldDeep:#7c6428;
+    --shu:#D7263D; --shu2:#E8412E; --shuDeep:#8c1420;
+    --cyan:#46E3FF; --ink:#e9e6dc; --sub:#9aa0b4;
+    --washi:#15151d;
+  }
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    overflow:hidden;
+    position:fixed;width:100%;height:100%;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:manipulation;
+  }
+  #stage{
+    position:relative;
+    width:100%;height:100%;
+    max-width:480px;max-height:100vh;
+    margin:0 auto;
+    background:
+      radial-gradient(120% 80% at 50% 12%, #1a1a26 0%, var(--bg) 60%),
+      var(--bg);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  /* faint grid */
+  #stage::before{
+    content:"";position:absolute;inset:0;opacity:.06;pointer-events:none;
+    background-image:linear-gradient(var(--cyan) 1px,transparent 1px),linear-gradient(90deg,var(--cyan) 1px,transparent 1px);
+    background-size:38px 38px;mix-blend-mode:screen;
+  }
+
+  /* ===== Certificate ===== */
+  #certWrap{flex:1;display:flex;align-items:center;justify-content:center;padding:14px 14px 4px;position:relative;z-index:2;min-height:0;}
+  #cert{
+    position:relative;width:100%;max-width:360px;aspect-ratio:3/4.1;
+    background:
+      radial-gradient(140% 100% at 50% 0%, #1c1c26 0%, var(--washi) 70%);
+    border:2px solid var(--gold);
+    border-radius:8px;
+    box-shadow:0 0 0 1px rgba(201,169,97,.25) inset, 0 0 30px rgba(0,0,0,.6), 0 0 22px rgba(201,169,97,.12);
+    padding:18px 16px 14px;
+    display:flex;flex-direction:column;align-items:center;
+    overflow:hidden;
+  }
+  #cert::after{ /* inner gold hairline */
+    content:"";position:absolute;inset:7px;border:1px solid rgba(201,169,97,.35);border-radius:4px;pointer-events:none;
+  }
+  .crest{font-size:11px;letter-spacing:6px;color:var(--gold2);opacity:.9;margin-top:2px;}
+  .ctitle{
+    font-size:30px;letter-spacing:10px;margin:6px 0 2px;font-weight:700;
+    background:linear-gradient(180deg,var(--gold2),var(--gold) 55%,var(--goldDeep));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 1px 0 rgba(0,0,0,.4);
+  }
+  .csub{font-size:10.5px;letter-spacing:3px;color:var(--sub);margin-bottom:8px;}
+  .genreLine{font-size:15px;letter-spacing:2px;color:var(--ink);margin:2px 0 4px;}
+  .genreLine b{color:var(--cyan);font-weight:700;}
+  .comment{
+    font-size:13px;line-height:1.85;color:#d8d3c4;text-align:center;
+    padding:6px 6px;min-height:78px;display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .stars{font-size:18px;letter-spacing:3px;color:var(--gold2);height:24px;}
+  .premium{font-size:9.5px;letter-spacing:2px;color:var(--sub);margin-top:1px;}
+  .metarow{display:flex;justify-content:space-between;width:100%;margin-top:auto;padding-top:8px;margin-bottom:16px;font-size:10px;color:var(--sub);letter-spacing:1px;}
+  .serial{color:var(--cyan);}
+  .wm{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:8.5px;letter-spacing:4px;color:rgba(201,169,97,.45);}
+
+  /* seal slot */
+  #sealSlot{position:absolute;right:18px;bottom:54px;width:96px;height:96px;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  #sealGuide{position:absolute;inset:0;border:1.5px dashed rgba(215,38,61,.35);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:9px;letter-spacing:2px;color:rgba(215,38,61,.5);}
+  /* the seal element */
+  .seal{
+    position:absolute;width:92px;height:92px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;transform:scale(2.4);
+    will-change:transform,opacity;
+  }
+  .seal canvas{width:100%;height:100%;display:block;}
+
+  #splat{position:absolute;inset:0;pointer-events:none;z-index:5;}
+
+  /* ===== Controls ===== */
+  #panel{position:relative;z-index:3;padding:8px 16px 16px;background:linear-gradient(180deg,transparent,rgba(8,8,12,.6) 30%);}
+  .row{margin:7px 0;}
+  .lab{font-size:11px;letter-spacing:2px;color:var(--sub);margin-bottom:5px;display:flex;justify-content:space-between;}
+  .lab b{color:var(--ink);font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{
+    font-family:inherit;font-size:12.5px;letter-spacing:1px;
+    padding:7px 12px;border-radius:20px;border:1px solid #2a2f44;background:#141826;color:var(--sub);
+    cursor:pointer;transition:all .15s;
+  }
+  .chip.on{background:linear-gradient(180deg,#1d2336,#141826);border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(70,227,255,.25);}
+  input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;background:#2a2f44;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--gold2);box-shadow:0 0 8px rgba(201,169,97,.5);cursor:pointer;}
+  input[type=range].locked::-webkit-slider-thumb{background:var(--shu2);box-shadow:0 0 8px rgba(232,65,46,.6);}
+  .starpick{display:flex;gap:8px;}
+  .starpick span{font-size:24px;color:#33384d;cursor:pointer;transition:color .12s,transform .12s;}
+  .starpick span.on{color:var(--gold2);text-shadow:0 0 8px rgba(201,169,97,.5);}
+
+  /* stamp button */
+  #stampWrap{display:flex;justify-content:center;margin-top:10px;}
+  #stampBtn{
+    position:relative;width:88px;height:88px;border-radius:50%;
+    border:2px solid var(--shu);background:radial-gradient(circle at 50% 40%,#2a1014,#160a0c);
+    color:var(--shu2);font-family:inherit;font-size:13px;letter-spacing:3px;font-weight:700;
+    cursor:pointer;user-select:none;touch-action:none;
+    box-shadow:0 0 20px rgba(215,38,61,.25), 0 0 0 1px rgba(215,38,61,.3) inset;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    transition:transform .08s;
+  }
+  #stampBtn small{font-size:9px;letter-spacing:1px;color:var(--sub);margin-top:3px;font-weight:400;}
+  #stampBtn:active{transform:scale(.96);}
+  #chargeRing{position:absolute;inset:-7px;border-radius:50%;pointer-events:none;}
+  .hint{text-align:center;font-size:10px;color:var(--sub);letter-spacing:1px;margin-top:7px;height:13px;}
+
+  /* result buttons */
+  #resultBtns{display:none;gap:10px;justify-content:center;margin-top:8px;}
+  .rbtn{
+    font-family:inherit;font-size:13px;letter-spacing:2px;padding:11px 16px;border-radius:24px;cursor:pointer;border:1px solid;
+    background:#141826;
+  }
+  .rbtn.share{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(70,227,255,.2);}
+  .rbtn.redo{border-color:var(--gold);color:var(--gold2);}
+
+  /* gag toast */
+  #gag{
+    position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) rotate(-9deg) scale(.6);
+    opacity:0;pointer-events:none;z-index:9;
+    border:3px solid var(--shu2);color:var(--shu2);background:rgba(20,8,10,.85);
+    padding:10px 16px;border-radius:6px;font-size:17px;letter-spacing:3px;font-weight:700;
+    box-shadow:0 0 24px rgba(232,65,46,.4);text-align:center;
+  }
+  #gag small{display:block;font-size:10px;letter-spacing:1px;color:#e9b3ad;margin-top:3px;font-weight:400;}
+  @keyframes gagpop{0%{opacity:0;transform:translate(-50%,-50%) rotate(-9deg) scale(.4);}15%{opacity:1;transform:translate(-50%,-50%) rotate(-9deg) scale(1.12);}30%{transform:translate(-50%,-50%) rotate(-9deg) scale(1);}80%{opacity:1;}100%{opacity:0;transform:translate(-50%,-50%) rotate(-9deg) scale(1);}}
+
+  #flash{position:absolute;inset:0;background:radial-gradient(circle at 78% 72%,rgba(232,65,46,.5),transparent 60%);opacity:0;pointer-events:none;z-index:6;}
+
+  .badge-top{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:9px;letter-spacing:3px;color:rgba(154,160,180,.7);z-index:4;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="badge-top">落款 · RAKKAN — 100% HUMAN-MADE 認証</div>
+
+  <div id="certWrap">
+    <div id="cert">
+      <div class="crest">— 無 A I 認 証 —</div>
+      <div class="ctitle">認 証 状</div>
+      <div class="csub">CERTIFICATE OF HUMAN AUTHENTICITY</div>
+      <div class="genreLine">本作 〈<b id="cGenre">—</b>〉 は</div>
+      <div class="comment" id="cComment">下の朱印を長押しで捺して、<br>あなたの「人間製」を認証せよ。</div>
+      <div class="stars" id="cStars">　</div>
+      <div class="premium" id="cPrem">AUTHENTICITY PREMIUM</div>
+      <div class="metarow">
+        <div class="serial" id="cSerial">第 — 号</div>
+        <div id="cDate">—</div>
+      </div>
+      <div class="wm">落 款 ／ R A K K A N</div>
+
+      <div id="sealSlot">
+        <div id="sealGuide">捺印</div>
+      </div>
+    </div>
+    <canvas id="splat"></canvas>
+    <div id="flash"></div>
+    <div id="gag">却 下<small>人の手が足りませぬ</small></div>
+  </div>
+
+  <div id="panel">
+    <div class="row">
+      <div class="lab">ジャンル</div>
+      <div class="chips" id="genreChips"></div>
+    </div>
+    <div class="row">
+      <div class="lab">制作時間 <b id="hLab">3 時間</b></div>
+      <input type="range" id="hours" min="0" max="40" value="3">
+    </div>
+    <div class="row">
+      <div class="lab">こだわり <b id="careLab">★★★</b></div>
+      <div class="starpick" id="carePick"></div>
+    </div>
+    <div class="row">
+      <div class="lab">AI 依存度 <b id="aiLab" style="color:var(--shu2)">0 %</b></div>
+      <input type="range" id="ai" class="locked" min="0" max="100" value="0">
+    </div>
+
+    <div id="stampWrap">
+      <button id="stampBtn">落款<small>長押しで捺す</small>
+        <svg id="chargeRing" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="#E8412E" stroke-width="3" stroke-linecap="round" stroke-dasharray="301.6" stroke-dashoffset="301.6" transform="rotate(-90 50 50)" style="filter:drop-shadow(0 0 4px #E8412E)"/></svg>
+      </button>
+    </div>
+    <div class="hint" id="hint">長押しでチャージ → 離して捺印</div>
+
+    <div id="resultBtns">
+      <button class="rbtn share" id="shareBtn">画像をシェア</button>
+      <button class="rbtn redo" id="redoBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const $=s=>document.querySelector(s);
+  const GENRES=["手料理","イラスト","手紙","演奏","DIY","写真","その他"];
+  const state={genre:"手料理",hours:3,care:3,stamped:false,serial:0,
+    seal:null,comment:"",stars:5};
+
+  // ---------- serial (localStorage) ----------
+  try{ state.serial=parseInt(localStorage.getItem("rakkan_serial")||"0",10)||0; }catch(e){}
+
+  // ---------- WebAudio ----------
+  let AC=null;
+  function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+  function now(){return AC?AC.currentTime:0;}
+  // sub-bass impact with missing fundamental + noise burst + wood click
+  function playStamp(){
+    const c=ac(); if(!c)return; const t=c.currentTime; const out=c.createGain(); out.gain.value=0.9; out.connect(c.destination);
+    // sub-bass 55Hz + harmonics (missing fundamental feel)
+    [55,110,165,220].forEach((f,i)=>{
+      const o=c.createOscillator();o.type="sine";o.frequency.value=f;
+      const g=c.createGain();const amp=[0.9,0.5,0.3,0.18][i];
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(amp,t+0.006);
+      g.gain.exponentialRampToValueAtTime(0.0008,t+0.34);
+      o.connect(g);g.connect(out);o.start(t);o.stop(t+0.4);
+    });
+    // pitch-drop thud
+    const o2=c.createOscillator();o2.type="sine";const g2=c.createGain();
+    o2.frequency.setValueAtTime(180,t);o2.frequency.exponentialRampToValueAtTime(48,t+0.12);
+    g2.gain.setValueAtTime(0.6,t);g2.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+    o2.connect(g2);g2.connect(out);o2.start(t);o2.stop(t+0.18);
+    // paper-strike noise burst (hi-passed)
+    const n=c.createBufferSource();const len=Math.floor(c.sampleRate*0.05);
+    const buf=c.createBuffer(1,len,c.sampleRate);const d=buf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);
+    n.buffer=buf;const hp=c.createBiquadFilter();hp.type="highpass";hp.frequency.value=1400;
+    const ng=c.createGain();ng.gain.setValueAtTime(0.5,t);ng.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+    n.connect(hp);hp.connect(ng);ng.connect(out);n.start(t);n.stop(t+0.06);
+    // wood click head
+    const o3=c.createOscillator();o3.type="triangle";o3.frequency.value=1500;
+    const g3=c.createGain();g3.gain.setValueAtTime(0.25,t);g3.gain.exponentialRampToValueAtTime(0.001,t+0.012);
+    o3.connect(g3);g3.connect(out);o3.start(t);o3.stop(t+0.014);
+  }
+  function playCharge(p){ // p 0..1 click tick
+    const c=ac(); if(!c)return; const t=c.currentTime;
+    const o=c.createOscillator();o.type="square";o.frequency.value=600+p*700;
+    const g=c.createGain();g.gain.setValueAtTime(0.05,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.03);
+    o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.04);
+  }
+  function playReveal(){ // gold chime on certificate finish
+    const c=ac(); if(!c)return; const t=c.currentTime;const out=c.createGain();out.gain.value=0.3;out.connect(c.destination);
+    [880,1320,1760,2640].forEach((f,i)=>{const o=c.createOscillator();o.type="sine";o.frequency.value=f;
+      const g=c.createGain();g.gain.setValueAtTime(0,t+i*0.05);g.gain.linearRampToValueAtTime(0.18,t+i*0.05+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,t+i*0.05+0.6);o.connect(g);g.connect(out);o.start(t+i*0.05);o.stop(t+i*0.05+0.65);});
+  }
+  function playReject(){
+    const c=ac(); if(!c)return;const t=c.currentTime;
+    const o=c.createOscillator();o.type="sawtooth";o.frequency.setValueAtTime(220,t);o.frequency.exponentialRampToValueAtTime(70,t+0.25);
+    const g=c.createGain();g.gain.setValueAtTime(0.25,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.28);
+    o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.3);
+  }
+  function vib(p){ if(navigator.vibrate){try{navigator.vibrate(p);}catch(e){}} }
+
+  // ---------- comment generator ----------
+  const PRE=[
+    "一切の機械的補完を排し、","アルゴリズムに一片も頼らず、","生成AIの影すら寄せ付けず、",
+    "プロンプトに魂を売らず、","自動化の誘惑を断ち、","学習データの匂いを一切残さず、"
+  ];
+  const MID={
+    "手料理":["湯気の向こうで幾度も味を確かめ、","焦げと戦い、手の火傷を厭わず、","レシピを超えた勘だけを頼りに、"],
+    "イラスト":["一本の線を幾度も引き直し、","震える手のブレごと味として残し、","下描きの迷いの跡を恐れず、"],
+    "手紙":["便箋に向かい言葉を選び直し、","インクの滲みも消さずに、","書き損じを丸めては、また綴り、"],
+    "演奏":["指の痛みを忘れて弾き込み、","小節の揺らぎを呼吸ごと刻み、","ミスタッチの余韻すら抱きしめ、"],
+    "DIY":["木屑にまみれ採寸を重ね、","歪みを手で削り合わせ、","図面なき試行錯誤の果てに、"],
+    "写真":["シャッターチャンスを足で稼ぎ、","構図に迷い何度も立ち位置を変え、","光を待ち続けた末に、"],
+    "その他":["名もなき手わざを尽くし、","誰にも頼らず一から立ち上げ、","不器用なまま手を動かし続け、"]
+  };
+  const SUF=[
+    "ここに人間の手わざを認む。","真贋を問う者なし、これぞ本物。","ゆえにその値打ちは計り知れぬ。",
+    "震える手の温もり、しかと刻まれたり。","この一作、二つとなき逸品である。","人の手の跡、永遠にここに在り。"
+  ];
+  function buildComment(){
+    const r=a=>a[Math.floor(Math.random()*a.length)];
+    let pre=r(PRE), mid=r(MID[state.genre]||MID["その他"]), suf=r(SUF);
+    let hourLine="";
+    if(state.hours>=20) hourLine="実に"+state.hours+"時間に及ぶ労苦、しかと見届けた。";
+    else if(state.hours>=8) hourLine=state.hours+"時間を惜しみなく注ぎ、";
+    else if(state.hours>=1) hourLine=state.hours+"時間の手わざを以て、";
+    else hourLine="一瞬の閃きを逃さず、";
+    return pre+hourLine+mid+suf;
+  }
+  function calcStars(){
+    let s=2+Math.round(state.care*0.4)+(state.hours>=8?1:0);
+    return Math.max(3,Math.min(5,s));
+  }
+
+  // ---------- seal rendering ----------
+  const SEAL_CHARS=["真","本","匠","誠","和","人","藝","拙"];
+  function makeSealCanvas(ch,size,scaleDPR){
+    const dpr=scaleDPR||1;
+    const cv=document.createElement("canvas");cv.width=size*dpr;cv.height=size*dpr;
+    const x=cv.getContext("2d");x.scale(dpr,dpr);
+    const shu="#D7263D";
+    // rounded square frame
+    x.fillStyle=shu;
+    roundRect(x,2,2,size-4,size-4,size*0.1);x.fill();
+    // carve interior (knockout) -> use destination-out for texture & inner field
+    x.globalCompositeOperation="destination-out";
+    roundRect(x,size*0.12,size*0.12,size*0.76,size*0.76,size*0.06);x.fill();
+    x.globalCompositeOperation="source-over";
+    // inner field fill (seal red) + characters knocked out (white = paper showing)
+    const fld=document.createElement("canvas");fld.width=size*dpr;fld.height=size*dpr;
+    const f=fld.getContext("2d");f.scale(dpr,dpr);
+    f.fillStyle=shu;roundRect(f,size*0.12,size*0.12,size*0.76,size*0.76,size*0.06);f.fill();
+    // characters: vertical "無AI" small at top? use central big char + small corners
+    f.globalCompositeOperation="destination-out";
+    f.textAlign="center";f.textBaseline="middle";
+    f.font="bold "+(size*0.42)+"px 'Hiragino Mincho ProN','Yu Mincho',serif";
+    f.fillText(ch,size*0.5,size*0.46);
+    f.font="bold "+(size*0.16)+"px 'Hiragino Mincho ProN',serif";
+    f.fillText("無",size*0.28,size*0.8);
+    f.fillText("為",size*0.5,size*0.8);
+    f.fillText("証",size*0.72,size*0.8);
+    f.globalCompositeOperation="source-over";
+    x.drawImage(fld,0,0,size,size);
+    // distress: erase random specks for かすれ
+    x.globalCompositeOperation="destination-out";
+    for(let i=0;i<size*1.6;i++){
+      const rx=Math.random()*size,ry=Math.random()*size,rr=Math.random()*1.6+0.2;
+      x.globalAlpha=Math.random()*0.5;x.beginPath();x.arc(rx,ry,rr,0,7);x.fill();
+    }
+    x.globalAlpha=1;x.globalCompositeOperation="source-over";
+    return cv;
+  }
+  function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+  // ---------- splatter particles ----------
+  const splat=$("#splat"),sx=splat.getContext("2d");
+  function sizeSplat(){const r=$("#certWrap").getBoundingClientRect();splat.width=r.width;splat.height=r.height;}
+  let parts=[],raf=null;
+  function burst(cx,cy){
+    parts=[];
+    const n=22;
+    for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=Math.random()*4+1.5;
+      parts.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,r:Math.random()*3+1.2,life:1,col:Math.random()<.5?"#D7263D":"#E8412E"});}
+    if(!raf)stepSplat();
+  }
+  function stepSplat(){
+    sx.clearRect(0,0,splat.width,splat.height);
+    let alive=false;
+    for(const p of parts){ if(p.life<=0)continue; alive=true;
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.22;p.vx*=0.97;p.life-=0.018;
+      sx.globalAlpha=Math.max(0,p.life);sx.fillStyle=p.col;
+      sx.beginPath();sx.arc(p.x,p.y,p.r*p.life,0,7);sx.fill();
+    }
+    sx.globalAlpha=1;
+    if(alive)raf=requestAnimationFrame(stepSplat); else {raf=null;sx.clearRect(0,0,splat.width,splat.height);}
+  }
+
+  // ---------- UI build ----------
+  const gc=$("#genreChips");
+  GENRES.forEach(g=>{const b=document.createElement("button");b.className="chip"+(g===state.genre?" on":"");b.textContent=g;
+    b.onclick=()=>{state.genre=g;[...gc.children].forEach(c=>c.classList.toggle("on",c===b));$("#cGenre").textContent=g;ac();};gc.appendChild(b);});
+  $("#cGenre").textContent=state.genre;
+
+  const carePick=$("#carePick");
+  for(let i=1;i<=5;i++){const s=document.createElement("span");s.textContent="★";s.dataset.v=i;
+    s.onclick=()=>{state.care=i;updCare();ac();};carePick.appendChild(s);}
+  function updCare(){[...carePick.children].forEach((c,i)=>c.classList.toggle("on",i<state.care));$("#careLab").textContent="★".repeat(state.care);}
+  updCare();
+
+  $("#hours").oninput=e=>{state.hours=+e.target.value;$("#hLab").textContent=state.hours+" 時間";};
+
+  // AI dependency locked at 0 — gag on attempt
+  const aiSlider=$("#ai"),gag=$("#gag");
+  function triggerGag(){
+    aiSlider.value=0;$("#aiLab").textContent="0 %";
+    gag.style.animation="none";void gag.offsetWidth;gag.style.animation="gagpop 1.3s ease forwards";
+    playReject();vib([0,30,40,30]);
+  }
+  aiSlider.addEventListener("input",triggerGag);
+  aiSlider.addEventListener("change",triggerGag);
+
+  // ---------- charge & stamp ----------
+  const stampBtn=$("#stampBtn"),ring=$("#chargeRing").querySelector("circle");
+  const DASH=301.6;
+  let charging=false,chargeStart=0,chargeRAF=null,lastTick=0;
+  const CHARGE_MS=620;
+  function startCharge(e){
+    if(state.stamped)return;
+    e.preventDefault();ac();
+    charging=true;chargeStart=performance.now();lastTick=0;
+    $("#hint").textContent="チャージ中…";
+    loopCharge();
+  }
+  function loopCharge(){
+    if(!charging)return;
+    let p=Math.min(1,(performance.now()-chargeStart)/CHARGE_MS);
+    ring.style.strokeDashoffset=DASH*(1-p);
+    stampBtn.style.transform="scale("+(1-p*0.06)+")";
+    stampBtn.style.boxShadow="0 0 "+(20+p*30)+"px rgba(215,38,61,"+(0.25+p*0.5)+")";
+    if(p-lastTick>0.12){lastTick=p;playCharge(p);vib(8);}
+    chargeRAF=requestAnimationFrame(loopCharge);
+  }
+  function endCharge(e){
+    if(!charging)return;e&&e.preventDefault();
+    charging=false;cancelAnimationFrame(chargeRAF);
+    let p=Math.min(1,(performance.now()-chargeStart)/CHARGE_MS);
+    ring.style.strokeDashoffset=DASH;stampBtn.style.transform="";stampBtn.style.boxShadow="";
+    if(p<0.35){$("#hint").textContent="もっと長く押して、しっかり捺せ";return;}
+    doStamp();
+  }
+  stampBtn.addEventListener("pointerdown",startCharge);
+  window.addEventListener("pointerup",endCharge);
+  stampBtn.addEventListener("pointercancel",endCharge);
+
+  function doStamp(){
+    state.stamped=true;
+    state.serial++;try{localStorage.setItem("rakkan_serial",state.serial);}catch(e){}
+    state.comment=buildComment();
+    state.stars=calcStars();
+    const ch=SEAL_CHARS[Math.floor(Math.random()*SEAL_CHARS.length)];
+    state.sealChar=ch;
+
+    // build seal element & slam
+    const slot=$("#sealSlot");const old=slot.querySelector(".seal");if(old)old.remove();
+    const seal=document.createElement("div");seal.className="seal";
+    const cv=makeSealCanvas(ch,92,2);seal.appendChild(cv);slot.appendChild(seal);
+    // slam animation via WAAPI
+    seal.animate([
+      {transform:"scale(2.4) rotate(-8deg)",opacity:0,offset:0},
+      {transform:"scale(2.4) rotate(-8deg)",opacity:0.0,offset:0.0001},
+      {transform:"scale(1.32) rotate(2deg)",opacity:1,offset:0.55},
+      {transform:"scale(0.94) rotate(-1deg)",opacity:1,offset:0.72},
+      {transform:"scale(1) rotate(0deg)",opacity:0.92,offset:1}
+    ],{duration:340,easing:"cubic-bezier(.2,1.3,.4,1)",fill:"forwards"});
+    // paper sink
+    const cert=$("#cert");
+    cert.animate([{transform:"translateY(0)"},{transform:"translateY(3px)",offset:0.5},{transform:"translateY(0)"}],{duration:220,easing:"ease-out"});
+
+    // effects timed to impact (~190ms)
+    setTimeout(()=>{
+      playStamp();vib([0,45,30,80]);
+      const slotR=slot.getBoundingClientRect(),wrapR=$("#certWrap").getBoundingClientRect();
+      burst(slotR.left-wrapR.left+slotR.width/2, slotR.top-wrapR.top+slotR.height/2);
+      const fl=$("#flash");fl.style.opacity="1";setTimeout(()=>fl.style.opacity="0",160);
+      // populate certificate text
+      $("#cComment").innerHTML=state.comment;
+      $("#cStars").textContent="★".repeat(state.stars)+"☆".repeat(5-state.stars);
+      $("#cPrem").textContent="AUTHENTICITY PREMIUM "+state.stars+"/5";
+      $("#cSerial").textContent="無AI認証 第 "+state.serial+" 号";
+      $("#cDate").textContent=fmtDate();
+      $("#sealGuide").style.display="none";
+      setTimeout(playReveal,140);
+    },185);
+
+    // swap buttons
+    $("#stampWrap").style.display="none";
+    $("#hint").style.display="none";
+    $("#resultBtns").style.display="flex";
+  }
+
+  function fmtDate(){const d=new Date();const w=["日","月","火","水","木","金","土"][d.getDay()];
+    return d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日 ("+w+")";}
+
+  // ---------- redo ----------
+  $("#redoBtn").onclick=()=>{
+    state.stamped=false;
+    const old=$("#sealSlot").querySelector(".seal");if(old)old.remove();
+    $("#sealGuide").style.display="";
+    $("#cComment").innerHTML="下の朱印を長押しで捺して、<br>あなたの「人間製」を認証せよ。";
+    $("#cStars").textContent="　";$("#cPrem").textContent="AUTHENTICITY PREMIUM";
+    $("#cSerial").textContent="第 — 号";$("#cDate").textContent="—";
+    $("#resultBtns").style.display="none";
+    $("#stampWrap").style.display="flex";$("#hint").style.display="";$("#hint").textContent="長押しでチャージ → 離して捺印";
+    ac();
+  };
+
+  // ---------- share card (1080x1920) ----------
+  function drawCard(){
+    const W=1080,H=1920;const cv=document.createElement("canvas");cv.width=W;cv.height=H;const x=cv.getContext("2d");
+    // bg
+    const bg=x.createRadialGradient(W/2,H*0.12,80,W/2,H*0.5,H*0.7);
+    bg.addColorStop(0,"#1c1c28");bg.addColorStop(1,"#0A0A0E");x.fillStyle=bg;x.fillRect(0,0,W,H);
+    // faint grid
+    x.strokeStyle="rgba(70,227,255,0.05)";x.lineWidth=2;
+    for(let i=0;i<W;i+=90){x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke();}
+    for(let j=0;j<H;j+=90){x.beginPath();x.moveTo(0,j);x.lineTo(W,j);x.stroke();}
+    // gold frame
+    const m=70;x.strokeStyle="#C9A961";x.lineWidth=5;rr(x,m,m,W-2*m,H-2*m,18);x.stroke();
+    x.strokeStyle="rgba(201,169,97,0.4)";x.lineWidth=2;rr(x,m+16,m+16,W-2*m-32,H-2*m-32,12);x.stroke();
+    x.textAlign="center";
+    // crest
+    x.fillStyle="#e9d49a";x.font="34px 'Hiragino Mincho ProN',serif";x.fillText("— 無 A I 認 証 —",W/2,210);
+    // title
+    const tg=x.createLinearGradient(0,250,0,360);tg.addColorStop(0,"#e9d49a");tg.addColorStop(.55,"#C9A961");tg.addColorStop(1,"#7c6428");
+    x.fillStyle=tg;x.font="bold 112px 'Hiragino Mincho ProN',serif";x.fillText("認　証　状",W/2,360);
+    x.fillStyle="#9aa0b4";x.font="30px sans-serif";x.fillText("CERTIFICATE OF HUMAN AUTHENTICITY",W/2,415);
+    // genre line
+    x.fillStyle="#e9e6dc";x.font="46px 'Hiragino Mincho ProN',serif";
+    x.fillText("本作 〈 "+state.genre+" 〉 は",W/2,520);
+    // comment (wrap)
+    x.fillStyle="#d8d3c4";x.font="40px 'Hiragino Mincho ProN',serif";
+    wrap(x,state.comment,W/2,620,W-300,62);
+    // stars
+    x.fillStyle="#e9d49a";x.font="64px serif";
+    x.fillText("★".repeat(state.stars)+"☆".repeat(5-state.stars),W/2,1130);
+    x.fillStyle="#9aa0b4";x.font="30px sans-serif";x.fillText("AUTHENTICITY PREMIUM "+state.stars+"/5",W/2,1180);
+    // seal (big) on lower-right
+    const seal=makeSealCanvas(state.sealChar||"真",300,2);
+    x.save();x.translate(W-300,H-560);x.rotate(-0.04);x.drawImage(seal,0,0,300,300);x.restore();
+    // serial + date
+    x.textAlign="left";x.fillStyle="#46E3FF";x.font="38px 'Hiragino Mincho ProN',serif";
+    x.fillText("無AI認証  第 "+state.serial+" 号",m+50,H-200);
+    x.textAlign="right";x.fillStyle="#9aa0b4";x.font="32px sans-serif";
+    x.fillText(fmtDate(),W-m-50,H-200);
+    // watermark
+    x.textAlign="center";x.fillStyle="rgba(201,169,97,0.55)";x.font="32px 'Hiragino Mincho ProN',serif";
+    x.fillText("落 款 ／ R A K K A N",W/2,H-110);
+    return cv;
+  }
+  function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+  function wrap(ctx,text,cx,y,maxW,lh){
+    // split by punctuation-aware chunks for Japanese
+    const chars=text.split("");let line="";let yy=y;const lines=[];
+    for(const ch of chars){const test=line+ch;if(ctx.measureText(test).width>maxW&&line){lines.push(line);line=ch;}else line=test;}
+    if(line)lines.push(line);
+    for(const l of lines){ctx.fillText(l,cx,yy);yy+=lh;}
+  }
+
+  $("#shareBtn").onclick=async()=>{
+    const cv=drawCard();
+    cv.toBlob(async(blob)=>{
+      if(!blob)return;
+      const file=new File([blob],"rakkan_"+state.serial+".png",{type:"image/png"});
+      const text="〈"+state.genre+"〉を100%人間が作った証、発行しました。 #落款 #Rakkan #無AI認証";
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file],text});return;}catch(e){}
+      }
+      // fallback: download
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=file.name;a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+      $("#hint").style.display="";$("#hint").textContent="画像を保存しました";
+    },"image/png");
+    vib(15);
+  };
+
+  // ---------- resize ----------
+  window.addEventListener("resize",sizeSplat);
+  setTimeout(sizeSplat,60);sizeSplat();
+  // unlock audio on first touch anywhere
+  window.addEventListener("pointerdown",()=>ac(),{once:true});
+})();
+</script>
+</body>
+</html>
