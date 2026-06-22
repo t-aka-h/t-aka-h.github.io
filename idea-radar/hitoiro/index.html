@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ひと色 — Hitoiro</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05060a;
+    font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    color:#eef1f8;touch-action:none;user-select:none;-webkit-user-select:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:26px;
+    pointer-events:none;}
+  .overlay.show{pointer-events:auto;}
+  .hidden{display:none!important;}
+  .title{font-size:54px;font-weight:900;letter-spacing:6px;
+    background:linear-gradient(90deg,#FF2D87,#00E5FF,#FBBF24,#A855F7);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 30px rgba(120,160,255,.25);}
+  .romaji{font-size:14px;letter-spacing:8px;color:#8a90ad;margin-top:2px;}
+  .lead{font-size:14px;line-height:1.9;color:#aeb4cc;margin-top:22px;max-width:340px;}
+  .lead b{color:#ffffff;font-weight:700;}
+  .btn{margin-top:30px;font-size:17px;font-weight:800;letter-spacing:3px;color:#06070c;
+    background:linear-gradient(90deg,#00E5FF,#A855F7);border:none;border-radius:40px;
+    padding:16px 40px;box-shadow:0 0 34px rgba(120,180,255,.5);cursor:pointer;}
+  .tip{font-size:12px;color:#6b7290;margin-top:18px;line-height:1.8;}
+  /* result card */
+  #cardWrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;background:rgba(4,5,9,.72);padding:18px;}
+  #card{width:auto;height:78%;max-height:78vh;border-radius:18px;
+    box-shadow:0 14px 60px rgba(0,0,0,.6);}
+  .cardBtns{display:flex;gap:12px;margin-top:16px;}
+  .cardBtns button{font-size:14px;font-weight:800;letter-spacing:2px;border:none;border-radius:30px;
+    padding:13px 22px;cursor:pointer;}
+  #shareBtn{background:linear-gradient(90deg,#FF2D87,#A855F7);color:#fff;box-shadow:0 0 22px rgba(255,80,160,.4);}
+  #againBtn{background:#1a2030;color:#cfd6ee;border:1px solid #2e3650;}
+  /* hud */
+  #hud{position:absolute;top:env(safe-area-inset-top);left:0;right:0;
+    padding:14px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;
+    pointer-events:none;font-variant-numeric:tabular-nums;}
+  .hudL{font-size:12px;letter-spacing:2px;color:#8089a6;}
+  .hudL b{display:block;font-size:24px;font-weight:900;color:#fff;letter-spacing:1px;margin-top:1px;}
+  .hudR{text-align:right;font-size:12px;letter-spacing:2px;color:#8089a6;}
+  .hudR b{display:block;font-size:24px;font-weight:900;color:#FBBF24;margin-top:1px;}
+  #flash{position:absolute;left:0;right:0;top:46%;text-align:center;font-weight:900;
+    font-size:40px;letter-spacing:3px;opacity:0;pointer-events:none;
+    text-shadow:0 0 24px rgba(255,255,255,.4);}
+  .credit{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#3c4258;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="hudL">CUE COLOR<b id="cueName">蒼</b></div>
+    <div class="hudR">COMBO<b id="combo">0</b></div>
+  </div>
+  <div id="flash"></div>
+
+  <!-- title -->
+  <div class="overlay show" id="titleScr">
+    <div class="title">ひと色</div>
+    <div class="romaji">H I T O I R O</div>
+    <div class="lead">国民的グループ、解散ラストライブ。<br>
+      ドームの<b>ペンライトの海</b>を指でなぞり、<br>
+      ビートのジャストで<b>色の波</b>を走らせ、<br>
+      客席を<b>ひと色</b>に染めあげろ。</div>
+    <button class="btn" id="startBtn">は じ め る</button>
+    <div class="tip">ビートに合わせて画面のどこかをタップ／なぞる<br>音をオンにすると気持ちいい 🎧</div>
+  </div>
+
+  <!-- result -->
+  <div id="cardWrap" class="hidden">
+    <canvas id="card"></canvas>
+    <div class="cardBtns">
+      <button id="shareBtn">結果をシェア</button>
+      <button id="againBtn">もう一度</button>
+    </div>
+  </div>
+
+  <div class="credit">Idea Radar · ひと色 — 完全オンデバイス / no server</div>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  layout();
+}
+window.addEventListener('resize',resize);
+
+// ---------- colors ----------
+const COLORS=[
+  {n:'蒼', rgb:[0,229,255]},
+  {n:'緋', rgb:[255,45,135]},
+  {n:'翠', rgb:[52,211,153]},
+  {n:'金', rgb:[251,191,36]},
+  {n:'紫', rgb:[168,85,247]},
+];
+const NEUTRAL=[120,128,150];
+
+// ---------- particles (penlight sea) ----------
+let P=[]; const N=520;
+let seaTop=0, seaBot=0;
+function layout(){
+  seaTop=H*0.34; seaBot=H*0.92;
+  // arrange in jittered grid filling lower area
+  const cols=Math.max(14,Math.round(Math.sqrt(N*(W/(seaBot-seaTop))))) ;
+  const rows=Math.ceil(N/cols);
+  P=[];
+  let idx=0;
+  for(let r=0;r<rows;r++){
+    for(let cc=0;cc<cols;cc++){
+      if(idx>=N) break;
+      const fx=(cc+0.5)/cols, fy=(r+0.5)/rows;
+      const jx=(Math.random()-0.5)/cols*0.9, jy=(Math.random()-0.5)/rows*0.7;
+      const x=(fx+jx)*W;
+      const y=seaTop+(fy+jy)*(seaBot-seaTop);
+      P.push({
+        x,y, hx:x, hy:y,
+        cr:NEUTRAL[0],cg:NEUTRAL[1],cb:NEUTRAL[2],
+        tr:NEUTRAL[0],tg:NEUTRAL[1],tb:NEUTRAL[2],
+        wStart:-1, pulse:0, ph:Math.random()*6.28,
+        sz:1.7+Math.random()*1.5, sink:0
+      });
+      idx++;
+    }
+  }
+}
+
+// ---------- audio ----------
+let AC=null, master=null, crowdGain=null, crowdLP=null;
+function initAudio(){
+  if(AC) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+    // crowd murmur: noise -> lowpass with LFO
+    const buf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    const src=AC.createBufferSource(); src.buffer=buf; src.loop=true;
+    crowdLP=AC.createBiquadFilter(); crowdLP.type='lowpass'; crowdLP.frequency.value=420; crowdLP.Q.value=0.6;
+    crowdGain=AC.createGain(); crowdGain.gain.value=0.0;
+    src.connect(crowdLP); crowdLP.connect(crowdGain); crowdGain.connect(master); src.start();
+    const lfo=AC.createOscillator(); lfo.frequency.value=0.25;
+    const lfoG=AC.createGain(); lfoG.gain.value=140;
+    lfo.connect(lfoG); lfoG.connect(crowdLP.frequency); lfo.start();
+  }catch(e){ AC=null; }
+}
+function now(){ return performance.now()/1000; } // game clock: monotonic, audio-independent
+function kick(){
+  if(!AC) return; const t=AC.currentTime;
+  // sub 55Hz + missing-fundamental layers
+  const subs=[[55,0.9],[110,0.30],[165,0.18],[220,0.12]];
+  subs.forEach(([f,g])=>{
+    const o=AC.createOscillator(), gg=AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(f*1.6,t); o.frequency.exponentialRampToValueAtTime(f,t+0.06);
+    gg.gain.setValueAtTime(g,t); gg.gain.exponentialRampToValueAtTime(0.0001,t+0.20);
+    o.connect(gg); gg.connect(master); o.start(t); o.stop(t+0.22);
+  });
+  // click
+  const nb=AC.createBuffer(1,AC.sampleRate*0.03,AC.sampleRate);
+  const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1)*(1-i/nd.length);
+  const ns=AC.createBufferSource(); ns.buffer=nb;
+  const ng=AC.createGain(); ng.gain.value=0.18; ns.connect(ng); ng.connect(master); ns.start(t);
+}
+function bell(combo){
+  if(!AC) return; const t=AC.currentTime;
+  const semi=Math.min(12, Math.floor(combo/2)); const base=523.25*Math.pow(2,semi/12);
+  [1,1.26,1.5].forEach((m,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='triangle'; o.frequency.value=base*m;
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.16/(i+1),t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.52);
+  });
+}
+function thud(){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(90,t); o.frequency.exponentialRampToValueAtTime(48,t+0.18);
+  g.gain.setValueAtTime(0.2,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.22);
+}
+function applause(dur){
+  if(!AC) return; const t0=AC.currentTime;
+  for(let i=0;i<26;i++){
+    const t=t0+Math.random()*dur;
+    const nb=AC.createBuffer(1,AC.sampleRate*0.05,AC.sampleRate);
+    const nd=nb.getChannelData(0); for(let j=0;j<nd.length;j++) nd[j]=(Math.random()*2-1)*(1-j/nd.length);
+    const ns=AC.createBufferSource(); ns.buffer=nb;
+    const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500+Math.random()*1800; bp.Q.value=0.8;
+    const g=AC.createGain(); g.gain.value=0.05+Math.random()*0.05;
+    ns.connect(bp); bp.connect(g); g.connect(master); ns.start(t);
+  }
+}
+function finaleBoom(){
+  if(!AC) return; const t=AC.currentTime;
+  [[41,1.0],[82,0.4],[123,0.2]].forEach(([f,g])=>{
+    const o=AC.createOscillator(), gg=AC.createGain();
+    o.type='sine'; o.frequency.value=f;
+    gg.gain.setValueAtTime(0.0001,t); gg.gain.exponentialRampToValueAtTime(g,t+0.04);
+    gg.gain.exponentialRampToValueAtTime(0.0001,t+1.4);
+    o.connect(gg); gg.connect(master); o.start(t); o.stop(t+1.5);
+  });
+}
+
+// ---------- game state ----------
+const BPM=128, BEAT=60/BPM, TOTAL=28; // beats
+let state='title'; // title, play, finale, result
+let startT=0, beats=[], cueIdx=0;
+let combo=0, maxCombo=0, perfects=0, goods=0, misses=0, applauseN=0;
+let bestColor=0, bestComboAt=0;
+let confetti=[], showers=[];
+const flashEl=document.getElementById('flash');
+const comboEl=document.getElementById('combo');
+const cueNameEl=document.getElementById('cueName');
+const hud=document.getElementById('hud');
+
+function startGame(){
+  initAudio();
+  if(AC && AC.state==='suspended') AC.resume();
+  document.getElementById('titleScr').classList.remove('show');
+  document.getElementById('titleScr').classList.add('hidden');
+  document.getElementById('cardWrap').classList.add('hidden');
+  hud.classList.remove('hidden');
+  if(crowdGain) crowdGain.gain.linearRampToValueAtTime(0.5, AC.currentTime+0.6);
+  combo=0;maxCombo=0;perfects=0;goods=0;misses=0;applauseN=0;bestColor=0;bestComboAt=0;
+  confetti=[];showers=[];
+  // reset sea to neutral
+  for(const p of P){p.cr=NEUTRAL[0];p.cg=NEUTRAL[1];p.cb=NEUTRAL[2];p.tr=NEUTRAL[0];p.tg=NEUTRAL[1];p.tb=NEUTRAL[2];p.wStart=-1;p.pulse=0;p.sink=0;}
+  beats=[];
+  startT=now()+1.2; // lead-in
+  for(let i=0;i<TOTAL;i++){
+    beats.push({t:startT+i*BEAT, ci:Math.floor(i/4)%COLORS.length, kicked:false, judged:false});
+  }
+  cueIdx=0;
+  state='play';
+}
+
+function flash(txt,color){
+  flashEl.textContent=txt; flashEl.style.color=color;
+  flashEl.style.opacity='1'; flashEl.style.transform='scale(1.15)';
+  flashEl.style.transition='none';
+  requestAnimationFrame(()=>{
+    flashEl.style.transition='opacity .5s, transform .5s';
+    flashEl.style.opacity='0'; flashEl.style.transform='scale(1)';
+  });
+}
+
+// trigger color wave from x,y to cue color
+function wave(x,y,ci,grade){
+  const col = grade==='miss'? NEUTRAL : COLORS[ci].rgb;
+  const speed= 1500; // px/s
+  const tnow=now();
+  for(const p of P){
+    const d=Math.abs(p.hx-x)+0.32*Math.abs(p.hy-y);
+    p.tr=col[0];p.tg=col[1];p.tb=col[2];
+    p.wStart=tnow+d/speed;
+    p.pulseQueued=p.wStart;
+  }
+  // confetti / shower on good waves
+  if(grade!=='miss'){
+    const c=COLORS[ci].rgb;
+    for(let i=0;i<14;i++){
+      confetti.push({x:x+(Math.random()-0.5)*W*0.5,y:seaTop-20-Math.random()*40,
+        vy:60+Math.random()*90,vx:(Math.random()-0.5)*40,
+        c:c,life:1,sz:3+Math.random()*4});
+    }
+  }
+}
+
+function pointerDown(e){
+  if(state!=='play'){return;}
+  const r=cv.getBoundingClientRect();
+  const px=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const py=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  const T=now();
+  // find nearest unjudged beat
+  let best=null,bd=1e9;
+  for(const b of beats){ if(b.judged) continue; const d=Math.abs(T-b.t); if(d<bd){bd=d;best=b;} }
+  if(!best){ thud(); return; }
+  const delta=Math.abs(T-best.t);
+  if(delta<=0.20){
+    best.judged=true;
+    let grade;
+    if(delta<=0.11){grade='just'; perfects++; combo++; applauseN+=3200; flash('PERFECT','#fff');}
+    else{grade='good'; goods++; combo++; applauseN+=1500; flash('GOOD','#9fe9ff');}
+    maxCombo=Math.max(maxCombo,combo);
+    if(combo>=bestComboAt){bestComboAt=combo; bestColor=best.ci;}
+    wave(px,py,best.ci,grade);
+    bell(combo);
+    if('vibrate' in navigator) navigator.vibrate(grade==='just'?10:6);
+    if(combo>0 && combo%5===0){ shower(); }
+  }else{
+    // miss tap (off-beat): dull wave, break combo
+    combo=0; misses++;
+    wave(px,py,0,'miss');
+    thud();
+    flash('…','#5a6080');
+  }
+  comboEl.textContent=combo;
+}
+function shower(){
+  const c=COLORS[bestColor%COLORS.length].rgb;
+  for(let i=0;i<22;i++){
+    showers.push({x:Math.random()*W,y:-10-Math.random()*60,vy:160+Math.random()*120,c:c,life:1,len:14+Math.random()*22});
+  }
+}
+cv.addEventListener('pointerdown',pointerDown,{passive:true});
+
+// ---------- loop ----------
+let last=performance.now();
+function frame(t){
+  const dt=Math.min(0.05,(t-last)/1000); last=t;
+  // bg
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#05060a'; ctx.fillRect(0,0,W,H);
+
+  const tnow=now();
+  let beatPulse=0, curCi=cueIdx;
+
+  if(state==='play'){
+    // play kicks on beat & detect missed beats
+    for(const b of beats){
+      if(!b.kicked && tnow>=b.t){ b.kicked=true; kick(); cueIdx=b.ci; }
+      if(!b.judged && tnow>b.t+0.2){ b.judged=true; if(combo>0){combo=0; comboEl.textContent=0;} misses++; }
+    }
+    // beat pulse for the stage ring
+    const sinceStart=tnow-startT;
+    const phase=((sinceStart%BEAT)+BEAT)%BEAT;
+    beatPulse=Math.max(0,1-phase/0.18);
+    curCi=cueIdx;
+    cueNameEl.textContent=COLORS[curCi].n;
+    cueNameEl.style.color='rgb('+COLORS[curCi].rgb.join(',')+')';
+    // end -> finale
+    if(tnow> beats[beats.length-1].t+0.6){ startFinale(); }
+  }
+
+  // ---- update + draw particles ----
+  ctx.globalCompositeOperation='lighter';
+  for(const p of P){
+    // color lerp once wave reaches
+    if(p.wStart>=0 && tnow>=p.wStart){
+      p.cr+=(p.tr-p.cr)*0.20; p.cg+=(p.tg-p.cg)*0.20; p.cb+=(p.tb-p.cb)*0.20;
+      if(p.pulseQueued && tnow>=p.pulseQueued){ p.pulse=1; p.pulseQueued=0; }
+    }
+    p.pulse*=0.90;
+    // sway
+    p.ph+=dt*1.4;
+    const sway=Math.sin(p.ph)*2.2;
+    let dx=p.hx+sway, dy=p.hy + Math.cos(p.ph*0.7)*1.6 + p.sink;
+    const br=0.55+0.45*Math.sin(p.ph*1.3) + p.pulse*0.9;
+    const sz=p.sz*(1+p.pulse*0.6)*(state==='finale'?(1-p.sink/ (H*0.5)*0.6):1);
+    const a=Math.max(0,Math.min(1,0.5+br*0.5))*(state==='finale'?p.fade:1);
+    const g=ctx.createRadialGradient(dx,dy,0,dx,dy,sz*4);
+    g.addColorStop(0,'rgba('+(p.cr|0)+','+(p.cg|0)+','+(p.cb|0)+','+(a)+')');
+    g.addColorStop(1,'rgba('+(p.cr|0)+','+(p.cg|0)+','+(p.cb|0)+',0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(dx,dy,sz*4,0,6.2832); ctx.fill();
+    // bright core
+    ctx.fillStyle='rgba('+Math.min(255,p.cr+70|0)+','+Math.min(255,p.cg+70|0)+','+Math.min(255,p.cb+70|0)+','+(a*0.9)+')';
+    ctx.beginPath(); ctx.arc(dx,dy,sz*0.9,0,6.2832); ctx.fill();
+  }
+
+  // confetti
+  ctx.globalCompositeOperation='lighter';
+  for(let i=confetti.length-1;i>=0;i--){
+    const f=confetti[i]; f.vy+=120*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.life-=dt*0.5;
+    if(f.life<=0||f.y>H){confetti.splice(i,1);continue;}
+    ctx.fillStyle='rgba('+f.c[0]+','+f.c[1]+','+f.c[2]+','+Math.max(0,f.life)+')';
+    ctx.fillRect(f.x,f.y,f.sz,f.sz*1.6);
+  }
+  for(let i=showers.length-1;i>=0;i--){
+    const s=showers[i]; s.y+=s.vy*dt; s.life-=dt*0.4;
+    if(s.life<=0||s.y>H){showers.splice(i,1);continue;}
+    ctx.strokeStyle='rgba('+s.c[0]+','+s.c[1]+','+s.c[2]+','+Math.max(0,s.life*0.7)+')';
+    ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x,s.y+s.len); ctx.stroke();
+  }
+
+  // ---- stage (top) ----
+  if(state==='play'){
+    ctx.globalCompositeOperation='source-over';
+    // stage glow strip
+    const sg=ctx.createLinearGradient(0,0,0,seaTop*0.9);
+    const cc=COLORS[curCi].rgb;
+    sg.addColorStop(0,'rgba('+cc[0]+','+cc[1]+','+cc[2]+',0.18)');
+    sg.addColorStop(1,'rgba(5,6,10,0)');
+    ctx.fillStyle=sg; ctx.fillRect(0,0,W,seaTop*0.9);
+    // beat ring
+    const cx=W/2, cy=seaTop*0.42, rad=26+beatPulse*16;
+    ctx.lineWidth=3; ctx.strokeStyle='rgba('+cc[0]+','+cc[1]+','+cc[2]+','+(0.4+beatPulse*0.6)+')';
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,6.2832); ctx.stroke();
+    ctx.fillStyle='rgba('+cc[0]+','+cc[1]+','+cc[2]+','+(0.25+beatPulse*0.5)+')';
+    ctx.beginPath(); ctx.arc(cx,cy,8,0,6.2832); ctx.fill();
+  }
+
+  if(state==='finale'){ updateFinale(dt,tnow); }
+
+  requestAnimationFrame(frame);
+}
+
+// ---------- finale ----------
+let finaleStart=0;
+function startFinale(){
+  state='finale'; finaleStart=now();
+  hud.classList.add('hidden');
+  for(const p of P){ p.fade=1; }
+  finaleBoom(); applause(2.6);
+  if(crowdGain) crowdGain.gain.linearRampToValueAtTime(0.9, AC.currentTime+0.4);
+  if('vibrate' in navigator) navigator.vibrate([0,40,40,120]);
+}
+function updateFinale(dt,tnow){
+  const e=tnow-finaleStart;
+  for(const p of P){
+    p.sink += dt* (60+ p.hy*0.04); // sink down (deep bow)
+    p.fade = Math.max(0, 1 - e/3.0);
+  }
+  // bow text
+  ctx.globalCompositeOperation='source-over';
+  const al=Math.max(0,Math.min(1,(e-0.3)/0.6))*Math.max(0,1-(e-2.4)/0.8);
+  if(al>0){
+    ctx.fillStyle='rgba(255,255,255,'+al+')';
+    ctx.font='900 30px -apple-system,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('ありがとう。',W/2,H*0.42);
+    ctx.font='600 14px -apple-system,sans-serif'; ctx.fillStyle='rgba(180,188,212,'+al+')';
+    ctx.fillText('— 最後の、深いお辞儀 —',W/2,H*0.42+30);
+  }
+  if(e>3.4){ showResult(); }
+}
+
+// ---------- result card ----------
+function showResult(){
+  if(state==='result') return;
+  state='result';
+  if(crowdGain) crowdGain.gain.linearRampToValueAtTime(0.0, AC.currentTime+1.2);
+  drawCard();
+  document.getElementById('cardWrap').classList.remove('hidden');
+}
+function drawCard(){
+  const card=document.getElementById('card');
+  const cw=1080, ch=1920; card.width=cw; card.height=ch;
+  const x=card.getContext('2d');
+  // bg
+  const bg=x.createLinearGradient(0,0,0,ch);
+  bg.addColorStop(0,'#070912'); bg.addColorStop(1,'#03040a');
+  x.fillStyle=bg; x.fillRect(0,0,cw,ch);
+  // penlight sea snapshot in best color
+  const col=COLORS[bestColor%COLORS.length].rgb;
+  x.globalCompositeOperation='lighter';
+  for(let i=0;i<460;i++){
+    const px=Math.random()*cw, py=ch*0.40+Math.random()*ch*0.50;
+    const sz=6+Math.random()*10;
+    const a=0.25+Math.random()*0.6;
+    const g=x.createRadialGradient(px,py,0,px,py,sz*3.4);
+    g.addColorStop(0,'rgba('+col[0]+','+col[1]+','+col[2]+','+a+')');
+    g.addColorStop(1,'rgba('+col[0]+','+col[1]+','+col[2]+',0)');
+    x.fillStyle=g; x.beginPath(); x.arc(px,py,sz*3.4,0,6.2832); x.fill();
+    x.fillStyle='rgba('+Math.min(255,col[0]+80)+','+Math.min(255,col[1]+80)+','+Math.min(255,col[2]+80)+','+(a)+')';
+    x.beginPath(); x.arc(px,py,sz*0.7,0,6.2832); x.fill();
+  }
+  x.globalCompositeOperation='source-over';
+  // top vignette for text
+  const tv=x.createLinearGradient(0,0,0,ch*0.5);
+  tv.addColorStop(0,'rgba(3,4,10,0.92)'); tv.addColorStop(1,'rgba(3,4,10,0)');
+  x.fillStyle=tv; x.fillRect(0,0,cw,ch*0.5);
+  // title
+  x.textAlign='center';
+  x.fillStyle='#8a90ad'; x.font='600 30px -apple-system,sans-serif';
+  x.fillText('H I T O I R O', cw/2, 150);
+  x.font='900 92px -apple-system,sans-serif';
+  const tg=x.createLinearGradient(cw*0.2,0,cw*0.8,0);
+  tg.addColorStop(0,'#FF2D87'); tg.addColorStop(0.5,'#00E5FF'); tg.addColorStop(1,'#FBBF24');
+  x.fillStyle=tg; x.fillText('ひと色', cw/2, 250);
+  // applause headline
+  x.fillStyle='#aeb4cc'; x.font='600 40px -apple-system,sans-serif';
+  x.fillText('浴びた拍手', cw/2, 430);
+  x.fillStyle='#fff'; x.font='900 150px -apple-system,sans-serif';
+  x.fillText(applauseN.toLocaleString()+' 人', cw/2, 590);
+  // stats row
+  const stats=[['PERFECT',perfects],['最大コンボ',maxCombo],['GOOD',goods]];
+  const by=ch-360, bw=cw/3;
+  stats.forEach((s,i)=>{
+    const cx=bw*i+bw/2;
+    x.fillStyle='#FBBF24'; x.font='900 70px -apple-system,sans-serif';
+    x.fillText(String(s[1]), cx, by+70);
+    x.fillStyle='#7e86a4'; x.font='600 28px -apple-system,sans-serif';
+    x.fillText(s[0], cx, by+120);
+  });
+  // rank line
+  const rate = perfects/Math.max(1,TOTAL);
+  let rank = rate>0.85?'SS 千秋楽の主役':rate>0.6?'S 一体感の指揮者':rate>0.35?'A ペンライトの海':'B はじめての客席';
+  x.fillStyle='#46E3FF'; x.font='800 44px -apple-system,sans-serif';
+  x.fillText(rank, cw/2, by-60);
+  // footer
+  x.fillStyle='#525a78'; x.font='600 26px -apple-system,sans-serif';
+  x.fillText('Idea Radar · t-aka-h.github.io/idea-radar', cw/2, ch-70);
+  x.fillStyle='#8a90ad'; x.font='600 30px -apple-system,sans-serif';
+  x.fillText('#ひと色 #Hitoiro', cw/2, ch-140);
+}
+
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  const card=document.getElementById('card');
+  card.toBlob(async(blob)=>{
+    const file=new File([blob],'hitoiro.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:'#ひと色 #Hitoiro — 浴びた拍手 '+applauseN.toLocaleString()+'人'}); }catch(e){}
+    }else{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hitoiro.png'; a.click();
+    }
+  },'image/png');
+});
+
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
