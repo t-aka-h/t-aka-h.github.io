@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07070d">
+<title>節 / Fushi — 抑揚をなぞる発音トイ</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:#07070d;overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;color:#e9edf6;}
+  #stage{position:fixed;inset:0;touch-action:none;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  .hud{position:absolute;left:0;right:0;top:0;padding:14px 18px;pointer-events:none;
+    display:flex;justify-content:space-between;align-items:flex-start;}
+  .logo{font-weight:900;font-size:18px;letter-spacing:2px;
+    background:linear-gradient(90deg,#00e5ff,#ff2d9a);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo small{display:block;font-size:9px;letter-spacing:3px;color:#5b6794;margin-top:1px;-webkit-text-fill-color:#5b6794;}
+  .acc{font-size:11px;color:#7e88ab;text-align:right;line-height:1.5;}
+
+  .phrase{position:absolute;left:0;right:0;top:62px;text-align:center;pointer-events:none;padding:0 16px;}
+  .phrase .en{font-size:23px;font-weight:800;letter-spacing:.5px;}
+  .phrase .ja{font-size:11px;color:#7e88ab;margin-top:3px;}
+
+  .center{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;pointer-events:none;padding:0 24px;}
+  .center .big{font-size:13px;color:#aeb6d4;letter-spacing:1px;}
+
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .btn{pointer-events:auto;border:none;cursor:pointer;border-radius:999px;
+    font-weight:800;font-size:15px;letter-spacing:1px;padding:15px 30px;color:#04060c;
+    background:linear-gradient(90deg,#00e5ff,#34f5c5);box-shadow:0 0 26px rgba(0,229,255,.45);}
+  .btn.ghost{background:transparent;color:#aeb6d4;box-shadow:none;border:1px solid #2a3350;font-size:13px;padding:11px 22px;}
+  .btn.mag{background:linear-gradient(90deg,#ff2d9a,#ffb547);box-shadow:0 0 26px rgba(255,45,154,.45);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  .hint{font-size:12px;color:#8a93b5;text-align:center;line-height:1.6;}
+
+  /* result */
+  #result{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(4,5,12,.72);backdrop-filter:blur(3px);text-align:center;padding:24px;z-index:5;}
+  #result.show{display:flex;}
+  #result .pct{font-size:74px;font-weight:900;line-height:1;
+    background:linear-gradient(90deg,#00e5ff,#34f5c5,#ff2d9a);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(52,245,197,.3);}
+  #result .ttl{font-size:22px;font-weight:900;margin-top:8px;color:#fff;}
+  #result .sub{font-size:12px;color:#9aa3c4;margin-top:6px;}
+  #share{margin:14px auto 4px;border-radius:14px;border:1px solid #232a40;max-width:200px;width:54vw;display:block;}
+  .fade{opacity:0;transition:opacity .35s;}
+  .fade.in{opacity:1;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+
+  <div class="hud">
+    <div class="logo">節 FUSHI<small>INTONATION TRACE</small></div>
+    <div class="acc" id="best">BEST<br><b style="color:#34f5c5;font-size:15px">—</b></div>
+  </div>
+
+  <div class="phrase">
+    <div class="en" id="pen">Are you KIDDING me?</div>
+    <div class="ja" id="pja">まさか／信じられない</div>
+  </div>
+
+  <div class="center fade in" id="cue">
+    <div class="big">線に指を置いて、抑揚をなぞる</div>
+  </div>
+
+  <div class="bottom" id="ctrl">
+    <div class="hint" id="hint">▶ ボタンを押すと、お手本の抑揚（節）が流れます。<br>そのネオンの線を指でなぞってください。</div>
+    <div class="row">
+      <button class="btn" id="go">なぞる ▶</button>
+      <button class="btn ghost" id="next">別のフレーズ ↻</button>
+    </div>
+  </div>
+
+  <div id="result">
+    <div class="pct" id="rpct">0%</div>
+    <div class="ttl" id="rttl">—</div>
+    <div class="sub" id="rsub"></div>
+    <canvas id="share" width="540" height="960"></canvas>
+    <div class="row" style="margin-top:6px">
+      <button class="btn mag" id="sh">結果をシェア</button>
+      <button class="btn" id="again">もう一度 ▶</button>
+    </div>
+    <button class="btn ghost" id="next2" style="margin-top:10px">別のフレーズ ↻</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ===================== お題（抑揚カーブ） =====================
+   pitch: 0(低) .. 1(高)。誇張気味の英語イントネーション。 */
+const PHRASES = [
+  { en:"Are you KIDDING me?", ja:"まさか／信じられない",
+    pts:[{l:"Are",t:0.00,p:0.34},{l:"you",t:0.16,p:0.40},{l:"KID-",t:0.42,p:0.96},{l:"ding",t:0.60,p:0.55},{l:"me?",t:0.92,p:0.74}] },
+  { en:"No WAY.", ja:"うそでしょ（強い否定）",
+    pts:[{l:"No",t:0.10,p:0.50},{l:"WAY",t:0.45,p:0.92},{l:".",t:0.95,p:0.18}] },
+  { en:"That's AMAZING!", ja:"すごい！（感嘆）",
+    pts:[{l:"That's",t:0.06,p:0.46},{l:"a-",t:0.34,p:0.58},{l:"MA-",t:0.52,p:0.97},{l:"zing!",t:0.82,p:0.55}] },
+  { en:"Really?", ja:"ほんと？（問い・語尾上げ）",
+    pts:[{l:"Re-",t:0.10,p:0.40},{l:"al-",t:0.45,p:0.50},{l:"ly?",t:0.88,p:0.92}] },
+  { en:"I can't BELIEVE it.", ja:"信じられない（落胆気味）",
+    pts:[{l:"I",t:0.00,p:0.42},{l:"can't",t:0.18,p:0.48},{l:"be-",t:0.40,p:0.62},{l:"LIEVE",t:0.62,p:0.95},{l:"it.",t:0.92,p:0.40}] },
+  { en:"Are you SERIOUS right now?", ja:"今マジで言ってる？",
+    pts:[{l:"Are you",t:0.04,p:0.40},{l:"SE-",t:0.30,p:0.93},{l:"rious",t:0.50,p:0.58},{l:"right",t:0.72,p:0.50},{l:"now?",t:0.94,p:0.78}] },
+  { en:"Oh COME on!", ja:"もう勘弁してよ！",
+    pts:[{l:"Oh",t:0.06,p:0.55},{l:"COME",t:0.40,p:0.95},{l:"on!",t:0.86,p:0.30}] },
+];
+
+/* ===================== Canvas / レイアウト ===================== */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1, marginL=0,marginR=0, ribTop=0,ribBot=0;
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  marginL = W*0.10; marginR = W*0.90;
+  ribTop = H*0.30; ribBot = H*0.74;          // 抑揚リボンの上下帯
+}
+window.addEventListener('resize', resize); resize();
+
+const xAt = t => marginL + (marginR-marginL)*t;
+const yAt = p => ribBot - (ribBot-ribTop)*p;   // p高い=上
+function contourP(t){                           // t->pitch (Catmull-Rom 風 線形補間)
+  const pts = cur.pts; if(t<=pts[0].t) return pts[0].p;
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1];
+    if(t<=b.t){ const u=(t-a.t)/(b.t-a.t||1); const s=u*u*(3-2*u); return a.p+(b.p-a.p)*s; }
+  }
+  return pts[pts.length-1].p;
+}
+const freqOf = p => 196 * Math.pow(2, p*1.17);   // G3〜A4 あたり
+
+/* ===================== WebAudio ===================== */
+let AC=null, master=null, drone=null;
+let tone=null, toneGain=null, lp=null, noise=null, noiseGain=null;
+function audioInit(){
+  if(AC) return;
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value=0.0; master.connect(AC.destination);
+  // 重低音ドローン（missing fundamental 風の土台）
+  drone = AC.createGain(); drone.gain.value=0.0; drone.connect(AC.destination);
+  [41,82].forEach((f,i)=>{ const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=AC.createGain(); g.gain.value=i?0.05:0.10; o.connect(g); g.connect(drone); o.start(); });
+}
+function voiceStart(){
+  lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; lp.Q.value=6;
+  tone = AC.createOscillator(); tone.type='triangle'; tone.frequency.value=240;
+  toneGain = AC.createGain(); toneGain.gain.value=0.0;
+  // 濁り用ノイズ
+  const buf = AC.createBuffer(1, AC.sampleRate*1.0, AC.sampleRate);
+  const d = buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  noise = AC.createBufferSource(); noise.buffer=buf; noise.loop=true;
+  noiseGain = AC.createGain(); noiseGain.gain.value=0.0;
+  const nlp = AC.createBiquadFilter(); nlp.type='bandpass'; nlp.frequency.value=1400; nlp.Q.value=0.7;
+  tone.connect(lp); lp.connect(toneGain); toneGain.connect(master);
+  noise.connect(nlp); nlp.connect(noiseGain); noiseGain.connect(master);
+  tone.start(); noise.start();
+  master.gain.setTargetAtTime(0.16, AC.currentTime, 0.05);
+  drone.gain.setTargetAtTime(0.9, AC.currentTime, 0.1);
+}
+function voiceStop(){
+  if(!AC) return;
+  master.gain.setTargetAtTime(0.0, AC.currentTime, 0.06);
+  drone.gain.setTargetAtTime(0.0, AC.currentTime, 0.2);
+  const t=AC.currentTime;
+  try{ tone.stop(t+0.3); noise.stop(t+0.3); }catch(e){}
+}
+function thud(p){ // 着地音
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(48,t+0.4);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.6);
+}
+function vibe(ms){ try{ navigator.vibrate&&navigator.vibrate(ms); }catch(e){} }
+
+/* ===================== ゲーム状態 ===================== */
+let idx=0, cur=PHRASES[0];
+let state='idle';                 // idle | play | result
+const DURATION=3.2;               // 1テイクの長さ(秒)
+let t0=0, prog=0;
+let fingerDown=false, fx=0, fy=0;
+let samples=[], trace=[];         // 一致率サンプル / 指の軌跡(画面座標)
+let particles=[];
+let bestScore = +(localStorage.getItem('fushi_best')||0);
+updateBest();
+function updateBest(){ document.getElementById('best').innerHTML='BEST<br><b style="color:#34f5c5;font-size:15px">'+(bestScore?bestScore+'%':'—')+'</b>'; }
+
+function loadPhrase(i){
+  idx=(i+PHRASES.length)%PHRASES.length; cur=PHRASES[idx];
+  document.getElementById('pen').textContent=cur.en;
+  document.getElementById('pja').textContent=cur.ja;
+}
+
+function start(){
+  audioInit(); if(AC.state==='suspended') AC.resume();
+  state='play'; t0=performance.now()/1000; prog=0; samples=[]; trace=[]; particles=[];
+  fingerDown=false;
+  document.getElementById('ctrl').style.display='none';
+  document.getElementById('cue').classList.remove('in');
+  document.getElementById('result').classList.remove('show');
+  voiceStart();
+}
+function finish(){
+  state='result'; voiceStop();
+  let avg=0; if(samples.length){ avg=samples.reduce((a,b)=>a+b,0)/samples.length; }
+  const pct=Math.round(avg*100);
+  const T = title(pct);
+  thud(avg); vibe(avg>0.9?[0,40,30,60]:30);
+  if(pct>bestScore){ bestScore=pct; localStorage.setItem('fushi_best',pct); updateBest(); }
+  const r=document.getElementById('result');
+  document.getElementById('rpct').textContent=pct+'%';
+  document.getElementById('rttl').textContent=(pct>=95?'🏆 ':'')+T;
+  document.getElementById('rsub').textContent='お題：'+cur.en;
+  drawShare(pct,T);
+  r.classList.add('show');
+}
+function title(p){
+  if(p>=95) return 'Native Curve';
+  if(p>=85) return 'なめらか抑揚';
+  if(p>=70) return 'いい線いってる';
+  if(p>=50) return '棒読み卒業';
+  return 'ザ・カタカナ';
+}
+
+/* ===================== 入力 ===================== */
+const stage=document.getElementById('stage');
+function setFinger(e){
+  const t = e.touches? e.touches[0] : e;
+  fx=t.clientX; fy=t.clientY; fingerDown=true;
+}
+stage.addEventListener('pointerdown', e=>{
+  if(state==='idle'){ start(); }
+  if(state==='play'){ setFinger(e); }
+}, {passive:false});
+stage.addEventListener('pointermove', e=>{ if(state==='play'&&fingerDown){ setFinger(e); e.preventDefault(); } }, {passive:false});
+stage.addEventListener('pointerup', ()=>{ fingerDown=false; });
+stage.addEventListener('pointercancel', ()=>{ fingerDown=false; });
+
+/* ボタン */
+document.getElementById('go').onclick   = ()=> start();
+document.getElementById('again').onclick= ()=> start();
+document.getElementById('next').onclick = ()=>{ loadPhrase(idx+1); };
+document.getElementById('next2').onclick= ()=>{ loadPhrase(idx+1); document.getElementById('result').classList.remove('show'); state='idle'; document.getElementById('ctrl').style.display='flex'; document.getElementById('cue').classList.add('in'); };
+document.getElementById('sh').onclick   = ()=> share();
+
+/* ===================== 描画ループ ===================== */
+function ribbonPath(){ // ターゲットリボンのパス点列
+  const arr=[]; for(let i=0;i<=64;i++){ const t=i/64; arr.push([xAt(t), yAt(contourP(t))]); } return arr;
+}
+function loop(){
+  requestAnimationFrame(loop);
+  ctx.clearRect(0,0,W,H);
+  // 背景の微粒子ドリフト
+  bgParticles();
+
+  const path=ribbonPath();
+  // ガイドリボン（淡い・太い・グラデ）
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const grad=ctx.createLinearGradient(marginL,0,marginR,0);
+  grad.addColorStop(0,'#0aa6c8'); grad.addColorStop(1,'#c0207a');
+  ctx.strokeStyle=grad; ctx.lineWidth=10; ctx.lineCap='round'; ctx.shadowBlur=18; ctx.shadowColor='#1bd3ff'; ctx.globalAlpha=0.35;
+  strokePts(path);
+  ctx.globalAlpha=1; ctx.lineWidth=3.2; ctx.shadowBlur=10;
+  strokePts(path);
+  ctx.restore();
+
+  // 音節ラベル
+  ctx.save(); ctx.globalCompositeOperation='source-over';
+  ctx.font='600 12px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#aab4d8';
+  cur.pts.forEach(pt=>{ ctx.fillText(pt.l, xAt(pt.t), yAt(pt.p)-16); });
+  ctx.restore();
+
+  let matchInstant=0;
+  if(state==='play'){
+    prog = (performance.now()/1000 - t0)/DURATION;
+    if(prog>=1){ prog=1; finish(); }
+    const px=xAt(prog), tgY=yAt(contourP(prog));
+    // 判定
+    if(fingerDown){
+      const err = Math.abs(fy - tgY) / (ribBot-ribTop);
+      matchInstant = Math.max(0, 1 - err/0.42);
+      samples.push(Math.min(1,matchInstant));
+      trace.push([px, fy]);
+      if(matchInstant>0.66) spawnParticles(px, tgY, matchInstant);
+    } else {
+      samples.push(0);
+    }
+    // オーディオ制御
+    if(AC&&tone){
+      const f=freqOf(contourP(prog));
+      tone.frequency.setTargetAtTime(f, AC.currentTime, 0.03);
+      lp.frequency.setTargetAtTime(400 + matchInstant*3200, AC.currentTime, 0.04);
+      tone.detune.setTargetAtTime((1-matchInstant)*Math.sin(prog*40)*50, AC.currentTime, 0.05);
+      toneGain.gain.setTargetAtTime(0.22, AC.currentTime, 0.05);
+      noiseGain.gain.setTargetAtTime((1-matchInstant)*0.05, AC.currentTime, 0.05);
+    }
+    // 指のトレース描画
+    drawTrace(trace);
+    // プレイヘッド
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(px,ribTop-40); ctx.lineTo(px,ribBot+40); ctx.stroke();
+    // ターゲットノブ
+    const glow = matchInstant>0.66?'#34f5c5':'#7ea6ff';
+    ctx.fillStyle=glow; ctx.shadowBlur=26; ctx.shadowColor=glow;
+    ctx.beginPath(); ctx.arc(px,tgY, 9+matchInstant*5, 0, 7); ctx.fill();
+    ctx.restore();
+    // 指ノブ
+    if(fingerDown){
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle='#ffffff'; ctx.shadowBlur=20; ctx.shadowColor='#fff';
+      ctx.beginPath(); ctx.arc(px,fy,7,0,7); ctx.fill(); ctx.restore();
+    }
+  } else if(state==='result'){
+    drawTrace(trace);
+  }
+  drawParticles();
+}
+function strokePts(p){ ctx.beginPath(); ctx.moveTo(p[0][0],p[0][1]); for(let i=1;i<p.length;i++) ctx.lineTo(p[i][0],p[i][1]); ctx.stroke(); }
+function drawTrace(tr){
+  if(tr.length<2) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.shadowBlur=12; ctx.shadowColor='#9fffe0'; ctx.globalAlpha=.9;
+  ctx.beginPath(); ctx.moveTo(tr[0][0],tr[0][1]); for(let i=1;i<tr.length;i++) ctx.lineTo(tr[i][0],tr[i][1]); ctx.stroke();
+  ctx.restore();
+}
+
+/* ===================== パーティクル ===================== */
+function spawnParticles(x,y,m){
+  for(let i=0;i<2;i++) particles.push({x:x+(Math.random()*16-8),y:y+(Math.random()*8-4),
+    vx:(Math.random()*.6-.3),vy:-(0.6+Math.random()*1.4),life:1,c:Math.random()<.5?'#34f5c5':'#7df7ff'});
+}
+function drawParticles(){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy*=0.99; p.life-=0.025;
+    if(p.life<=0){ particles.splice(i,1); continue; }
+    ctx.globalAlpha=p.life; ctx.fillStyle=p.c; ctx.shadowBlur=10; ctx.shadowColor=p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,2.2*p.life+0.6,0,7); ctx.fill();
+  }
+  ctx.restore();
+}
+let bg=[]; for(let i=0;i<26;i++) bg.push({x:Math.random(),y:Math.random(),s:Math.random()*1.4+0.3,sp:Math.random()*0.0006+0.0002});
+function bgParticles(){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(const b of bg){ b.y-=b.sp; if(b.y<0)b.y=1;
+    ctx.globalAlpha=0.12; ctx.fillStyle='#3b6cff'; ctx.beginPath(); ctx.arc(b.x*W,b.y*H,b.s,0,7); ctx.fill(); }
+  ctx.restore();
+}
+
+/* ===================== シェアカード(9:16) ===================== */
+const shareCv=document.getElementById('share'), sx=shareCv.getContext('2d');
+function drawShare(pct,T){
+  const w=540,h=960; sx.clearRect(0,0,w,h);
+  // 背景
+  const bgg=sx.createLinearGradient(0,0,0,h); bgg.addColorStop(0,'#0a0c16'); bgg.addColorStop(1,'#06060c');
+  sx.fillStyle=bgg; sx.fillRect(0,0,w,h);
+  // ロゴ
+  sx.textAlign='center';
+  sx.font='900 26px -apple-system,sans-serif';
+  const lg=sx.createLinearGradient(0,0,w,0); lg.addColorStop(0,'#00e5ff'); lg.addColorStop(1,'#ff2d9a');
+  sx.fillStyle=lg; sx.fillText('節  FUSHI', w/2, 70);
+  sx.font='600 12px -apple-system,sans-serif'; sx.fillStyle='#5b6794'; sx.fillText('INTONATION TRACE', w/2, 92);
+  // お題
+  sx.font='800 22px -apple-system,sans-serif'; sx.fillStyle='#eef1fb';
+  sx.fillText('“'+cur.en+'”', w/2, 150);
+  // リボン枠
+  const RL=70,RR=470,RT=300,RB=560;
+  const X=t=>RL+(RR-RL)*t, Y=p=>RB-(RB-RT)*p;
+  sx.save(); sx.globalCompositeOperation='lighter';
+  const gd=sx.createLinearGradient(RL,0,RR,0); gd.addColorStop(0,'#0aa6c8'); gd.addColorStop(1,'#c0207a');
+  sx.strokeStyle=gd; sx.lineWidth=8; sx.lineCap='round'; sx.shadowBlur=16; sx.shadowColor='#1bd3ff'; sx.globalAlpha=.9;
+  sx.beginPath(); for(let i=0;i<=64;i++){ const t=i/64,xx=X(t),yy=Y(contourP(t)); i?sx.lineTo(xx,yy):sx.moveTo(xx,yy);} sx.stroke();
+  // 自分の軌跡（画面座標→カード座標へスケール）
+  if(trace.length>1){
+    sx.strokeStyle='#fff'; sx.lineWidth=3; sx.shadowColor='#9fffe0'; sx.globalAlpha=.95;
+    sx.beginPath();
+    for(let i=0;i<trace.length;i++){
+      const t=(trace[i][0]-marginL)/(marginR-marginL);
+      const pp=(ribBot-trace[i][1])/(ribBot-ribTop);
+      const xx=X(Math.max(0,Math.min(1,t))), yy=Y(Math.max(-0.1,Math.min(1.1,pp)));
+      i?sx.lineTo(xx,yy):sx.moveTo(xx,yy);
+    }
+    sx.stroke();
+  }
+  sx.restore();
+  // スコア
+  sx.textAlign='center';
+  sx.font='900 110px -apple-system,sans-serif';
+  const sg=sx.createLinearGradient(0,0,w,0); sg.addColorStop(0,'#00e5ff'); sg.addColorStop(.5,'#34f5c5'); sg.addColorStop(1,'#ff2d9a');
+  sx.fillStyle=sg; sx.shadowBlur=30; sx.shadowColor='rgba(52,245,197,.5)';
+  sx.fillText(pct+'%', w/2, 720); sx.shadowBlur=0;
+  sx.font='700 13px -apple-system,sans-serif'; sx.fillStyle='#9aa3c4'; sx.fillText('抑揚一致率', w/2, 748);
+  sx.font='900 30px -apple-system,sans-serif'; sx.fillStyle='#fff';
+  sx.fillText((pct>=95?'🏆 ':'')+T, w/2, 800);
+  // フッター
+  sx.font='600 13px -apple-system,sans-serif'; sx.fillStyle='#5b6794';
+  sx.fillText('英語の抑揚をなぞる発音トイ', w/2, 890);
+  sx.fillStyle='#3f4663'; sx.font='600 11px -apple-system,sans-serif';
+  sx.fillText('Idea Radar · t-aka-h.github.io/idea-radar', w/2, 916);
+}
+async function share(){
+  shareCv.toBlob(async (blob)=>{
+    const file=new File([blob],'fushi.png',{type:'image/png'});
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'節 / Fushi', text:'英語の抑揚をなぞった結果 #節Fushi'});
+        return;
+      }
+    }catch(e){}
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='fushi.png'; a.click();
+  },'image/png');
+}
+
+loadPhrase(0);
+loop();
+</script>
+</body>
+</html>
