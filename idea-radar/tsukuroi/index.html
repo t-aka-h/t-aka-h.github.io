@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070A14">
+<title>繕い — Tsukuroi</title>
+<style>
+  :root{
+    --bg0:#070A14; --bg1:#0B1530; --indigo:#13294B; --indigo2:#1c3a66;
+    --thread:#F2F6FF; --neon:#3FA9FF; --gold:#E8C766; --sub:#9fb3d6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg0);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+    color:var(--thread);user-select:none;-webkit-user-select:none;touch-action:none;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:28px;z-index:10;
+    background:radial-gradient(120% 90% at 50% 38%, rgba(11,21,48,.62), rgba(7,10,20,.93));
+    backdrop-filter:blur(2px);}
+  .hidden{display:none!important;}
+  .logo{font-size:clamp(58px,20vw,108px);font-weight:800;letter-spacing:.18em;
+    color:var(--thread);text-shadow:0 0 18px rgba(63,169,255,.55),0 0 46px rgba(63,169,255,.28);}
+  .romaji{font-size:13px;letter-spacing:.62em;color:var(--neon);margin-top:4px;opacity:.9;padding-left:.62em;}
+  .tag{margin-top:22px;font-size:14px;line-height:1.9;color:var(--sub);max-width:300px;}
+  .cta{margin-top:34px;font-size:17px;font-weight:700;letter-spacing:.16em;color:var(--bg0);
+    background:linear-gradient(180deg,#fff,#cfe2ff);border:none;border-radius:40px;
+    padding:16px 40px;box-shadow:0 0 26px rgba(63,169,255,.5);cursor:pointer;animation:bob 2.2s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .hud{position:absolute;top:0;left:0;right:0;z-index:6;padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;
+    font-variant-numeric:tabular-nums;}
+  .hud .l,.hud .r{display:flex;flex-direction:column;gap:2px;}
+  .hud .r{align-items:flex-end;}
+  .k{font-size:10px;letter-spacing:.22em;color:var(--sub);}
+  .v{font-size:21px;font-weight:800;color:var(--thread);text-shadow:0 0 10px rgba(63,169,255,.4);}
+  .motif{font-size:13px;letter-spacing:.3em;color:var(--gold);}
+  .combo{position:absolute;left:50%;top:84px;transform:translateX(-50%);z-index:6;
+    font-size:15px;font-weight:800;letter-spacing:.14em;color:var(--neon);opacity:0;pointer-events:none;
+    text-shadow:0 0 12px rgba(63,169,255,.6);}
+  .hint{position:absolute;left:0;right:0;bottom:30px;z-index:6;text-align:center;
+    font-size:13px;letter-spacing:.16em;color:var(--sub);pointer-events:none;}
+  .judge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:7;
+    font-size:30px;font-weight:800;letter-spacing:.2em;opacity:0;pointer-events:none;}
+  .rTitle{font-size:clamp(30px,9vw,46px);font-weight:800;letter-spacing:.14em;
+    text-shadow:0 0 20px rgba(232,199,102,.4);}
+  .rMotif{margin-top:6px;font-size:16px;letter-spacing:.4em;color:var(--gold);}
+  .rAcc{margin-top:18px;font-size:64px;font-weight:800;line-height:1;color:var(--neon);
+    text-shadow:0 0 24px rgba(63,169,255,.5);font-variant-numeric:tabular-nums;}
+  .rAccK{font-size:12px;letter-spacing:.34em;color:var(--sub);margin-top:6px;}
+  .rPiece{margin-top:14px;font-size:14px;letter-spacing:.2em;color:var(--sub);}
+  .row{margin-top:26px;display:flex;gap:14px;}
+  .btn{font-size:15px;font-weight:700;letter-spacing:.12em;border-radius:34px;padding:14px 26px;cursor:pointer;border:1px solid rgba(159,179,214,.4);background:rgba(20,41,75,.6);color:var(--thread);}
+  .btn.primary{background:linear-gradient(180deg,#fff,#cfe2ff);color:var(--bg0);border:none;box-shadow:0 0 22px rgba(63,169,255,.45);}
+  .credit{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.18em;color:rgba(159,179,214,.5);z-index:11;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+
+  <div class="hud hidden" id="hud">
+    <div class="l"><span class="k">第</span><span class="v" id="pieceV">1</span><span class="motif" id="motifV">七宝</span></div>
+    <div class="r"><span class="k">PERFECT率</span><span class="v" id="accV">—</span></div>
+  </div>
+  <div class="combo" id="combo"></div>
+  <div class="judge" id="judge"></div>
+  <div class="hint hidden" id="hint">光が縫い穴に重なる刹那にタップ</div>
+
+  <div class="overlay" id="start">
+    <div class="logo">繕い</div>
+    <div class="romaji">TSUKUROI</div>
+    <div class="tag">破れた藍布を、刺し子の運針リズムで<br>ひと針ずつ縫い直す。<br>捨てずに、繕って使う。</div>
+    <button class="cta" id="startBtn">針を持つ</button>
+  </div>
+
+  <div class="overlay hidden" id="reveal">
+    <div class="rTitle">繕い完了</div>
+    <div class="rMotif" id="rMotif">七宝</div>
+    <div class="rAcc" id="rAcc">0%</div>
+    <div class="rAccK">PERFECT率</div>
+    <div class="rPiece" id="rPiece">第1枚 ・ 最長コンボ 0</div>
+    <div class="row">
+      <button class="btn primary" id="nextBtn">もう一枚</button>
+      <button class="btn" id="shareBtn">結果をシェア</button>
+    </div>
+  </div>
+
+  <div class="credit">Idea Radar ・ 繕い / Tsukuroi</div>
+</div>
+
+<script>
+"use strict";
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio (WebAudio, missing-fundamental bass) ---------- */
+let AC=null, master=null, droneGain=null, droneNodes=[];
+function initAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+}
+function resumeAudio(){ if(AC&&AC.state==='suspended') AC.resume(); }
+function tone(freq,t0,dur,type,peak,fEnd){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+  if(fEnd) o.frequency.exponentialRampToValueAtTime(Math.max(20,fEnd),t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(peak,t0+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.02);
+}
+function noise(t0,dur,peak,lp){
+  if(!AC) return;
+  const n=Math.floor(AC.sampleRate*dur), buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  const s=AC.createBufferSource(); s.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1200;
+  const g=AC.createGain(); g.gain.value=peak;
+  s.connect(f); f.connect(g); g.connect(master); s.start(t0);
+}
+// bass with implied low pitch via harmonics 2..5 of a 44Hz fundamental
+function bass(t0,dur,peak){
+  if(!AC) return;
+  [88,132,176,220].forEach((f,i)=>tone(f,t0,dur,'sine',peak*(1-i*0.18)));
+}
+function sfxPerfect(){
+  if(!AC) return; const t=AC.currentTime;
+  noise(t,0.05,0.5,2600); tone(900,t,0.05,'square',0.16,420); bass(t,0.18,0.12);
+  tone(1760,t+0.02,0.12,'sine',0.05);
+}
+function sfxGood(){ if(!AC) return; const t=AC.currentTime; noise(t,0.04,0.3,1500); tone(520,t,0.07,'sine',0.12,300); }
+function sfxMiss(){ if(!AC) return; const t=AC.currentTime; tone(150,t,0.16,'sine',0.16,80); }
+function sfxWhiff(){ if(!AC) return; const t=AC.currentTime; tone(210,t,0.08,'sine',0.07,150); }
+function sfxReveal(){
+  if(!AC) return; let t=AC.currentTime;
+  [0,1,2,3].forEach(i=>tone([440,587,740,880][i],t+i*0.07,0.5,'sine',0.12));
+  bass(t,1.0,0.16);
+}
+function startDrone(){
+  if(!AC) return; stopDrone();
+  droneGain=AC.createGain(); droneGain.gain.value=0; droneGain.connect(master);
+  droneGain.gain.linearRampToValueAtTime(0.07,AC.currentTime+0.8);
+  [88,132,176].forEach((f,i)=>{ const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine'; o.frequency.value=f; g.gain.value=(1-i*0.3)*0.5;
+    o.connect(g); g.connect(droneGain); o.start(); droneNodes.push(o); });
+}
+function stopDrone(){
+  if(droneGain){ try{droneGain.gain.linearRampToValueAtTime(0,AC.currentTime+0.4);}catch(e){} }
+  droneNodes.forEach(o=>{try{o.stop(AC.currentTime+0.5);}catch(e){}}); droneNodes=[];
+}
+function vibe(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+/* ---------- motif generation ---------- */
+// returns {name, strokes:[ [{x,y}...] ... ]} in normalized 0..1 panel coords
+const clamp01=v=>Math.max(0.05,Math.min(0.95,v));
+function genShippo(){ // overlapping circles (七宝)
+  const strokes=[], cen=[[0.30,0.30],[0.70,0.30],[0.30,0.70],[0.70,0.70],[0.50,0.50]], r=0.24, K=30;
+  cen.forEach(c=>{const pts=[];for(let k=0;k<=K;k++){const a=k/K*Math.PI*2;pts.push({x:c[0]+Math.cos(a)*r,y:c[1]+Math.sin(a)*r});}strokes.push(pts);});
+  return {name:'七宝', strokes};
+}
+function genSeigaiha(){ // fish-scale upper arcs (青海波)
+  const strokes=[], cols=3, rows=3, R=0.15, K=18;
+  const dx=0.84/cols, dy=0.27;
+  for(let ry=0;ry<rows;ry++){
+    const off=(ry%2)*dx/2;
+    for(let cx=0;cx<=cols;cx++){
+      const ox=0.08+cx*dx+off, oy=0.16+ry*dy, pts=[];
+      for(let k=0;k<=K;k++){const a=Math.PI+k/K*Math.PI; pts.push({x:clamp01(ox+Math.cos(a)*R),y:oy-Math.sin(a)*R});}
+      strokes.push(pts);
+    }
+  }
+  return {name:'青海波', strokes};
+}
+function genAsanoha(){ // diagonal sashiko lattice (麻の葉)
+  const strokes=[], N=4;
+  for(let k=0;k<N;k++){const o=(k/(N-1))*1.5-0.25; strokes.push([{x:clamp01(o-0.18),y:0.08},{x:clamp01(o+0.62),y:0.92}]);} // "\"
+  for(let k=0;k<N;k++){const o=(k/(N-1))*1.5-0.25; strokes.push([{x:clamp01(o+0.62),y:0.08},{x:clamp01(o-0.18),y:0.92}]);} // "/"
+  return {name:'麻の葉', strokes};
+}
+const MOTIFS=[genShippo, genSeigaiha, genAsanoha];
+
+/* ---------- panel geometry ---------- */
+let panel={x:0,y:0,s:0};
+function layoutPanel(){
+  const s=Math.min(W*0.84, H*0.50);
+  panel={x:(W-s)/2, y:H*0.30, s};
+}
+function P2(p){ return {x:panel.x+p.x*panel.s, y:panel.y+p.y*panel.s}; }
+
+/* ---------- build stitch path from motif ---------- */
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function resampleStroke(pts, seg){
+  // arc-length resample: points spaced ~seg px, including first & last
+  const out=[{x:pts[0].x,y:pts[0].y}];
+  let cur={x:pts[0].x,y:pts[0].y}, i=1, remain=seg;
+  while(i<pts.length){
+    const nx=pts[i], d=dist(cur,nx);
+    if(d<remain){ remain-=d; cur={x:nx.x,y:nx.y}; i++; }
+    else { const t=remain/d; cur={x:cur.x+(nx.x-cur.x)*t, y:cur.y+(nx.y-cur.y)*t}; out.push({x:cur.x,y:cur.y}); remain=seg; }
+  }
+  const last=pts[pts.length-1];
+  if(dist(out[out.length-1],last)>seg*0.35) out.push({x:last.x,y:last.y});
+  return out;
+}
+let game=null;
+const TARGET_TAPS=24;
+function buildPiece(pieceIdx){
+  layoutPanel();
+  const motif=MOTIFS[pieceIdx%MOTIFS.length]();
+  // total motif length (px) → seg sized so taps ≈ TARGET_TAPS
+  let L=0; const strokesPx=motif.strokes.map(s=>s.map(P2));
+  strokesPx.forEach(s=>{for(let i=1;i<s.length;i++)L+=dist(s[i-1],s[i]);});
+  let seg=L/TARGET_TAPS; seg=Math.max(panel.s*0.06,Math.min(panel.s*0.30,seg));
+  const anchors=[]; // {x,y,stroke,needsTap,carry,resolved,result,cum}
+  strokesPx.forEach((px,si)=>{
+    const rs=resampleStroke(px,seg);
+    rs.forEach((p,k)=>anchors.push({x:p.x,y:p.y,stroke:si,needsTap:k>0,carry:(k===0&&anchors.length>0),resolved:false,result:null}));
+  });
+  let cum=0; anchors[0].cum=0;
+  for(let i=1;i<anchors.length;i++){ cum+=dist(anchors[i-1],anchors[i]); anchors[i].cum=cum; }
+  const total=cum;
+  const tapCount=anchors.filter(a=>a.needsTap).length;
+  const stitchTime=Math.max(0.34, 0.56 - pieceIdx*0.03);
+  const speed=seg/stitchTime;
+  const perfWin=speed*Math.max(0.085,0.12-pieceIdx*0.004);
+  const goodWin=speed*Math.max(0.16,0.22-pieceIdx*0.006);
+  game={ motif:motif.name, anchors, total, tapCount, speed, perfWin, goodWin,
+    s:-speed*0.7, done:false, scoreSum:0, resolved:0,
+    combo:0, maxCombo:0, particles:[], started:performance.now(), pieceIdx };
+}
+
+/* ---------- particles ---------- */
+function spawn(x,y,col,n){
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=0.6+Math.random()*1.8;
+    game.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-0.6,life:1,col});}
+}
+
+/* ---------- tap handling ---------- */
+function onTap(){
+  resumeAudio();
+  if(!game||game.done) return;
+  const s=game.s;
+  // find nearest unresolved tap anchor within goodWin
+  let best=-1,bestErr=1e9;
+  for(let i=0;i<game.anchors.length;i++){
+    const a=game.anchors[i];
+    if(!a.needsTap||a.resolved) continue;
+    const err=Math.abs(a.cum-s);
+    if(err<=game.goodWin && err<bestErr){bestErr=err;best=i;}
+  }
+  if(best<0){ game.combo=0; sfxWhiff(); return; }
+  const a=game.anchors[best];
+  a.resolved=true; game.resolved++;
+  if(bestErr<=game.perfWin){ a.result='perfect'; game.scoreSum+=1; game.combo++; game.maxCombo=Math.max(game.maxCombo,game.combo);
+    sfxPerfect(); vibe(12); spawn(a.x,a.y,'#F2F6FF',8); flashJudge('PERFECT','#F2F6FF'); if(game.combo>=3) showCombo(game.combo); }
+  else { a.result='good'; game.scoreSum+=0.6; game.combo++; game.maxCombo=Math.max(game.maxCombo,game.combo);
+    sfxGood(); vibe(7); spawn(a.x,a.y,'#3FA9FF',4); flashJudge('GOOD','#3FA9FF'); }
+}
+
+/* ---------- judge / combo text ---------- */
+const judgeEl=document.getElementById('judge'), comboEl=document.getElementById('combo');
+let judgeT=0;
+function flashJudge(txt,col){ judgeEl.textContent=txt; judgeEl.style.color=col; judgeEl.style.textShadow='0 0 16px '+col; judgeT=performance.now(); }
+function showCombo(c){ comboEl.textContent=c+' COMBO'; comboEl.style.opacity='1'; comboEl.style.transform='translateX(-50%) scale(1.12)';
+  setTimeout(()=>{comboEl.style.transition='all .3s';comboEl.style.opacity='0';comboEl.style.transform='translateX(-50%) scale(1)';
+    setTimeout(()=>comboEl.style.transition='',300);},260); }
+
+/* ---------- drawing ---------- */
+function drawPatch(){
+  const {x,y,s}=panel;
+  // cloth
+  ctx.save();
+  const g=ctx.createLinearGradient(x,y,x,y+s);
+  g.addColorStop(0,'#16315c'); g.addColorStop(1,'#0f2247');
+  ctx.fillStyle=g;
+  roundRect(x-10,y-10,s+20,s+20,14); ctx.fill();
+  // subtle weave
+  ctx.globalAlpha=0.06; ctx.strokeStyle='#bcd2ff'; ctx.lineWidth=1;
+  for(let i=0;i<s;i+=6){ctx.beginPath();ctx.moveTo(x,y+i);ctx.lineTo(x+s,y+i);ctx.stroke();}
+  ctx.globalAlpha=1; ctx.restore();
+}
+function drawGuide(){
+  // faint indigo guide of whole motif
+  ctx.save(); ctx.strokeStyle='rgba(120,165,230,0.16)'; ctx.lineWidth=1.4; ctx.beginPath();
+  const A=game.anchors;
+  for(let i=1;i<A.length;i++){ if(A[i].stroke===A[i-1].stroke){ ctx.moveTo(A[i-1].x,A[i-1].y); ctx.lineTo(A[i].x,A[i].y);} }
+  ctx.stroke(); ctx.restore();
+}
+function stitchDash(a,b,col,w,glow){
+  const d=dist(a,b); if(d<1) return;
+  const dx=(b.x-a.x)/d, dy=(b.y-a.y)/d, gap=Math.min(4,d*0.22);
+  const ax=a.x+dx*gap, ay=a.y+dy*gap, bx=b.x-dx*gap, by=b.y-dy*gap;
+  ctx.save(); ctx.lineCap='round'; ctx.lineWidth=w; ctx.strokeStyle=col;
+  if(glow){ctx.shadowColor=col;ctx.shadowBlur=glow;}
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); ctx.restore();
+}
+function drawStitches(revealMix){
+  const A=game.anchors;
+  for(let i=1;i<A.length;i++){
+    const a=A[i];
+    if(!a.needsTap||A[i].stroke!==A[i-1].stroke) continue;
+    if(a.resolved && a.result){
+      const col=a.result==='perfect'?'#F4F8FF':'#cfe0ff';
+      const w=a.result==='perfect'?3.4:2.4;
+      const glow=a.result==='perfect'?(8+revealMix*10):3;
+      stitchDash(A[i-1],a,col,w,glow);
+      if(a.result==='perfect'){ // gold vertex dot
+        ctx.save(); ctx.fillStyle='rgba(232,199,102,'+(0.5+revealMix*0.5)+')';
+        ctx.shadowColor='#E8C766'; ctx.shadowBlur=6+revealMix*8;
+        ctx.beginPath(); ctx.arc(a.x,a.y,1.8+revealMix*1.4,0,7); ctx.fill(); ctx.restore();
+      }
+    }
+  }
+}
+function drawCursor(){
+  const s=game.s; if(s<0) return;
+  const p=posAt(s); if(!p) return;
+  // upcoming target ring (telegraph)
+  let nextA=null;
+  for(let i=0;i<game.anchors.length;i++){const a=game.anchors[i];if(a.needsTap&&!a.resolved&&a.cum>=s-1){nextA=a;break;}}
+  if(nextA){
+    const dToNext=Math.max(0,nextA.cum-s);
+    const r=6+Math.min(34,dToNext*0.6);
+    const close=1-Math.min(1,dToNext/(game.goodWin*2.2));
+    ctx.save(); ctx.strokeStyle='rgba(63,169,255,'+(0.25+close*0.6)+')'; ctx.lineWidth=2;
+    ctx.shadowColor='#3FA9FF'; ctx.shadowBlur=10*close;
+    ctx.beginPath(); ctx.arc(nextA.x,nextA.y,r,0,7); ctx.stroke();
+    ctx.fillStyle='rgba(63,169,255,'+(0.15+close*0.5)+')';
+    ctx.beginPath(); ctx.arc(nextA.x,nextA.y,3,0,7); ctx.fill(); ctx.restore();
+  }
+  // cursor (needle light)
+  ctx.save(); ctx.fillStyle='#fff'; ctx.shadowColor='#3FA9FF'; ctx.shadowBlur=16;
+  ctx.beginPath(); ctx.arc(p.x,p.y,4.2,0,7); ctx.fill(); ctx.restore();
+}
+function posAt(s){
+  const A=game.anchors;
+  if(s<=0) return A[0];
+  for(let i=1;i<A.length;i++){
+    if(s<=A[i].cum){
+      const seg=A[i].cum-A[i-1].cum, t=seg>0?(s-A[i-1].cum)/seg:0;
+      return {x:A[i-1].x+(A[i].x-A[i-1].x)*t, y:A[i-1].y+(A[i].y-A[i-1].y)*t};
+    }
+  }
+  return A[A.length-1];
+}
+function drawParticles(){
+  for(let i=game.particles.length-1;i>=0;i--){const p=game.particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.045;
+    if(p.life<=0){game.particles.splice(i,1);continue;}
+    ctx.save(); ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.col;
+    ctx.shadowColor=p.col; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(p.x,p.y,2,0,7); ctx.fill(); ctx.restore();
+  }
+}
+
+/* ---------- background ---------- */
+function drawBG(){
+  const g=ctx.createRadialGradient(W*0.5,H*0.34,40,W*0.5,H*0.4,Math.max(W,H)*0.8);
+  g.addColorStop(0,'#0B1530'); g.addColorStop(1,'#070A14');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+/* ---------- main loop ---------- */
+let mode='start'; // start | play | reveal
+let revealStart=0;
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  drawBG();
+  if(mode==='play'&&game){
+    // fast-glide across non-stitch "carry" segments
+    let mult=1; const A=game.anchors;
+    for(let i=1;i<A.length;i++){ if(game.s< A[i].cum){ mult=A[i].carry?3.6:1; break; } }
+    game.s+=game.speed*mult*dt;
+    // auto-miss anchors the cursor passed beyond goodWin
+    for(let i=0;i<game.anchors.length;i++){const a=game.anchors[i];
+      if(a.needsTap&&!a.resolved&&a.cum<game.s-game.goodWin){a.resolved=true;a.result='miss';game.resolved++;game.combo=0;sfxMiss();vibe([18,40,18]);}
+    }
+    drawPatch(); drawGuide(); drawStitches(0); drawCursor(); drawParticles();
+    updateHUD();
+    if(game.s>=game.total+game.speed*0.4){ enterReveal(); }
+    // fade judge text
+    if(judgeT){const e=(now-judgeT)/420; if(e>=1){judgeEl.style.opacity='0';judgeT=0;} else {judgeEl.style.opacity=String(1-e); judgeEl.style.transform='translate(-50%,'+(-50-e*16)+'%)';}}
+  } else if(mode==='reveal'&&game){
+    const mix=Math.min(1,(now-revealStart)/900);
+    drawPatch(); drawGuide(); drawStitches(mix); drawParticles();
+    if(mix<1 && Math.random()<0.3) {} // handled by reveal burst already
+  } else {
+    if(game){ drawPatch(); drawGuide(); drawStitches(1); }
+  }
+  requestAnimationFrame(loop);
+}
+function updateHUD(){
+  document.getElementById('pieceV').textContent=String(game.pieceIdx+1);
+  document.getElementById('motifV').textContent=game.motif;
+  const acc=game.resolved>0?Math.round(100*game.scoreSum/game.resolved):0;
+  document.getElementById('accV').textContent=(game.resolved>0?acc+'%':'—');
+}
+
+/* ---------- flow ---------- */
+const startEl=document.getElementById('start'), revealEl=document.getElementById('reveal'),
+      hudEl=document.getElementById('hud'), hintEl=document.getElementById('hint');
+let curPiece=0;
+function beginPlay(){
+  buildPiece(curPiece);
+  mode='play'; startEl.classList.add('hidden'); revealEl.classList.add('hidden');
+  hudEl.classList.remove('hidden'); hintEl.classList.remove('hidden');
+  startDrone();
+}
+function enterReveal(){
+  mode='reveal'; revealStart=performance.now();
+  stopDrone(); sfxReveal(); vibe([10,30,10,30,60]);
+  // burst from perfect vertices
+  game.anchors.forEach(a=>{ if(a.result==='perfect') spawn(a.x,a.y,'#E8C766',3); });
+  const acc=game.resolved>0?Math.round(100*game.scoreSum/game.resolved):0;
+  hintEl.classList.add('hidden');
+  setTimeout(()=>{
+    document.getElementById('rMotif').textContent=game.motif;
+    document.getElementById('rAcc').textContent=acc+'%';
+    document.getElementById('rPiece').textContent='第'+(game.pieceIdx+1)+'枚 ・ 最長コンボ '+game.maxCombo;
+    revealEl.classList.remove('hidden'); hudEl.classList.add('hidden');
+  },950);
+}
+document.getElementById('startBtn').addEventListener('click',()=>{ initAudio(); resumeAudio(); curPiece=0; beginPlay(); });
+document.getElementById('nextBtn').addEventListener('click',()=>{ curPiece++; beginPlay(); });
+document.getElementById('shareBtn').addEventListener('click',shareCard);
+
+// tap = stitch (only during play)
+function pointerStitch(e){ if(mode==='play'){ e.preventDefault(); onTap(); } }
+cv.addEventListener('pointerdown',pointerStitch,{passive:false});
+
+/* ---------- share card 1080x1920 ---------- */
+function shareCard(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(540,640,60,540,760,1400);
+  g.addColorStop(0,'#0B1530'); g.addColorStop(1,'#070A14'); x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // title
+  x.textAlign='center'; x.fillStyle='#F2F6FF';
+  x.font='800 120px -apple-system,sans-serif'; x.shadowColor='#3FA9FF'; x.shadowBlur=30;
+  x.fillText('繕い',540,250); x.shadowBlur=0;
+  x.fillStyle='#3FA9FF'; x.font='600 28px sans-serif';
+  x.fillText('T S U K U R O I',540,300);
+  // patch render: re-draw current motif stitches scaled into a square
+  const S=620, PX=(1080-S)/2, PY=420;
+  x.fillStyle='#14305c'; roundRectX(x,PX-16,PY-16,S+32,S+32,22); x.fill();
+  // map game anchors (panel coords) into this square
+  const sc=S/panel.s;
+  function mp(p){return {x:PX+(p.x-panel.x)*sc, y:PY+(p.y-panel.y)*sc};}
+  x.lineCap='round';
+  const A=game.anchors;
+  for(let i=1;i<A.length;i++){const a=A[i]; if(!a.needsTap||A[i].stroke!==A[i-1].stroke||!a.resolved||!a.result) continue;
+    const p1=mp(A[i-1]),p2=mp(a); const d=Math.hypot(p2.x-p1.x,p2.y-p1.y); if(d<2)continue;
+    const ux=(p2.x-p1.x)/d,uy=(p2.y-p1.y)/d,gp=d*0.22;
+    x.strokeStyle=a.result==='perfect'?'#F4F8FF':'#cfe0ff'; x.lineWidth=a.result==='perfect'?6:4.4;
+    x.shadowColor=a.result==='perfect'?'#9fc8ff':'transparent'; x.shadowBlur=a.result==='perfect'?14:0;
+    x.beginPath(); x.moveTo(p1.x+ux*gp,p1.y+uy*gp); x.lineTo(p2.x-ux*gp,p2.y-uy*gp); x.stroke();
+    if(a.result==='perfect'){x.shadowColor='#E8C766';x.shadowBlur=10;x.fillStyle='#E8C766';x.beginPath();x.arc(p2.x,p2.y,4,0,7);x.fill();}
+  }
+  x.shadowBlur=0;
+  const acc=game.resolved>0?Math.round(100*game.scoreSum/game.resolved):0;
+  x.fillStyle='#E8C766'; x.font='600 40px sans-serif';
+  x.fillText('繕い完了 ・ '+game.motif,540,PY+S+110);
+  x.fillStyle='#3FA9FF'; x.font='800 150px -apple-system,sans-serif'; x.shadowColor='#3FA9FF'; x.shadowBlur=24;
+  x.fillText(acc+'%',540,PY+S+280); x.shadowBlur=0;
+  x.fillStyle='#9fb3d6'; x.font='600 30px sans-serif';
+  x.fillText('PERFECT率 ・ 第'+(game.pieceIdx+1)+'枚 ・ 最長コンボ '+game.maxCombo,540,PY+S+340);
+  x.fillStyle='rgba(159,179,214,0.7)'; x.font='600 26px sans-serif';
+  x.fillText('Idea Radar  —  繕い / Tsukuroi',540,1860);
+
+  c.toBlob(async(blob)=>{
+    const file=new File([blob],'tsukuroi.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:'繕い完了 第'+(game.pieceIdx+1)+'枚 PERFECT率'+acc+'% #繕い #Tsukuroi'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tsukuroi_'+game.motif+'.png'; a.click();
+  },'image/png');
+}
+function roundRect(xx,yy,w,h,r){ctx.beginPath();ctx.moveTo(xx+r,yy);ctx.arcTo(xx+w,yy,xx+w,yy+h,r);ctx.arcTo(xx+w,yy+h,xx,yy+h,r);ctx.arcTo(xx,yy+h,xx,yy,r);ctx.arcTo(xx,yy,xx+w,yy,r);ctx.closePath();}
+function roundRectX(x,xx,yy,w,h,r){x.beginPath();x.moveTo(xx+r,yy);x.arcTo(xx+w,yy,xx+w,yy+h,r);x.arcTo(xx+w,yy+h,xx,yy+h,r);x.arcTo(xx,yy+h,xx,yy,r);x.arcTo(xx,yy,xx+w,yy,r);x.closePath();}
+
+window.addEventListener('resize',()=>{ if(game){ /* keep simple: rebuild layout coords on next piece */ } });
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
