@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06060C">
+<title>不動 — Fudō</title>
+<meta name="description" content="動かさないこと、それが唯一の入力。指を的に重ねて静止するほど神経が読み取られ自動発射する逆説プレシジョン体感ゲー。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#06060C;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#eaf6ff;}
+  #wrap{position:fixed;inset:0;touch-action:none;user-select:none;-webkit-user-select:none;}
+  #game{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none;}
+  .layer.on{pointer-events:auto;}
+  h1{font-size:clamp(58px,22vw,140px);font-weight:900;letter-spacing:.12em;line-height:.92;
+     background:linear-gradient(180deg,#bff4ff,#37c6ff 55%,#0f7bd6);-webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 0 26px rgba(55,198,255,.55));}
+  .romaji{font-size:13px;letter-spacing:.55em;color:#7fd6ff;margin:6px 0 2px;opacity:.85;}
+  .tag{font-size:15px;color:#9fb6c8;max-width:300px;line-height:1.7;margin-top:18px;}
+  .hint{font-size:13px;color:#6f8597;margin-top:8px;line-height:1.7;}
+  .btn{pointer-events:auto;margin-top:30px;padding:16px 40px;border-radius:40px;border:1px solid rgba(120,225,255,.55);
+       background:rgba(20,40,60,.35);color:#cdeeff;font-size:17px;font-weight:800;letter-spacing:.18em;
+       box-shadow:0 0 26px rgba(55,198,255,.35),inset 0 0 18px rgba(55,198,255,.12);backdrop-filter:blur(3px);cursor:pointer;}
+  .btn:active{transform:scale(.96);}
+  .btn.gold{border-color:rgba(255,210,110,.7);color:#ffe7ad;box-shadow:0 0 26px rgba(255,190,90,.4),inset 0 0 18px rgba(255,190,90,.14);}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:16px 18px;font-variant-numeric:tabular-nums;pointer-events:none;}
+  #hud .blk{display:flex;flex-direction:column;gap:2px;}
+  #hud .k{font-size:10px;letter-spacing:.28em;color:#5f7d92;}
+  #hud .v{font-size:24px;font-weight:900;color:#dff3ff;text-shadow:0 0 12px rgba(55,198,255,.5);}
+  #hud .mid{align-items:center;}
+  #lives{font-size:22px;letter-spacing:3px;}
+  #combo{font-size:13px;color:#ffd27a;font-weight:800;letter-spacing:.1em;min-height:16px;text-shadow:0 0 10px rgba(255,190,90,.6);}
+  #wavebanner{position:absolute;left:0;right:0;top:34%;text-align:center;font-size:34px;font-weight:900;letter-spacing:.2em;
+       color:#bff4ff;opacity:0;text-shadow:0 0 24px rgba(55,198,255,.7);pointer-events:none;}
+  .hide{display:none!important;}
+  /* result */
+  #resultLayer{background:radial-gradient(120% 80% at 50% 30%,rgba(10,22,40,.62),rgba(4,5,12,.92));}
+  #resultLayer{gap:16px;overflow:auto;}
+  #cardCanvas{flex:0 0 auto;height:min(56vh,480px);width:auto;aspect-ratio:9/16;border-radius:18px;box-shadow:0 12px 60px rgba(0,0,0,.6),0 0 30px rgba(55,198,255,.25);}
+  .row{display:flex;gap:12px;margin-top:0;flex-wrap:wrap;justify-content:center;}
+  #resultLayer .btn{margin-top:0;}
+  .credit{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:10px;color:#46586a;letter-spacing:.12em;pointer-events:none;}
+  .credit a{color:#5f87a8;text-decoration:none;}
+  @media(min-aspect-ratio:1/1){ h1{font-size:96px;} }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hide">
+    <div class="blk"><span class="k">SCORE</span><span class="v" id="score">0</span><span id="combo"></span></div>
+    <div class="blk mid"><span class="k">WAVE</span><span class="v" id="wave">1</span></div>
+    <div class="blk" style="align-items:flex-end"><span class="k">LIFE</span><span class="v" id="lives">●●●</span></div>
+  </div>
+
+  <div id="wavebanner"></div>
+
+  <div class="layer on" id="titleLayer">
+    <div class="romaji">F U D Ō &nbsp;·&nbsp; 不 動</div>
+    <h1>不動</h1>
+    <div class="tag">タップでも、スワイプでもない。<br><b style="color:#bff4ff">動かさないこと</b>が入力。</div>
+    <div class="hint">的に指を重ね、ぴたりと止める。<br>震えれば神経ロックは緩む。満ちれば自動発射。</div>
+    <button class="btn" id="startBtn">は じ め る</button>
+  </div>
+
+  <div class="layer hide" id="resultLayer">
+    <canvas id="cardCanvas" width="540" height="960"></canvas>
+    <div class="row">
+      <button class="btn gold" id="shareBtn">シェア / 保存</button>
+      <button class="btn" id="againBtn">も う 一 度</button>
+    </div>
+  </div>
+
+  <div class="credit">Idea Radar 🏆 2026-06-24 ・ Lens L16 身体・空間 ・ <a href="../">他の優勝作を見る</a></div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio (missing-fundamental bass + fire + miss) ---------- */
+let AC=null, lockGain=null, lockOscs=[], lockOn=false;
+function ensureAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; return; }
+  lockGain=AC.createGain(); lockGain.gain.value=0; lockGain.connect(AC.destination);
+  // harmonics of a 55Hz fundamental, omitting 55 itself -> ear infers the missing bass
+  [110,165,220,275,330].forEach((f,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=f; g.gain.value=1/(i+1.4);
+    o.connect(g); g.connect(lockGain); o.start();
+    lockOscs.push({o,base:f});
+  });
+}
+function setLockSound(progress,jitter){
+  if(!AC) return;
+  const t=AC.currentTime;
+  // tremolo pulse ("ji...ji...") faster as it fills; gain rises with progress
+  const pulse=0.55+0.45*Math.sin(t*(8+progress*22));
+  const g=Math.min(.4, progress*progress*0.5)*pulse*(1-Math.min(.6,jitter*2.2));
+  lockGain.gain.setTargetAtTime(g,t,0.03);
+  const mul=1+0.05*progress; // slight rise near full
+  lockOscs.forEach(x=>x.o.frequency.setTargetAtTime(x.base*mul,t,0.05));
+}
+function silenceLock(){ if(AC) lockGain.gain.setTargetAtTime(0,AC.currentTime,0.05); }
+function fireBoom(){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(55,t+0.4);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.6,t+0.012); g.gain.exponentialRampToValueAtTime(.0001,t+0.55);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.6);
+  // bright zap
+  const n=noiseBurst(0.09,2600,0.28); if(n) n();
+}
+function missSound(){
+  if(!AC) return; const t=AC.currentTime;
+  [70,104].forEach(f=>{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.6,t+0.35);
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.32,t+0.02); g.gain.exponentialRampToValueAtTime(.0001,t+0.4);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.45);
+  });
+}
+function noiseBurst(dur,cut,vol){
+  if(!AC) return null;
+  return function(){
+    const t=AC.currentTime, n=Math.floor(AC.sampleRate*dur);
+    const buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=AC.createBufferSource(); s.buffer=buf;
+    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=cut;
+    const g=AC.createGain(); g.gain.value=vol;
+    s.connect(f); f.connect(g); g.connect(AC.destination); s.start(t);
+  };
+}
+function vibe(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
+
+/* ---------- game state ---------- */
+const STATE={MENU:0,PLAY:1,OVER:2};
+let state=STATE.MENU;
+let score=0, wave=1, combo=0, lives=3, neural=0, maxStillMs=0;
+let targets=[], particles=[], flash=0, shake=0;
+let roundStart=0, roundLimit=0, locking=null;
+let ptr={down:false,x:0,y:0,vx:0,vy:0,lastT:0,lastMoveT:0,speed:0};
+let stillRun=0; // continuous still time on a valid target (for card)
+let bannerTxt='', bannerT=0;
+
+function waveParams(w){
+  return {
+    needLock: 720+Math.min(520, w*48),        // ms of stillness required
+    thresh: Math.max(0.085, 0.21 - w*0.012),  // allowed relative speed px/ms
+    radius: Math.max(34, 64 - w*3),
+    decoys: w<3?0:Math.min(4, w-2),
+    move: w<3?0:Math.min(85, (w-2)*22),        // target px/s
+    limit: Math.max(3.0, 6.2 - w*0.32)         // round time sec
+  };
+}
+
+function spawnRound(){
+  const p=waveParams(wave);
+  targets=[];
+  const m=80, R=p.radius;
+  function rndPos(){ return {x:m+R+Math.random()*(W-2*(m+R)), y:H*0.20+R+Math.random()*(H*0.56-2*R)}; }
+  // true target
+  const ang=Math.random()*Math.PI*2;
+  const t={true:true,r:R, ...rndPos(), vx:Math.cos(ang)*p.move/1000, vy:Math.sin(ang)*p.move/1000, lock:0, danger:0, dir:1};
+  targets.push(t);
+  // decoys
+  for(let i=0;i<p.decoys;i++){
+    const a=Math.random()*Math.PI*2;
+    let pos, tries=0;
+    do{ pos=rndPos(); tries++; }while(dist(pos,t)<R*2.4 && tries<20);
+    targets.push({true:false,r:R*0.96, ...pos, vx:Math.cos(a)*p.move/1000, vy:Math.sin(a)*p.move/1000, lock:0, danger:0});
+  }
+  roundStart=performance.now(); roundLimit=p.limit*1000; locking=null;
+}
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+function startGame(){
+  ensureAudio(); if(AC&&AC.state==='suspended') AC.resume();
+  score=0; wave=1; combo=0; lives=3; neural=0; maxStillMs=0; stillRun=0;
+  particles=[]; flash=0; shake=0;
+  document.getElementById('titleLayer').classList.remove('on'); document.getElementById('titleLayer').classList.add('hide');
+  document.getElementById('resultLayer').classList.remove('on'); document.getElementById('resultLayer').classList.add('hide');
+  document.getElementById('hud').classList.remove('hide');
+  state=STATE.PLAY; updHUD(); banner('WAVE 1'); spawnRound();
+}
+function banner(t){ bannerTxt=t; bannerT=performance.now(); }
+function updHUD(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('wave').textContent=wave;
+  document.getElementById('lives').textContent='●'.repeat(lives)+'<span style="opacity:.18">●</span>'.repeat(Math.max(0,3-lives));
+  document.getElementById('lives').innerHTML='<span style="color:#ff5e7a;text-shadow:0 0 10px rgba(255,80,110,.7)">'+'●'.repeat(lives)+'</span>'+'<span style="opacity:.16">'+'●'.repeat(Math.max(0,3-lives))+'</span>';
+  const c=document.getElementById('combo'); c.textContent = combo>=2 ? ('×'+combo+' COMBO') : '';
+}
+
+/* ---------- pointer ---------- */
+function pos(e){
+  const r=cv.getBoundingClientRect();
+  const p=(e.touches&&e.touches[0])||e;
+  return {x:p.clientX-r.left, y:p.clientY-r.top};
+}
+function onDown(e){
+  if(state===STATE.MENU||state===STATE.OVER) return;
+  e.preventDefault();
+  const p=pos(e); const now=performance.now();
+  ptr.down=true; ptr.x=p.x; ptr.y=p.y; ptr.vx=0; ptr.vy=0; ptr.speed=0; ptr.lastT=now; ptr.lastMoveT=now;
+}
+function onMove(e){
+  if(!ptr.down) return; e.preventDefault();
+  const p=pos(e); const now=performance.now(); const dt=Math.max(1,now-ptr.lastT);
+  const dx=p.x-ptr.x, dy=p.y-ptr.y;
+  ptr.vx=dx/dt; ptr.vy=dy/dt;
+  ptr.x=p.x; ptr.y=p.y; ptr.lastT=now; ptr.lastMoveT=now;
+}
+function onUp(e){ ptr.down=false; ptr.vx=0; ptr.vy=0; ptr.speed=0; if(locking){locking.lock=0;} silenceLock(); stillRun=0; }
+cv.addEventListener('touchstart',onDown,{passive:false});
+cv.addEventListener('touchmove',onMove,{passive:false});
+cv.addEventListener('touchend',onUp);  cv.addEventListener('touchcancel',onUp);
+cv.addEventListener('mousedown',onDown); window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
+
+/* ---------- core update ---------- */
+function hit(t){
+  const p=waveParams(wave);
+  const prec=Math.max(0,Math.min(1,1-(lastAvgJit/p.thresh)));
+  const add=Math.round(100*(1+combo*0.18)*(0.55+0.45*prec));
+  score+=add; neural+=Math.round(add*(0.6+0.6*prec)); combo++;
+  maxStillMs=Math.max(maxStillMs, t.lock);
+  // gold burst
+  for(let i=0;i<38;i++){ const a=Math.random()*Math.PI*2, s=1+Math.random()*4.4;
+    particles.push({x:t.x,y:t.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,col: Math.random()<.7?'255,210,110':'191,244,255',sz:1.5+Math.random()*2.6}); }
+  flash=0.9; fireBoom(); vibe([18]); silenceLock();
+  wave++; updHUD(); if(wave%1===0) banner('WAVE '+wave); spawnRound();
+}
+function loseLife(reason){
+  lives--; combo=0; missSound(); flash=0.5; shake=14; vibe([60,40,90]); silenceLock(); stillRun=0; updHUD();
+  if(lives<=0){ gameOver(); } else { banner(reason); spawnRound(); }
+}
+let lastAvgJit=0, jitAcc=0, jitN=0;
+
+function update(dt,now){
+  if(state!==STATE.PLAY) return;
+  // pointer speed decays if no recent move (still finger = no events = speed ~0)
+  if(now-ptr.lastMoveT>45){ ptr.vx*=0.6; ptr.vy*=0.6; }
+  const p=waveParams(wave);
+  // move targets
+  targets.forEach(t=>{
+    if(p.move>0){
+      t.x+=t.vx*dt; t.y+=t.vy*dt;
+      const m=70+t.r;
+      if(t.x<m||t.x>W-m){ t.vx*=-1; t.x=Math.max(m,Math.min(W-m,t.x)); }
+      if(t.y<H*0.16+t.r||t.y>H*0.80-t.r){ t.vy*=-1; t.y=Math.max(H*0.16+t.r,Math.min(H*0.80-t.r,t.y)); }
+    }
+  });
+  // round timer
+  if(now-roundStart>roundLimit){ loseLife('TIME UP'); return; }
+
+  if(ptr.down){
+    // which target is the finger inside?
+    let on=null;
+    for(const t of targets){ if(Math.hypot(ptr.x-t.x,ptr.y-t.y)<t.r){ on=t; break; } }
+    locking=on&&on.true?on:null;
+    targets.forEach(t=>{ if(t!==on){ t.lock*=0.84; t.danger*=0.8; } });
+    if(on){
+      // relative speed vs the target's own velocity (so following a moving target reads as 'still')
+      const relx=ptr.vx-(on.vx||0), rely=ptr.vy-(on.vy||0);
+      const rel=Math.hypot(relx,rely);
+      if(on.true){
+        if(rel<p.thresh){
+          on.lock+=dt; stillRun+=dt; jitAcc+=rel; jitN++;
+          maxStillMs=Math.max(maxStillMs,stillRun);
+          setLockSound(Math.min(1,on.lock/p.needLock), rel);
+          if(on.lock>=p.needLock){ lastAvgJit=jitN?jitAcc/jitN:0; jitAcc=0; jitN=0; hit(on); return; }
+        }else{
+          on.lock=Math.max(0,on.lock-dt*2.4); stillRun=0; silenceLock();
+        }
+      }else{
+        // dwelling still on a decoy fills its danger -> false fire
+        if(rel<p.thresh){ on.danger+=dt; if(on.danger>=p.needLock*0.62){ loseLife('DECOY!'); return; } }
+        else on.danger=Math.max(0,on.danger-dt*2);
+        silenceLock();
+      }
+    }else{ silenceLock(); stillRun=0; }
+  }else{
+    targets.forEach(t=>{ t.lock*=0.8; t.danger*=0.8; });
+  }
+  // particles
+  particles.forEach(pt=>{ pt.x+=pt.vx; pt.y+=pt.vy; pt.vx*=0.96; pt.vy*=0.96; pt.life-=dt/620; });
+  particles=particles.filter(pt=>pt.life>0);
+  flash*=0.9; if(flash<0.01) flash=0; shake*=0.86; if(shake<0.4) shake=0;
+}
+
+/* ---------- render ---------- */
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  // bg
+  const g=ctx.createRadialGradient(W/2,H*0.42,40,W/2,H*0.42,Math.max(W,H)*0.8);
+  g.addColorStop(0,'#0c1626'); g.addColorStop(.5,'#080a14'); g.addColorStop(1,'#05060c');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.save();
+  if(shake>0.4) ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+
+  if(state===STATE.PLAY||state===STATE.OVER){
+    const p=waveParams(wave);
+    // round-timer thin ring at bottom
+    if(state===STATE.PLAY){
+      const tl=Math.max(0,1-(now-roundStart)/roundLimit);
+      ctx.strokeStyle='rgba(120,200,255,'+(0.16+0.4*(1-tl))+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(W*0.5-W*0.34*tl,H-26); ctx.lineTo(W*0.5+W*0.34*tl,H-26); ctx.stroke();
+    }
+    // targets
+    targets.forEach(t=>{
+      const tru=t.true;
+      const prog=tru?Math.min(1,t.lock/p.needLock):0;
+      // jitter visual: outer ring wobble = current relative speed when finger is on this target
+      let jit=0;
+      if(ptr.down && Math.hypot(ptr.x-t.x,ptr.y-t.y)<t.r){
+        jit=Math.hypot(ptr.vx-(t.vx||0),ptr.vy-(t.vy||0));
+      }
+      const wob=Math.min(10,jit*40);
+      // base ring
+      ctx.lineWidth=3;
+      const col = tru ? lerpCol([90,180,255],[255,255,255],prog) : [255,80,110];
+      // glow
+      ctx.shadowBlur=18+30*prog; ctx.shadowColor='rgba('+col.join(',')+',0.8)';
+      ctx.strokeStyle='rgba('+col.join(',')+','+(tru?0.9:0.85)+')';
+      ringWobble(t.x,t.y,t.r,wob,now);
+      ctx.stroke();
+      ctx.shadowBlur=0;
+      // inner dot
+      ctx.fillStyle='rgba('+col.join(',')+',0.22)';
+      ctx.beginPath(); ctx.arc(t.x,t.y,t.r*0.34,0,7); ctx.fill();
+      // lock arc
+      if(tru && prog>0){
+        ctx.lineWidth=6; ctx.strokeStyle= prog>=1?'#ffe7ad':'rgba('+lerpCol([120,220,255],[255,225,150],prog).join(',')+',0.95)';
+        ctx.shadowBlur=16; ctx.shadowColor='rgba(255,220,150,.8)';
+        ctx.beginPath(); ctx.arc(t.x,t.y,t.r+11,-Math.PI/2,-Math.PI/2+prog*Math.PI*2); ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+      // decoy danger arc
+      if(!tru && t.danger>0){
+        const dp=Math.min(1,t.danger/(p.needLock*0.62));
+        ctx.lineWidth=6; ctx.strokeStyle='rgba(255,70,90,.95)'; ctx.shadowBlur=14; ctx.shadowColor='rgba(255,70,90,.8)';
+        ctx.beginPath(); ctx.arc(t.x,t.y,t.r+11,-Math.PI/2,-Math.PI/2+dp*Math.PI*2); ctx.stroke(); ctx.shadowBlur=0;
+      }
+      if(tru){ ctx.fillStyle='rgba(180,235,255,.45)'; ctx.font='600 11px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('HOLD',t.x,t.y+4); }
+    });
+    // finger marker
+    if(ptr.down){
+      ctx.fillStyle='rgba(255,255,255,.85)'; ctx.shadowBlur=12; ctx.shadowColor='#bff4ff';
+      ctx.beginPath(); ctx.arc(ptr.x,ptr.y,5,0,7); ctx.fill(); ctx.shadowBlur=0;
+    }
+  }
+  // particles
+  particles.forEach(pt=>{ ctx.globalAlpha=Math.max(0,pt.life); ctx.fillStyle='rgba('+pt.col+',1)';
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.sz*pt.life,0,7); ctx.fill(); });
+  ctx.globalAlpha=1;
+  ctx.restore();
+  // flash
+  if(flash>0){ ctx.fillStyle='rgba(255,225,150,'+(flash*0.5)+')'; ctx.fillRect(0,0,W,H); }
+  // banner
+  const bel=document.getElementById('wavebanner');
+  const bt=(now-bannerT)/1000;
+  if(bt<1.1 && bannerTxt){ bel.textContent=bannerTxt; bel.style.opacity=Math.max(0,1-Math.abs(bt-0.4)/0.7).toFixed(2); }
+  else bel.style.opacity=0;
+}
+function ringWobble(x,y,r,wob,now){
+  ctx.beginPath();
+  for(let a=0;a<=Math.PI*2+0.01;a+=Math.PI/22){
+    const rr=r+(wob? Math.sin(a*5+now/60)*wob*Math.random():0);
+    const px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr;
+    if(a===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+}
+function lerpCol(a,b,t){ return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t)); }
+
+/* ---------- loop ---------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(50,now-last); last=now;
+  update(dt,now); draw(now);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- result card ---------- */
+function titleFor(s){
+  if(s>=2600) return ['不動','FUDŌ','一切ブレなし。神域の静止。'];
+  if(s>=1400) return ['達人','MASTER','息を殺す指先。お見事。'];
+  if(s>=600)  return ['居合','IAI','静と動の間合いを掴んだ。'];
+  return ['凡','NOVICE','まだ指が、しゃべりすぎる。'];
+}
+function gameOver(){
+  state=STATE.OVER; silenceLock();
+  document.getElementById('hud').classList.add('hide');
+  drawCard();
+  const rl=document.getElementById('resultLayer'); rl.classList.remove('hide'); rl.classList.add('on');
+}
+function drawCard(){
+  const c=document.getElementById('cardCanvas'), x=c.getContext('2d'); const w=540,h=960;
+  const tt=titleFor(score);
+  const g=x.createLinearGradient(0,0,0,h); g.addColorStop(0,'#0b1730'); g.addColorStop(.55,'#0a1020'); g.addColorStop(1,'#05060d');
+  x.fillStyle=g; x.fillRect(0,0,w,h);
+  // glow
+  const rg=x.createRadialGradient(w/2,300,20,w/2,300,420); rg.addColorStop(0,'rgba(55,198,255,.30)'); rg.addColorStop(1,'rgba(55,198,255,0)');
+  x.fillStyle=rg; x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(120,225,255,.55)'; x.lineWidth=3; x.strokeRect(18,18,w-36,h-36);
+  x.textAlign='center';
+  x.fillStyle='#7fd6ff'; x.font='600 18px sans-serif'; x.textBack='';
+  x.fillText('F U D Ō   ·   不 動',w/2,86);
+  // big title (rank)
+  x.shadowBlur=30; x.shadowColor='rgba(255,210,120,.7)';
+  x.fillStyle='#ffe7ad'; x.font='900 150px serif'; x.fillText(tt[0],w/2,300);
+  x.shadowBlur=0;
+  x.fillStyle='#9fdcff'; x.font='700 22px sans-serif'; x.fillText(tt[1],w/2,345);
+  x.fillStyle='#c7d6e4'; x.font='400 18px sans-serif'; x.fillText(tt[2],w/2,392);
+  // neural score
+  x.fillStyle='#5f7d92'; x.font='600 15px sans-serif'; x.fillText('NEURAL SCORE',w/2,470);
+  x.shadowBlur=22; x.shadowColor='rgba(55,198,255,.7)';
+  x.fillStyle='#dff3ff'; x.font='900 96px sans-serif'; x.fillText(String(neural),w/2,560);
+  x.shadowBlur=0;
+  // stats
+  function stat(label,val,yy){ x.fillStyle='#5f7d92'; x.font='600 15px sans-serif'; x.textAlign='left'; x.fillText(label,70,yy);
+    x.fillStyle='#dff3ff'; x.font='800 26px sans-serif'; x.textAlign='right'; x.fillText(val,w-70,yy); x.textAlign='center'; }
+  stat('SCORE',String(score),650);
+  stat('REACHED WAVE','W'+wave,700);
+  stat('LONGEST STILL',(maxStillMs/1000).toFixed(2)+'s',750);
+  // footer
+  x.fillStyle='#46586a'; x.font='500 14px sans-serif';
+  x.fillText('動かさないこと、それが入力。',w/2,h-92);
+  x.fillStyle='#5f87a8'; x.font='700 16px sans-serif';
+  x.fillText('不動 — Idea Radar',w/2,h-58);
+  x.fillStyle='#3d4b5a'; x.font='400 12px sans-serif';
+  x.fillText('t-aka-h.github.io/idea-radar',w/2,h-34);
+}
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+  const c=document.getElementById('cardCanvas');
+  c.toBlob(async(blob)=>{
+    const file=new File([blob],'fudo.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],title:'不動 — Fudō',text:'NEURAL SCORE '+neural+' / 動かさないことが入力。#不動 #Fudo'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='fudo.png'; a.click();
+  },'image/png');
+});
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+})();
+</script>
+</body>
+</html>
