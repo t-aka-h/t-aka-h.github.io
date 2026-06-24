@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<title>利確 — Rikaku｜AIバブル・クラッチ</title>
+<meta name="description" content="乱高下するAI関連株。暴落の一瞬手前で利確を離せ。欲を抑える握力だけが利益を残す。">
+<style>
+  :root{
+    --bg:#05060a; --bg2:#0a0e1a;
+    --green:#39ff14; --red:#ff2d55; --gold:#ffd400; --cyan:#37e3ff;
+    --ink:#eaf2ff; --sub:#8a94ad;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Segoe UI",sans-serif;
+    color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  /* phone canvas frame 9:16 */
+  #stage{position:relative;width:100vw;height:100vh;max-width:calc(100vh * 9 / 16);
+    background:radial-gradient(120% 80% at 50% 0%,#0c1226 0%,var(--bg) 60%);
+    overflow:hidden;box-shadow:0 0 60px rgba(0,0,0,.6);}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* HUD */
+  #hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;}
+  .topbar{padding:env(safe-area-inset-top) 14px 0;padding-top:max(14px,env(safe-area-inset-top));}
+  .ticker{height:26px;overflow:hidden;position:relative;margin-top:6px;
+    border-top:1px solid rgba(55,227,255,.18);border-bottom:1px solid rgba(55,227,255,.18);}
+  .ticker .row{position:absolute;white-space:nowrap;will-change:transform;
+    font-size:12.5px;letter-spacing:.04em;color:var(--cyan);opacity:.92;top:5px;font-weight:600;}
+  .statline{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;}
+  .brand{font-weight:800;font-size:15px;letter-spacing:.22em;color:var(--ink);}
+  .brand small{display:block;font-size:9px;letter-spacing:.34em;color:var(--sub);font-weight:700;margin-top:2px;}
+  .profit{text-align:right;}
+  .profit .lab{font-size:9.5px;letter-spacing:.18em;color:var(--sub);font-weight:700;}
+  .profit .val{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;
+    text-shadow:0 0 18px rgba(57,255,20,.5);}
+  .profit .live{font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums;margin-top:3px;}
+  .profit .live b{color:var(--green);font-weight:800;}
+  .meta{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--sub);
+    font-weight:700;letter-spacing:.06em;}
+  .meta .combo b{color:var(--gold);}
+  /* bottom button */
+  .btnzone{margin-top:auto;display:flex;flex-direction:column;align-items:center;
+    padding-bottom:max(26px,env(safe-area-inset-bottom));}
+  #hold{pointer-events:auto;width:150px;height:150px;border-radius:50%;position:relative;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    background:radial-gradient(circle at 50% 38%,#15203c,#0a1124);
+    border:2px solid rgba(57,255,20,.35);box-shadow:0 0 30px rgba(57,255,20,.12),inset 0 0 24px rgba(0,0,0,.6);
+    transition:transform .06s;}
+  #hold:active{transform:scale(.97);}
+  #hold .ringcv{position:absolute;inset:-6px;}
+  #hold .lab{font-size:26px;font-weight:900;letter-spacing:.08em;color:var(--green);
+    text-shadow:0 0 16px rgba(57,255,20,.6);}
+  #hold .sub{position:absolute;bottom:30px;font-size:9.5px;letter-spacing:.18em;color:var(--sub);font-weight:700;}
+  .hint{font-size:11px;color:var(--sub);margin-top:14px;letter-spacing:.05em;text-align:center;line-height:1.5;}
+  /* flash verdict */
+  #verdict{position:absolute;left:0;right:0;top:42%;transform:translateY(-50%);text-align:center;
+    pointer-events:none;opacity:0;}
+  #verdict .big{font-size:46px;font-weight:900;letter-spacing:.04em;}
+  #verdict .small{font-size:14px;font-weight:700;margin-top:4px;letter-spacing:.08em;}
+  /* overlays */
+  .scrim{position:absolute;inset:0;background:rgba(4,6,12,.86);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:auto;z-index:5;}
+  .scrim.hidden{display:none;}
+  .title-logo{font-size:62px;font-weight:900;letter-spacing:.16em;
+    background:linear-gradient(180deg,#fff,#9fe8ff);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(55,227,255,.3);}
+  .title-en{font-size:13px;letter-spacing:.5em;color:var(--cyan);font-weight:800;margin-top:2px;}
+  .title-tag{font-size:13.5px;color:var(--sub);margin-top:18px;line-height:1.7;max-width:300px;font-weight:600;}
+  .cta{margin-top:30px;pointer-events:auto;padding:16px 46px;border-radius:40px;font-size:18px;font-weight:900;
+    letter-spacing:.12em;color:#04210a;background:linear-gradient(180deg,#5dff3a,#26d40a);border:none;cursor:pointer;
+    box-shadow:0 0 34px rgba(57,255,20,.45);}
+  .cta:active{transform:scale(.97);}
+  .mini{font-size:11px;color:var(--sub);margin-top:18px;line-height:1.7;letter-spacing:.04em;}
+  .mini b{color:var(--ink);}
+  /* result card */
+  #cardWrap{display:flex;flex-direction:column;align-items:center;}
+  #card{width:min(78vw,300px);aspect-ratio:9/16;border-radius:18px;box-shadow:0 12px 50px rgba(0,0,0,.6);}
+  .resbtns{display:flex;gap:12px;margin-top:18px;}
+  .resbtns button{padding:13px 22px;border-radius:30px;font-size:14px;font-weight:800;letter-spacing:.06em;
+    border:none;cursor:pointer;}
+  .b-share{background:linear-gradient(180deg,#5dff3a,#26d40a);color:#04210a;box-shadow:0 0 22px rgba(57,255,20,.4);}
+  .b-again{background:#16203a;color:var(--ink);border:1px solid rgba(255,255,255,.14);}
+  .resbtns button:active{transform:scale(.96);}
+  .credit{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:9px;color:#39435e;letter-spacing:.08em;}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="game"></canvas>
+  <canvas id="fx"></canvas>
+
+  <div id="hud">
+    <div class="topbar">
+      <div class="ticker"><div class="row" id="tickerRow">　</div></div>
+      <div class="statline">
+        <div class="brand">利確<small>RIKAKU</small></div>
+        <div class="profit">
+          <div class="lab">確定益 PROFIT</div>
+          <div class="val" id="profitVal">¥0</div>
+          <div class="live">含み益 <b id="liveVal">¥0</b></div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class=" life" id="lifeBox">★★★</div>
+        <div class="combo">COMBO <b id="comboBox">x1</b></div>
+        <div class="stock" id="stockBox">銘柄 1</div>
+      </div>
+    </div>
+
+    <div id="verdict"><div class="big" id="vBig">JUST</div><div class="small" id="vSmall"></div></div>
+
+    <div class="btnzone">
+      <div id="hold">
+        <canvas class="ringcv" id="ring" width="162" height="162"></canvas>
+        <div class="lab">利確</div>
+        <div class="sub">HOLD</div>
+      </div>
+      <div class="hint">急騰の<b style="color:#fff">天井ギリギリ</b>で指を離す<br>音が高く・速くなったら頂点が近い</div>
+    </div>
+  </div>
+
+  <!-- TITLE -->
+  <div class="scrim" id="titleScrim">
+    <div class="title-logo">利確</div>
+    <div class="title-en">R I K A K U</div>
+    <div class="title-tag">AIバブルのチャートが煽りで吹き上がる。<br>暴落の一瞬手前で「利確」を離せ。<br>欲を抑える握力だけが、利益を残す。</div>
+    <button class="cta" id="startBtn">▶ 始める</button>
+    <div class="mini">長押しでチャージ → <b>天井直前で離す</b> = JUST RIKAKU<br>早すぎ＝伸び不足／遅すぎ＝暴落で吐き出し</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="scrim hidden" id="resultScrim">
+    <div id="cardWrap">
+      <canvas id="card" width="540" height="960"></canvas>
+      <div class="resbtns">
+        <button class="b-share" id="shareBtn">シェア</button>
+        <button class="b-again" id="againBtn">もう一度</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="credit">Idea Radar 🏆 2026-06-25 ／ ワイルドカード: 日経69,174円・AI関連株 高値波乱</div>
+</div></div>
+
+<script>
+"use strict";
+/* ====================== 利確 / Rikaku ======================
+   単一HTML・外部依存ゼロ。Canvas + WebAudio + vibrate のみ。
+   天井は「予兆（揺らぎ・音程・縁の赤み）」に厳密連動 → 読めば勝てる。
+*/
+const stage = document.getElementById('stage');
+const gcv = document.getElementById('game'), gx = gcv.getContext('2d');
+const fcv = document.getElementById('fx'),   fx = fcv.getContext('2d');
+const ringcv = document.getElementById('ring'), rx = ringcv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  W=r.width; H=r.height;
+  for(const c of [gcv,fcv]){ c.width=W*DPR; c.height=H*DPR; }
+  gx.setTransform(DPR,0,0,DPR,0,0);
+  fx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- WebAudio (synth, no files) ---------- */
+let AC=null, master=null, drone=null, droneGain=null, droneFilt=null;
+function audioInit(){
+  if(AC) return;
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  // continuous tension drone: triangle through lowpass; pitch tracks "ceiling proximity"
+  drone = AC.createOscillator(); drone.type='triangle';
+  droneFilt = AC.createBiquadFilter(); droneFilt.type='lowpass'; droneFilt.frequency.value=520;
+  droneGain = AC.createGain(); droneGain.gain.value=0.0;
+  drone.frequency.value=55;
+  drone.connect(droneFilt); droneFilt.connect(droneGain); droneGain.connect(master);
+  drone.start();
+}
+function resumeAudio(){ if(AC && AC.state==='suspended') AC.resume(); }
+// missing-fundamental sub: stack 2F..5F of 55Hz so phone speakers imply the bass
+function subThud(freq=55,dur=0.5,vol=0.9){
+  if(!AC) return; const t=AC.currentTime; const g=AC.createGain();
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0008,t+dur); g.connect(master);
+  [2,3,4,5].forEach((h,i)=>{ const o=AC.createOscillator(); o.type='sine';
+    o.frequency.value=freq*h; const gg=AC.createGain(); gg.gain.value=[0.9,0.55,0.32,0.2][i];
+    o.connect(gg); gg.connect(g); o.start(t); o.stop(t+dur+0.05); });
+}
+function blip(freq,dur=0.09,type='square',vol=0.25){
+  if(!AC) return; const t=AC.currentTime; const o=AC.createOscillator(); o.type=type;
+  o.frequency.value=freq; const g=AC.createGain();
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02);
+}
+function sparkle(){ if(!AC) return; [1320,1760,2640].forEach((f,i)=>setTimeout(()=>blip(f,0.12,'triangle',0.18),i*45)); }
+function crashNoise(dur=0.6){
+  if(!AC) return; const t=AC.currentTime; const n=Math.floor(AC.sampleRate*dur);
+  const buf=AC.createBuffer(1,n,AC.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.6); }
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(2400,t); f.frequency.exponentialRampToValueAtTime(180,t+dur);
+  const g=AC.createGain(); g.gain.value=0.5; g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t);
+  // down sweep tone
+  const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(420,t); o.frequency.exponentialRampToValueAtTime(70,t+dur);
+  const og=AC.createGain(); og.gain.value=0.3; og.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(og); og.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+function vib(p){ if(navigator.vibrate) navigator.vibrate(p); }
+
+/* ---------- game state ---------- */
+const ST = { TITLE:0, RISING:1, RESULT:2 };
+let state = ST.TITLE;
+let pts=[];               // chart points (price history, normalized 0..1 visual)
+let price=0, base=0;      // current price value, entry base
+let stockIndex=0;
+let profit=0;             // confirmed profit (yen)
+let live=0;               // current unrealized (yen)
+let combo=0, maxCombo=0, lives=3, startLives=3;
+let justCount=0, tradeCount=0;
+let charging=false, charge=0;     // 0..1 hold charge
+let ceilingProx=0;        // 0..1 how close to the top (drives ALL cues)
+let phase='approach';     // approach -> peak window -> crashed
+let tphase=0, peakAt=0, crashed=false, crashT=0;
+let noiseAmp=0, lastPrice=0;
+let edge=0;               // red edge intensity
+let scrollY=0;            // bg grid scroll
+let runMaxProfit=0;
+let curTopBonus=0;
+
+const HEADLINES = [
+  "速報：AI、ついに『次の特異点』へ突入か",
+  "アナリスト『人類最後の決算が来る』",
+  "新型モデル発表で関連株が一斉ストップ高",
+  "『今買わなきゃ一生後悔』とSNSが過熱",
+  "半導体に世界マネーが殺到、青天井相場",
+  "『これは2000年のバブルとは違う』専門家",
+  "AIデータセンター需要、想定の10倍に上方修正",
+  "個人投資家『#億り人』トレンド1位",
+  "海外勢が日本のAI株を爆買い、円も急騰",
+  "『乗り遅れるな』——FOMOが市場を支配",
+];
+let tickerX=0, tickerText='', tickerW=0;
+function pushHeadline(){
+  tickerText = HEADLINES[(Math.random()*HEADLINES.length)|0];
+  const el=document.getElementById('tickerRow'); el.textContent='◤ '+tickerText+' ◢　　';
+  tickerX = W; tickerW = el.getBoundingClientRect().width;
+}
+
+/* yen formatting */
+const yen = v => '¥'+Math.round(v).toLocaleString('ja-JP');
+
+/* ---------- start a new stock pump ---------- */
+function newStock(){
+  stockIndex++;
+  pts=[]; const n=Math.floor(W/4);
+  for(let i=0;i<n;i++) pts.push(0.18 + Math.random()*0.02);
+  price=0.2; base=0.2; lastPrice=price;
+  phase='approach'; tphase=0; crashed=false; charge=0; charging=false;
+  ceilingProx=0; noiseAmp=0; edge=0;
+  // peak window: appears after a randomized rise; harder (later/steeper) as you go
+  peakAt = 1.0 + Math.random()*0.9;        // total rise height target
+  const speedUp = Math.min(0.9, (stockIndex-1)*0.07);
+  riseSpeed = 0.16 + 0.05*Math.random() + speedUp*0.18;
+  curTopBonus = 0;
+  document.getElementById('stockBox').textContent = '銘柄 '+stockIndex;
+  pushHeadline();
+}
+let riseSpeed=0.2;
+
+/* ---------- core update ---------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(state===ST.RISING) update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  scrollY = (scrollY + dt*22) % 44;
+  tphase += dt;
+
+  // price dynamics
+  if(!crashed){
+    // rising trend toward peakAt; the closer to peak, the more violent the wobble (the tell)
+    const target = peakAt;
+    const remain = Math.max(0, target - (price-base));
+    ceilingProx = 1 - Math.min(1, remain / Math.max(0.35,peakAt*0.55));
+    ceilingProx = Math.max(0, Math.min(1, ceilingProx));
+    // base climb
+    let climb = riseSpeed * dt * (0.5 + (1-ceilingProx)*0.9);
+    // wobble grows with proximity = readable predictor
+    noiseAmp = 0.004 + ceilingProx*ceilingProx*0.05;
+    const wob = (Math.random()*2-1)*noiseAmp;
+    price += climb + wob;
+    // chance to top out & crash, strictly tied to proximity (so cues never lie)
+    const topChance = Math.pow(ceilingProx, 4) * 0.9; // per-second
+    if(ceilingProx>0.55 && Math.random() < topChance*dt*60/60){
+      // weighted: only really fires when prox high
+      if(Math.random() < ceilingProx*0.9){ triggerCrash(); }
+    }
+    // hard cap
+    if(price-base > peakAt+0.05){ triggerCrash(); }
+  } else {
+    crashT += dt;
+    price -= riseSpeed*dt*2.4*(0.6+Math.random()*0.5);
+    if(price < base-0.05) price = base-0.05;
+  }
+  lastPrice = price;
+
+  // unrealized profit scales with gain over entry
+  const gain = price - base;
+  live = Math.max(0, gain) * 100000 * (1 + (stockIndex-1)*0.06);
+  document.getElementById('liveVal').textContent = yen(live);
+  // tension audio
+  edge = ceilingProx;
+  if(droneGain){
+    droneGain.gain.value = 0.05 + ceilingProx*0.16;
+    drone.frequency.value = 55 + ceilingProx*ceilingProx*210; // pitch climbs near top
+    droneFilt.frequency.value = 420 + ceilingProx*1600;
+  }
+
+  // push chart point
+  pts.push(0.12 + Math.min(0.82, (price-0)*0.62));
+  if(pts.length > Math.floor(W/4)) pts.shift();
+
+  // charge ring
+  if(charging){ charge=Math.min(1,charge+dt*2.2); }
+
+  // ticker scroll
+  tickerX -= dt* (90 + ceilingProx*120);
+  if(tickerX < -tickerW-20){ pushHeadline(); }
+  document.getElementById('tickerRow').style.transform='translateX('+tickerX+'px)';
+
+  // crashed too long without release => forced loss of this stock
+  if(crashed && crashT>1.0){ settleCrashTimeout(); }
+}
+
+function triggerCrash(){
+  if(crashed) return;
+  crashed=true; crashT=0;
+}
+
+/* player releases the hold button => realize */
+function release(){
+  if(state!==ST.RISING) return;
+  if(!charging) return;
+  charging=false;
+  const charged = charge; charge=0;
+  tradeCount++;
+  const gain = price - base;
+
+  if(crashed){
+    // sold after the top => spat out the gains
+    const got = Math.max(0, gain)*100000*(1+(stockIndex-1)*0.06);
+    showVerdict('吐き出し','遅すぎた…天井を逃した', 'var(--red)');
+    crashNoise(0.5); vib([90,40,120]);
+    loseLife();
+    if(got>0){ profit += got*0.15; } // salvage a fraction
+    finishTrade();
+    return;
+  }
+  // not crashed: judge by ceiling proximity
+  const prox = ceilingProx;
+  const realized = Math.max(0, gain)*100000*(1+(stockIndex-1)*0.06);
+  if(prox >= 0.78){
+    // JUST — near the top
+    justCount++; combo++; maxCombo=Math.max(maxCombo,combo);
+    const mult = 1 + (combo-1)*0.5;
+    const got = realized * (1.3) * mult;
+    profit += got;
+    showVerdict('JUST RIKAKU!', '天井ジャスト × '+combo.toFixed(0)+'  +'+yen(got), 'var(--gold)');
+    subThud(55,0.55,0.95); sparkle(); vib([18,30,18]);
+    burst(W*0.5, H*0.42, 'gold', 160);
+  } else if(prox >= 0.45){
+    // good-ish
+    combo++; maxCombo=Math.max(maxCombo,combo);
+    const got = realized*0.85;
+    profit += got;
+    showVerdict('確定', '+'+yen(got), 'var(--green)');
+    subThud(55,0.4,0.7); vib(20);
+    burst(W*0.5, H*0.45, 'green', 70);
+  } else {
+    // too early — left money on table
+    combo=0;
+    const got = realized*0.5;
+    profit += got;
+    showVerdict('早すぎ', '伸びしろを残した… +'+yen(got), 'var(--cyan)');
+    blip(300,0.12,'sine',0.25); vib(12);
+    burst(W*0.5, H*0.5, 'cyan', 40);
+  }
+  finishTrade();
+}
+
+function settleCrashTimeout(){
+  // never released after crash: zero, lose life
+  showVerdict('暴落','握ったまま全部消えた…','var(--red)');
+  crashNoise(0.5); vib([90,40,120]);
+  combo=0; loseLife(); finishTrade();
+}
+
+function loseLife(){ lives--; }
+
+function finishTrade(){
+  document.getElementById('profitVal').textContent = yen(profit);
+  document.getElementById('comboBox').textContent = 'x'+(1+Math.max(0,combo)*0.5).toFixed(combo? 1:0).replace('.0','');
+  document.getElementById('comboBox').textContent = 'x'+(combo>0?(1+(combo-1)*0.5):1).toString();
+  updateLives();
+  runMaxProfit=Math.max(runMaxProfit,profit);
+  if(lives<=0){ setTimeout(endGame, 900); return; }
+  // next stock after a beat
+  setTimeout(()=>{ if(state===ST.RISING) newStock(); }, 850);
+}
+
+function updateLives(){
+  let s=''; for(let i=0;i<startLives;i++) s+= i<lives?'★':'☆';
+  document.getElementById('lifeBox').textContent=s;
+}
+
+/* ---------- verdict flash ---------- */
+let vTimer=null;
+function showVerdict(big,small,color){
+  const v=document.getElementById('verdict');
+  document.getElementById('vBig').textContent=big;
+  document.getElementById('vBig').style.color=color;
+  document.getElementById('vBig').style.textShadow='0 0 26px '+color;
+  document.getElementById('vSmall').textContent=small;
+  document.getElementById('vSmall').style.color=color;
+  v.style.transition='none'; v.style.opacity='1'; v.style.transform='translateY(-50%) scale(1.08)';
+  requestAnimationFrame(()=>{ v.style.transition='all .5s ease'; v.style.opacity='0'; v.style.transform='translateY(-58%) scale(1)'; });
+}
+
+/* ---------- particles ---------- */
+let parts=[];
+function burst(x,y,kind,n){
+  const col = kind==='gold'?[255,212,0]: kind==='green'?[57,255,20]: kind==='red'?[255,45,85]:[55,227,255];
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, sp=(kind==='red'? 1: 1)*(60+Math.random()*260);
+    parts.push({x,y,vx:Math.cos(a)*sp, vy:(kind==='red'? Math.abs(Math.sin(a))*sp*1.4 : Math.sin(a)*sp)-(kind==='red'?0:80),
+      life:1,col,sz:1.5+Math.random()*3});
+  }
+  if(parts.length>900) parts.splice(0,parts.length-900);
+}
+function stepParts(dt){
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i];
+    p.vy+=420*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.1;
+    if(p.life<=0) parts.splice(i,1);
+  }
+}
+
+/* ---------- render ---------- */
+function render(){
+  gx.clearRect(0,0,W,H);
+  // bg grid
+  gx.save();
+  gx.strokeStyle='rgba(55,227,255,0.06)'; gx.lineWidth=1;
+  for(let y=-44+scrollY; y<H; y+=44){ gx.beginPath(); gx.moveTo(0,y); gx.lineTo(W,y); gx.stroke(); }
+  for(let x=0; x<W; x+=44){ gx.beginPath(); gx.moveTo(x,0); gx.lineTo(x,H); gx.stroke(); }
+  gx.restore();
+
+  if(state!==ST.TITLE){
+    drawChart();
+  }
+
+  // particles on fx layer
+  fx.clearRect(0,0,W,H);
+  stepParts(1/60);
+  for(const p of parts){
+    fx.globalAlpha=Math.max(0,p.life);
+    fx.fillStyle='rgba('+p.col[0]+','+p.col[1]+','+p.col[2]+',1)';
+    fx.beginPath(); fx.arc(p.x,p.y,p.sz*(0.6+p.life*0.8),0,Math.PI*2); fx.fill();
+  }
+  fx.globalAlpha=1;
+
+  // red danger edge near ceiling
+  if(state===ST.RISING && edge>0.25){
+    const a = (edge-0.25)/0.75;
+    const pulse = 0.5+0.5*Math.sin(performance.now()/ (90 - a*55));
+    gx.save();
+    const grd=gx.createLinearGradient(0,0,0,H);
+    gx.strokeStyle='rgba(255,45,85,'+(a*0.9*pulse).toFixed(3)+')';
+    gx.lineWidth=6+a*10; gx.strokeRect(3,3,W-6,H-6);
+    gx.restore();
+  }
+
+  // charge ring
+  drawRing();
+}
+
+function drawChart(){
+  const n=pts.length; if(n<2) return;
+  const stepX=W/(n-1);
+  const baseColor = crashed? [255,45,85] : [57,255,20];
+  // glow layers
+  const layers=[{w:14,a:0.06},{w:8,a:0.12},{w:3.2,a:1}];
+  for(const L of layers){
+    gx.beginPath();
+    for(let i=0;i<n;i++){ const x=i*stepX, y=H - pts[i]*H*0.92 - H*0.06;
+      if(i===0) gx.moveTo(x,y); else gx.lineTo(x,y); }
+    gx.lineJoin='round'; gx.lineCap='round';
+    gx.strokeStyle='rgba('+baseColor[0]+','+baseColor[1]+','+baseColor[2]+','+L.a+')';
+    gx.lineWidth=L.w; gx.stroke();
+  }
+  // head spark + price label
+  const hx=(n-1)*stepX, hy=H - pts[n-1]*H*0.92 - H*0.06;
+  gx.fillStyle='#fff'; gx.beginPath(); gx.arc(hx,hy,4,0,Math.PI*2); gx.fill();
+  gx.fillStyle='rgba('+baseColor[0]+','+baseColor[1]+','+baseColor[2]+',0.9)';
+  gx.beginPath(); gx.arc(hx,hy,9,0,Math.PI*2); gx.globalAlpha=0.35; gx.fill(); gx.globalAlpha=1;
+  // small trailing sparks near head when near ceiling
+  if(!crashed && edge>0.5 && Math.random()<0.6){ burst(hx,hy,'green',1); }
+}
+
+function drawRing(){
+  rx.clearRect(0,0,162,162);
+  const cx=81,cy=81,r=72;
+  rx.lineWidth=5;
+  rx.strokeStyle='rgba(255,255,255,0.08)';
+  rx.beginPath(); rx.arc(cx,cy,r,0,Math.PI*2); rx.stroke();
+  if(charge>0){
+    const col = charge>0.99? '#ffd400' : '#39ff14';
+    rx.strokeStyle=col; rx.lineCap='round';
+    rx.shadowColor=col; rx.shadowBlur=14;
+    rx.beginPath(); rx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+charge*Math.PI*2); rx.stroke();
+    rx.shadowBlur=0;
+  }
+}
+
+/* ---------- result card ---------- */
+function rank(){
+  const jr = tradeCount? justCount/tradeCount : 0;
+  if(profit>=900000 && jr>=0.6) return 'SS';
+  if(profit>=550000 && jr>=0.5) return 'S';
+  if(profit>=320000) return 'A';
+  if(profit>=160000) return 'B';
+  if(profit>=60000) return 'C';
+  return 'D';
+}
+function quip(){
+  const r=rank();
+  if(r==='SS') return '握力の化身。天井で離す求道者。';
+  if(r==='S') return '欲を制した者。利確の達人。';
+  if(r==='A') return 'なかなかの握力。高値づかみ知らず。';
+  if(r==='B') return 'まずまず。あと0.2秒、天井だった。';
+  if(r==='C') return '欲が顔を出した。次は離せる。';
+  return '全部溶けた…でも勉強代は安い。';
+}
+function drawCard(){
+  const c=document.getElementById('card'), x=c.getContext('2d');
+  const Wc=540,Hc=960;
+  // bg
+  const g=x.createLinearGradient(0,0,0,Hc); g.addColorStop(0,'#0a1024'); g.addColorStop(1,'#05060a');
+  x.fillStyle=g; x.fillRect(0,0,Wc,Hc);
+  // grid
+  x.strokeStyle='rgba(55,227,255,0.06)'; x.lineWidth=1;
+  for(let y=0;y<Hc;y+=46){ x.beginPath(); x.moveTo(0,y); x.lineTo(Wc,y); x.stroke(); }
+  for(let i=0;i<Wc;i+=46){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,Hc); x.stroke(); }
+  // border
+  x.strokeStyle='rgba(57,255,20,0.5)'; x.lineWidth=3; x.strokeRect(16,16,Wc-32,Hc-32);
+  // mini chart deco
+  x.save(); x.translate(0, 360);
+  const lay=[{w:18,a:0.08},{w:8,a:0.18},{w:3.5,a:1}];
+  for(const L of lay){ x.beginPath();
+    for(let i=0;i<=40;i++){ const px=40+i*(Wc-80)/40;
+      const py=120 - Math.pow(i/40,2.2)*150 - Math.sin(i*0.5)*4;
+      if(i===0)x.moveTo(px,py); else x.lineTo(px,py);}
+    x.strokeStyle='rgba(57,255,20,'+L.a+')'; x.lineWidth=L.w; x.lineJoin='round'; x.stroke(); }
+  x.restore();
+  // title
+  x.textAlign='center';
+  x.fillStyle='#eaf2ff'; x.font='900 84px -apple-system,sans-serif';
+  x.fillText('利確', Wc/2, 150);
+  x.fillStyle='#37e3ff'; x.font='800 22px -apple-system,sans-serif';
+  x.fillText('R I K A K U', Wc/2, 188);
+  // profit
+  x.fillStyle='#8a94ad'; x.font='800 22px sans-serif'; x.fillText('確定益 TOTAL PROFIT', Wc/2, 470);
+  x.fillStyle='#39ff14'; x.font='900 86px sans-serif';
+  x.shadowColor='rgba(57,255,20,.6)'; x.shadowBlur=24;
+  x.fillText(yen(profit), Wc/2, 556); x.shadowBlur=0;
+  // rank badge
+  const rk=rank();
+  x.fillStyle='#ffd400'; x.font='900 130px sans-serif';
+  x.shadowColor='rgba(255,212,0,.55)'; x.shadowBlur=30;
+  x.fillText(rk, Wc/2, 720); x.shadowBlur=0;
+  x.fillStyle='#8a94ad'; x.font='800 20px sans-serif'; x.fillText('握力ランク GRIP', Wc/2, 752);
+  // stats row
+  x.fillStyle='#eaf2ff'; x.font='800 24px sans-serif';
+  x.fillText('JUST '+justCount+'/'+tradeCount+'　最大コンボ x'+(maxCombo>0?(1+(maxCombo-1)*0.5):1), Wc/2, 812);
+  // quip
+  x.fillStyle='#9fe8ff'; x.font='700 24px sans-serif';
+  wrapText(x, quip(), Wc/2, 862, Wc-90, 32);
+  // footer
+  x.fillStyle='#39435e'; x.font='700 16px sans-serif';
+  x.fillText('利確 / Rikaku ・ Idea Radar 🏆 2026-06-25', Wc/2, 928);
+  x.fillStyle='#2b3550'; x.font='700 13px sans-serif';
+  x.fillText('#利確 #高値づかみ #AIバブル', Wc/2, 912 - 0 + 16);
+}
+function wrapText(ctx,text,cx,cy,maxW,lh){
+  const ch=[...text]; let line='', y=cy;
+  for(const c of ch){ const t=line+c; if(ctx.measureText(t).width>maxW){ ctx.fillText(line,cx,y); line=c; y+=lh; } else line=t; }
+  ctx.fillText(line,cx,y);
+}
+
+/* ---------- flow ---------- */
+function startGame(){
+  audioInit(); resumeAudio();
+  state=ST.RISING; profit=0; combo=0; maxCombo=0; lives=startLives; startLives=3;
+  justCount=0; tradeCount=0; stockIndex=0; runMaxProfit=0; parts=[];
+  document.getElementById('profitVal').textContent='¥0';
+  document.getElementById('liveVal').textContent='¥0';
+  document.getElementById('comboBox').textContent='x1';
+  updateLives();
+  document.getElementById('titleScrim').classList.add('hidden');
+  document.getElementById('resultScrim').classList.add('hidden');
+  newStock();
+}
+function endGame(){
+  state=ST.RESULT;
+  if(droneGain) droneGain.gain.value=0;
+  drawCard();
+  document.getElementById('resultScrim').classList.remove('hidden');
+}
+
+/* ---------- input on hold button ---------- */
+const hold=document.getElementById('hold');
+function down(e){ e.preventDefault(); if(state!==ST.RISING) return; resumeAudio();
+  if(!charging){ charging=true; charge=0; blip(180,0.06,'square',0.18);} }
+function up(e){ e.preventDefault(); release(); }
+hold.addEventListener('touchstart',down,{passive:false});
+hold.addEventListener('touchend',up,{passive:false});
+hold.addEventListener('touchcancel',up,{passive:false});
+hold.addEventListener('mousedown',down);
+window.addEventListener('mouseup',(e)=>{ if(charging) up(e); });
+
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+document.getElementById('shareBtn').addEventListener('click',shareCard);
+
+function shareCard(){
+  const c=document.getElementById('card');
+  c.toBlob(async (blob)=>{
+    const file=new File([blob],'rikaku.png',{type:'image/png'});
+    const text='利確 — 確定益 '+yen(profit)+'（握力ランク '+rank()+'）。AIバブルの天井で離せるか？ #利確';
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text}); return; }catch(e){}
+    }
+    // fallback: download
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rikaku.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },'image/png');
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
