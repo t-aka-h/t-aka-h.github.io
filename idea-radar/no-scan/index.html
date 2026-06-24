@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<title>脳スキャン｜Nō-Scan</title>
+<meta name="description" content="AI疲れの脳をネオンでスキャンし、思考の焦げを暴く自虐診断ジェネレーター。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  :root{
+    --bg:#0a0a0f; --bg2:#11101a;
+    --cyan:#1ad1ff; --red:#ff2d3c; --gold:#d4af37; --amber:#ffb13c;
+    --ink:#e9f3ff; --dim:#7c84a3;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    overflow:hidden;overscroll-behavior:none}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;max-width:520px;margin:0 auto}
+  .stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;padding:24px;opacity:0;pointer-events:none;
+    transition:opacity .45s ease}
+  .stage.on{opacity:1;pointer-events:auto}
+  /* INTRO */
+  .logo{font-weight:900;letter-spacing:.04em;line-height:1.04;text-align:center}
+  .logo .jp{font-size:clamp(44px,15vw,72px);
+    background:linear-gradient(180deg,#fff,var(--cyan) 60%,#1287b0);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 26px rgba(26,209,255,.45)}
+  .logo .en{font-size:13px;letter-spacing:.55em;color:var(--cyan);margin-top:10px;
+    opacity:.85;padding-left:.55em}
+  .tag{margin-top:22px;text-align:center;color:var(--dim);font-size:14px;line-height:1.8;max-width:340px}
+  .stat{margin-top:18px;font-size:12.5px;color:#9aa3c4;text-align:center;line-height:1.7;
+    border-top:1px solid rgba(124,132,163,.22);padding-top:14px;max-width:330px}
+  .stat b{color:var(--red);font-weight:800}
+  .btn{margin-top:30px;border:none;cursor:pointer;font-weight:800;letter-spacing:.06em;
+    color:#04121a;background:linear-gradient(180deg,#7fe6ff,var(--cyan));
+    padding:17px 46px;border-radius:40px;font-size:17px;
+    box-shadow:0 0 30px rgba(26,209,255,.5),inset 0 1px 0 rgba(255,255,255,.6)}
+  .btn:active{transform:scale(.96)}
+  .btn.ghost{background:transparent;border:1.5px solid rgba(26,209,255,.5);color:var(--cyan);
+    box-shadow:none;padding:14px 34px;font-size:15px;margin-top:18px}
+  /* QUIZ */
+  #quizWrap{width:100%;max-width:430px}
+  .qprog{display:flex;gap:6px;justify-content:center;margin-bottom:26px}
+  .qprog i{width:30px;height:4px;border-radius:3px;background:rgba(124,132,163,.28)}
+  .qprog i.done{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  .qno{color:var(--cyan);font-size:12px;letter-spacing:.3em;font-weight:800;text-align:center}
+  .qtext{font-size:clamp(20px,5.6vw,26px);font-weight:800;text-align:center;margin:12px 0 26px;line-height:1.5}
+  .opts{display:flex;flex-direction:column;gap:12px}
+  .opt{border:1.5px solid rgba(124,132,163,.34);background:rgba(255,255,255,.02);
+    color:var(--ink);padding:17px 20px;border-radius:16px;font-size:16px;font-weight:600;
+    cursor:pointer;text-align:left;transition:transform .1s,border-color .15s,background .15s}
+  .opt:active{transform:scale(.97)}
+  .opt.pick{border-color:var(--cyan);background:rgba(26,209,255,.12);
+    box-shadow:0 0 18px rgba(26,209,255,.25)}
+  /* SCAN + REVEAL share a canvas */
+  #scanCanvas{display:block;width:100%;height:100%;position:absolute;inset:0}
+  .scanLabel{position:absolute;bottom:9%;left:0;right:0;text-align:center;
+    font-size:13px;letter-spacing:.4em;color:var(--cyan);font-weight:800;
+    text-shadow:0 0 12px rgba(26,209,255,.6)}
+  /* REVEAL overlay */
+  #revealUI{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:flex-end;padding:26px;pointer-events:none}
+  .idx{font-size:13px;letter-spacing:.3em;color:var(--dim);font-weight:700}
+  .idxNum{font-weight:900;font-size:clamp(58px,18vw,86px);line-height:1;
+    background:linear-gradient(180deg,#fff,var(--red));-webkit-background-clip:text;
+    background-clip:text;color:transparent;text-shadow:0 0 30px rgba(255,45,60,.4)}
+  .stars{font-size:28px;letter-spacing:.12em;margin-top:4px;color:var(--gold);
+    text-shadow:0 0 16px rgba(212,175,55,.7)}
+  .nick{font-size:clamp(22px,6vw,30px);font-weight:900;margin-top:6px;letter-spacing:.04em}
+  .revealBtn{pointer-events:auto;margin-top:22px}
+  /* CARD */
+  #cardWrap{width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
+  #cardCanvas{width:auto;height:62vh;max-height:560px;border-radius:14px;
+    box-shadow:0 14px 50px rgba(0,0,0,.6),0 0 0 1px rgba(212,175,55,.3)}
+  .row{display:flex;gap:12px}
+  .mini{font-size:11px;color:var(--dim);text-align:center;margin-top:2px;letter-spacing:.05em}
+  .credit{position:absolute;bottom:10px;left:0;right:0;text-align:center;
+    font-size:10px;color:rgba(124,132,163,.5);letter-spacing:.18em}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- INTRO -->
+  <section class="stage on" id="introStage">
+    <div class="logo"><div class="jp">脳スキャン</div><div class="en">N&Omacr;-SCAN</div></div>
+    <p class="tag">AI疲れの脳を、ネオンでスキャン。<br>あなたの“思考の焦げ”を暴きます。</p>
+    <p class="stat">AIで生産性 <b>+40%</b>、なのに <b>88%</b> が燃え尽き。<br>ツール7個切り替えの末路＝<b>brain&nbsp;fry</b>。</p>
+    <button class="btn" id="startBtn">スキャン開始</button>
+    <div class="credit">IDEA RADAR ／ L10 AI疲れ・brain fry</div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="stage" id="quizStage">
+    <div id="quizWrap">
+      <div class="qprog" id="qprog"></div>
+      <div class="qno" id="qno"></div>
+      <div class="qtext" id="qtext"></div>
+      <div class="opts" id="opts"></div>
+    </div>
+  </section>
+
+  <!-- SCAN / REVEAL -->
+  <section class="stage" id="scanStage">
+    <canvas id="scanCanvas"></canvas>
+    <div class="scanLabel" id="scanLabel">SCANNING…</div>
+    <div id="revealUI" class="hide">
+      <div class="idx">BRAIN&nbsp;FRY&nbsp;INDEX</div>
+      <div class="idxNum" id="idxNum">0</div>
+      <div class="stars" id="stars"></div>
+      <div class="nick" id="nick"></div>
+      <button class="btn revealBtn" id="toCardBtn">診断書を発行</button>
+    </div>
+  </section>
+
+  <!-- CARD -->
+  <section class="stage" id="cardStage">
+    <div id="cardWrap">
+      <canvas id="cardCanvas" width="540" height="960"></canvas>
+      <div class="row">
+        <button class="btn" id="shareBtn" style="padding:15px 30px;font-size:15px">シェア / 保存</button>
+        <button class="btn ghost" id="againBtn" style="margin-top:0">もう一度</button>
+      </div>
+      <div class="mini">画像を長押しで保存も可。#脳スキャン</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* ============== AUDIO (WebAudio, no files) ============== */
+let AC=null;
+function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended')AC.resume(); return AC; }
+function tone(freq,dur,type,gain,when,glideTo){
+  const c=ac(); if(!c)return; const t=(when||0)+c.currentTime;
+  const o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t);
+  if(glideTo)o.frequency.exponentialRampToValueAtTime(Math.max(20,glideTo),t+dur);
+  f.type='lowpass'; f.frequency.setValueAtTime(1800,t);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain||.2,t+.012);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(f);f.connect(g);g.connect(c.destination); o.start(t);o.stop(t+dur+.05);
+}
+// missing-fundamental bass: stack harmonics of 55Hz
+function bass(dur,when,gain){
+  const f0=55; [1,2,3,4,5].forEach((h,i)=>tone(f0*h,dur,'sine',(gain||.22)/(i+1.2),when));
+}
+function sweepNoise(dur){ // scanning ambience
+  const c=ac(); if(!c)return; const t=c.currentTime;
+  const o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter();
+  o.type='sawtooth'; o.frequency.setValueAtTime(120,t);
+  o.frequency.exponentialRampToValueAtTime(1200,t+dur);
+  f.type='lowpass'; f.frequency.setValueAtTime(700,t); f.Q.value=6;
+  g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(.12,t+.3);
+  g.gain.setValueAtTime(.12,t+dur-.4); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(f);f.connect(g);g.connect(c.destination); o.start(t);o.stop(t+dur+.05);
+}
+function beep(){ tone(1320,.09,'square',.16); }
+function stamp(){ bass(.5,0,.3); tone(2400,.12,'sawtooth',.14,.02,600); tone(180,.18,'triangle',.18,0); }
+function vib(p){ if(navigator.vibrate){try{navigator.vibrate(p);}catch(e){}} }
+
+/* ============== QUIZ DATA ============== */
+const QUESTIONS=[
+  {q:"今日、AIツールをいくつ使った？", a:["0〜1個","2〜3個","4〜6個","7個以上"]},
+  {q:"今日の会議・通話は何本？", a:["0本","1〜2本","3〜4本","5本以上"]},
+  {q:"通知を何回チェックした？", a:["〜20回","〜50回","〜100回","数えてない"]},
+  {q:"最後に“何も考えなかった”のは？", a:["ついさっき","今朝","昨日","思い出せない"]},
+  {q:"今いくつタブ／アプリ開いてる？", a:["〜5","〜15","〜30","無限／こわくて見れない"]},
+];
+const answers=new Array(QUESTIONS.length).fill(-1);
+let qi=0;
+
+/* ============== STAGE SWITCH ============== */
+const stages={intro:'introStage',quiz:'quizStage',scan:'scanStage',card:'cardStage'};
+function go(name){
+  for(const k in stages)document.getElementById(stages[k]).classList.toggle('on',k===name);
+}
+
+/* ============== INTRO ============== */
+document.getElementById('startBtn').onclick=()=>{ ac(); bass(.4,0,.22); vib(30); go('quiz'); renderQ(); };
+
+/* ============== QUIZ ============== */
+function renderProg(){
+  const p=document.getElementById('qprog'); p.innerHTML='';
+  for(let i=0;i<QUESTIONS.length;i++){const e=document.createElement('i');if(i<=qi&&answers[i]>=0)e.className='done';if(i<qi)e.className='done';p.appendChild(e);}
+}
+function renderQ(){
+  renderProg();
+  document.getElementById('qno').textContent='QUESTION '+(qi+1)+' / '+QUESTIONS.length;
+  document.getElementById('qtext').textContent=QUESTIONS[qi].q;
+  const o=document.getElementById('opts'); o.innerHTML='';
+  QUESTIONS[qi].a.forEach((txt,idx)=>{
+    const b=document.createElement('button'); b.className='opt'; b.textContent=txt;
+    b.onclick=()=>{ answers[qi]=idx; beep(); vib(18);
+      [...o.children].forEach(c=>c.classList.remove('pick')); b.classList.add('pick');
+      setTimeout(()=>{ if(qi<QUESTIONS.length-1){qi++;renderQ();} else {startScan();} },230);
+    };
+    o.appendChild(b);
+  });
+}
+
+/* ============== RESULT MODEL ============== */
+const REGIONS=[
+  {key:'focus', name:'集中野', w:[1.0,0.4,0.9,0.2,1.0]}, // tools,meet,notif,blank,tabs
+  {key:'memory',name:'記憶野', w:[0.5,0.5,1.0,1.0,0.4]},
+  {key:'create',name:'創造野', w:[0.9,0.9,0.4,0.7,0.3]},
+  {key:'patience',name:'忍耐野',w:[0.4,1.0,1.0,0.6,0.5]},
+  {key:'language',name:'言語野',w:[0.8,0.6,0.6,0.3,0.9]},
+];
+const CAPTIONS={
+  low:["まだ正気","ギリ無事","小休止セーフ","余力あり"],
+  mid:["うっすら焦げ","半生","注意報","熱がこもる"],
+  high:["こんがり","煮詰まり","赤信号","ほぼ炭"],
+  crit:["完全に焦げた","沸騰中","限界突破","煙が出てる"],
+};
+function band(v){return v<35?'low':v<60?'mid':v<82?'high':'crit';}
+function capFor(v){const arr=CAPTIONS[band(v)];return arr[Math.floor(Math.random()*arr.length)];}
+let RESULT=null;
+function computeResult(){
+  const norm=answers.map(a=>a<0?0:a/3); // 0..1
+  const regs=REGIONS.map(r=>{
+    let s=0,wsum=0;
+    r.w.forEach((w,i)=>{s+=w*norm[i];wsum+=w;});
+    let v=(s/wsum); // 0..1
+    v=Math.pow(v,0.88); // gentle curve
+    let pct=Math.round(v*92 + Math.random()*10 - 2); // jitter for replay variety
+    pct=Math.max(6,Math.min(99,pct));
+    return {key:r.key,name:r.name,pct,cap:capFor(pct)};
+  });
+  const total=Math.round(regs.reduce((a,b)=>a+b.pct,0)/regs.length);
+  let rank,nick;
+  if(total>=82){rank=3;nick='煮詰まり脳';}
+  else if(total>=62){rank=2;nick='こんがり脳';}
+  else if(total>=40){rank=1;nick='半生脳';}
+  else {rank=0;nick='ほぼ無傷脳';}
+  // worst region for prescription flavor
+  const worst=[...regs].sort((a,b)=>b.pct-a.pct)[0];
+  const toolAns=answers[0];
+  const rx = toolAns>=3 ? 'AIツールを 7個 → 2個 に断つ'
+           : toolAns>=2 ? 'AIツールを半分に減らす'
+           : worst.pct>70 ? worst.name+'を24時間オフラインで休ませる'
+           : '通知を切って10分ぼーっとする';
+  RESULT={regs,total,rank,nick,worst,rx};
+}
+
+/* ============== BRAIN GEOMETRY ============== */
+// region polygons in a normalized brain box (0..1)
+const REGION_POLY={
+  focus:   [[.30,.20],[.55,.16],[.62,.34],[.40,.40],[.27,.34]],     // front-top
+  create:  [[.62,.20],[.84,.30],[.80,.48],[.60,.42],[.58,.28]],     // front-right
+  memory:  [[.20,.40],[.42,.42],[.44,.62],[.24,.62],[.16,.52]],     // mid-left
+  language:[[.44,.44],[.66,.46],[.66,.66],[.46,.66]],               // mid-right
+  patience:[[.26,.64],[.62,.66],[.56,.84],[.34,.84]],               // bottom
+};
+function brainPath(ctx,X,Y,S){
+  // stylized brain silhouette
+  ctx.beginPath();
+  const pts=[[.16,.46],[.18,.30],[.30,.16],[.50,.10],[.70,.14],[.85,.26],
+             [.90,.44],[.86,.62],[.74,.82],[.54,.90],[.34,.88],[.20,.74],[.14,.58]];
+  pts.forEach((p,i)=>{const x=X+p[0]*S,y=Y+p[1]*S; i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.closePath();
+}
+function heatColor(pct,alpha){
+  // 220(blue) -> 0(red)
+  const h=220-(220*pct/100);
+  return 'hsla('+h+',95%,'+(46+pct*0.12)+'%,'+(alpha==null?1:alpha)+')';
+}
+
+/* ============== SCAN ANIMATION ============== */
+const cvs=document.getElementById('scanCanvas');
+const cx=cvs.getContext('2d');
+let DPR=Math.min(2,window.devicePixelRatio||1);
+let CW,CH,brainX,brainY,brainS;
+function sizeCanvas(){
+  CW=cvs.clientWidth; CH=cvs.clientHeight;
+  cvs.width=CW*DPR; cvs.height=CH*DPR; cx.setTransform(DPR,0,0,DPR,0,0);
+  brainS=Math.min(CW*0.86,CH*0.5);
+  brainX=(CW-brainS)/2; brainY=CH*0.18;
+}
+let scanT=0, scanDur=3.2, scanStart=0, revealed={}, raf=null, mode='scan', scanFallback=null;
+function startScan(){
+  computeResult();
+  revealDone=false;
+  go('scan');
+  document.getElementById('revealUI').classList.add('hide');
+  document.getElementById('scanLabel').classList.remove('hide');
+  document.getElementById('scanLabel').textContent='SCANNING…';
+  requestAnimationFrame(()=>{ sizeCanvas();
+    revealed={}; mode='scan'; scanStart=performance.now();
+    sweepNoise(scanDur); vib([200]);
+    cancelAnimationFrame(raf); loop();
+    // fallback: guarantee reveal even if rAF is throttled
+    clearTimeout(scanFallback);
+    scanFallback=setTimeout(()=>{ if(mode==='scan'){ mode='done'; finishScan(); requestAnimationFrame(loop); } }, scanDur*1000+400);
+  });
+}
+function drawBrainBase(){
+  cx.clearRect(0,0,CW,CH);
+  // bg glow
+  const g=cx.createRadialGradient(CW/2,CH*0.42,10,CW/2,CH*0.42,CW*0.9);
+  g.addColorStop(0,'rgba(26,209,255,.07)');g.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g; cx.fillRect(0,0,CW,CH);
+  // outline
+  cx.save();
+  brainPath(cx,brainX,brainY,brainS);
+  cx.strokeStyle='rgba(26,209,255,.55)'; cx.lineWidth=2;
+  cx.shadowColor='rgba(26,209,255,.6)'; cx.shadowBlur=16; cx.stroke();
+  cx.shadowBlur=0;
+  // faint inner fill
+  cx.fillStyle='rgba(20,28,48,.5)'; cx.fill();
+  // sulci lines
+  cx.strokeStyle='rgba(26,209,255,.16)'; cx.lineWidth=1;
+  for(let i=0;i<5;i++){
+    cx.beginPath();
+    const yy=brainY+brainS*(0.22+i*0.14);
+    cx.moveTo(brainX+brainS*0.18,yy);
+    cx.bezierCurveTo(brainX+brainS*0.4,yy-brainS*0.05,brainX+brainS*0.6,yy+brainS*0.06,brainX+brainS*0.82,yy-brainS*0.02);
+    cx.stroke();
+  }
+  cx.restore();
+}
+function fillRegion(key,pct,alpha,label){
+  const poly=REGION_POLY[key]; if(!poly)return;
+  cx.save();
+  cx.beginPath();
+  poly.forEach((p,i)=>{const x=brainX+p[0]*brainS,y=brainY+p[1]*brainS;i?cx.lineTo(x,y):cx.moveTo(x,y);});
+  cx.closePath();
+  cx.globalCompositeOperation='lighter';
+  cx.fillStyle=heatColor(pct,0.5*alpha);
+  cx.shadowColor=heatColor(pct,0.8); cx.shadowBlur=22*alpha; cx.fill();
+  cx.restore();
+}
+function loop(){
+  raf=requestAnimationFrame(loop);
+  const now=performance.now();
+  if(mode==='scan'){
+    const t=(now-scanStart)/1000; scanT=t;
+    const prog=Math.min(1,t/scanDur);
+    drawBrainBase();
+    const lineY=brainY-10+(brainS+20)*prog;
+    // reveal regions whose top passed the line
+    REGIONS.forEach(r=>{
+      const poly=REGION_POLY[r.key]; if(!poly)return;
+      const topY=brainY+Math.min(...poly.map(p=>p[1]))*brainS;
+      if(lineY>topY && !revealed[r.key+'_hit']){
+        revealed[r.key+'_hit']=1; revealed[r.key]=0.0001; beep(); vib([40]);
+      }
+      if(revealed[r.key]!==undefined){
+        revealed[r.key]=Math.min(1,(revealed[r.key]||0)+0.06);
+        const reg=RESULT.regs.find(x=>x.key===r.key);
+        fillRegion(r.key,reg.pct,revealed[r.key],true);
+        // count-up % label
+        const poly2=REGION_POLY[r.key];
+        const cxp=poly2.reduce((a,p)=>a+p[0],0)/poly2.length;
+        const cyp=poly2.reduce((a,p)=>a+p[1],0)/poly2.length;
+        const shown=Math.round(reg.pct*revealed[r.key]);
+        cx.save();
+        cx.fillStyle='#fff'; cx.font='800 '+(brainS*0.052)+'px -apple-system,sans-serif';
+        cx.textAlign='center'; cx.shadowColor=heatColor(reg.pct,1); cx.shadowBlur=8;
+        cx.fillText(shown+'%',brainX+cxp*brainS,brainY+cyp*brainS+brainS*0.018);
+        cx.font='700 '+(brainS*0.03)+'px sans-serif'; cx.fillStyle='rgba(255,255,255,.85)';
+        cx.shadowBlur=0; cx.fillText(reg.name,brainX+cxp*brainS,brainY+cyp*brainS-brainS*0.03);
+        cx.restore();
+      }
+    });
+    // scan beam
+    if(prog<1){
+      cx.save();
+      const grd=cx.createLinearGradient(0,lineY-30,0,lineY+30);
+      grd.addColorStop(0,'rgba(26,209,255,0)');grd.addColorStop(.5,'rgba(26,209,255,.9)');grd.addColorStop(1,'rgba(26,209,255,0)');
+      cx.fillStyle=grd; cx.fillRect(0,lineY-30,CW,60);
+      cx.fillStyle='rgba(255,255,255,.95)'; cx.shadowColor='#1ad1ff'; cx.shadowBlur=20;
+      cx.fillRect(brainX-10,lineY-1.5,brainS+20,3);
+      cx.restore();
+    } else {
+      // finished -> reveal
+      mode='done'; finishScan();
+    }
+  } else if(mode==='done'){
+    drawBrainBase();
+    REGIONS.forEach(r=>{const reg=RESULT.regs.find(x=>x.key===r.key);fillRegion(r.key,reg.pct,1,true);
+      const poly2=REGION_POLY[r.key];
+      const cxp=poly2.reduce((a,p)=>a+p[0],0)/poly2.length;
+      const cyp=poly2.reduce((a,p)=>a+p[1],0)/poly2.length;
+      cx.save();
+      cx.fillStyle='#fff'; cx.font='800 '+(brainS*0.052)+'px sans-serif'; cx.textAlign='center';
+      cx.shadowColor=heatColor(reg.pct,1); cx.shadowBlur=8;
+      cx.fillText(reg.pct+'%',brainX+cxp*brainS,brainY+cyp*brainS+brainS*0.018);
+      cx.font='700 '+(brainS*0.03)+'px sans-serif'; cx.fillStyle='rgba(255,255,255,.9)'; cx.shadowBlur=0;
+      cx.fillText(reg.name,brainX+cxp*brainS,brainY+cyp*brainS-brainS*0.03);
+      cx.restore();
+    });
+  }
+}
+let revealDone=false;
+function finishScan(){
+  if(revealDone)return; revealDone=true; clearTimeout(scanFallback);
+  document.getElementById('scanLabel').classList.add('hide');
+  const ui=document.getElementById('revealUI'); ui.classList.remove('hide');
+  // count up index
+  const numEl=document.getElementById('idxNum');
+  let v=0; const target=RESULT.total;
+  const iv=setInterval(()=>{ v+=Math.max(1,Math.round(target/22)); if(v>=target){v=target;clearInterval(iv);
+    document.getElementById('stars').textContent='★★★☆☆☆'.slice(3-RESULT.rank,6-RESULT.rank).padEnd(0)||'☆☆☆';
+    document.getElementById('stars').textContent='★'.repeat(RESULT.rank)+'☆'.repeat(3-RESULT.rank);
+    document.getElementById('nick').textContent='“'+RESULT.nick+'”';
+    stamp(); vib([120,60,120]);
+  } numEl.textContent=v; },45);
+}
+document.getElementById('toCardBtn').onclick=()=>{ bass(.4,0,.2); vib(30); buildCard(); go('card'); };
+
+/* ============== DIAGNOSIS CARD (9:16) ============== */
+const card=document.getElementById('cardCanvas');
+const kx=card.getContext('2d');
+function buildCard(){
+  const W=540,H=960; kx.clearRect(0,0,W,H);
+  // bg
+  let g=kx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0c0c14');g.addColorStop(1,'#06060b'); kx.fillStyle=g; kx.fillRect(0,0,W,H);
+  // gold frame
+  g=kx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#7a6418');g.addColorStop(.5,'#e9cf72');g.addColorStop(1,'#8a6e1e');
+  kx.strokeStyle=g; kx.lineWidth=3; kx.strokeRect(20,20,W-40,H-40);
+  kx.strokeStyle='rgba(212,175,55,.4)'; kx.lineWidth=1; kx.strokeRect(28,28,W-56,H-56);
+  // header
+  kx.textAlign='center';
+  kx.fillStyle='#d4af37'; kx.font='800 15px sans-serif';
+  kx.fillText('— 思  考  焦  げ  診  断  書 —',W/2,72);
+  kx.fillStyle='#1ad1ff'; kx.font='900 46px sans-serif';
+  kx.shadowColor='rgba(26,209,255,.5)'; kx.shadowBlur=18;
+  kx.fillText('脳 ス キ ャ ン',W/2,124); kx.shadowBlur=0;
+  kx.fillStyle='#6b7390'; kx.font='600 11px sans-serif';
+  kx.fillText('N Ō - S C A N    B R A I N   F R Y   R E P O R T',W/2,148);
+  // mini brain heatmap
+  const bx=W/2-144, by=166, bs=288;
+  (function(){
+    kx.save();
+    brainPath(kx,bx,by,bs);
+    kx.fillStyle='rgba(18,26,46,.7)'; kx.fill();
+    kx.strokeStyle='rgba(26,209,255,.5)'; kx.lineWidth=2; kx.stroke();
+    kx.restore();
+    REGIONS.forEach(r=>{const reg=RESULT.regs.find(x=>x.key===r.key);const poly=REGION_POLY[r.key];
+      kx.save(); kx.beginPath();
+      poly.forEach((p,i)=>{const x=bx+p[0]*bs,y=by+p[1]*bs;i?kx.lineTo(x,y):kx.moveTo(x,y);});
+      kx.closePath(); kx.globalCompositeOperation='lighter';
+      kx.fillStyle=heatColor(reg.pct,0.55); kx.shadowColor=heatColor(reg.pct,.9); kx.shadowBlur=16; kx.fill();
+      kx.restore();
+    });
+  })();
+  // index big
+  let y=498;
+  kx.fillStyle='#6b7390'; kx.font='700 13px sans-serif'; kx.fillText('BRAIN FRY INDEX',W/2,y);
+  g=kx.createLinearGradient(0,y,0,y+70); g.addColorStop(0,'#fff');g.addColorStop(1,'#ff2d3c');
+  kx.fillStyle=g; kx.font='900 74px sans-serif';
+  kx.shadowColor='rgba(255,45,60,.4)';kx.shadowBlur=20;
+  kx.fillText(RESULT.total,W/2,y+62); kx.shadowBlur=0;
+  kx.fillStyle='#d4af37'; kx.font='800 30px sans-serif';
+  kx.fillText('★'.repeat(RESULT.rank)+'☆'.repeat(3-RESULT.rank),W/2,y+96);
+  kx.fillStyle='#e9f3ff'; kx.font='900 30px sans-serif';
+  kx.fillText('“'+RESULT.nick+'”',W/2,y+136);
+  // region bars
+  y=y+168; const bw=380, bxs=(W-bw)/2;
+  RESULT.regs.forEach((reg,i)=>{
+    const ry=y+i*30;
+    kx.fillStyle='#9aa3c4'; kx.font='700 13px sans-serif'; kx.textAlign='left';
+    kx.fillText(reg.name,bxs,ry+12);
+    kx.fillStyle='rgba(124,132,163,.2)'; kx.fillRect(bxs+70,ry+2,bw-140,11);
+    kx.fillStyle=heatColor(reg.pct,1); kx.shadowColor=heatColor(reg.pct,.8);kx.shadowBlur=8;
+    kx.fillRect(bxs+70,ry+2,(bw-140)*reg.pct/100,11); kx.shadowBlur=0;
+    kx.fillStyle='#e9f3ff'; kx.font='800 13px sans-serif'; kx.textAlign='right';
+    kx.fillText(reg.pct+'%',bxs+bw,ry+12);
+  });
+  // prescription
+  kx.textAlign='center';
+  const py=y+5*30+16;
+  kx.fillStyle='rgba(212,175,55,.12)'; roundRect(kx,bxs,py,bw,50,10); kx.fill();
+  kx.strokeStyle='rgba(212,175,55,.5)';kx.lineWidth=1; roundRect(kx,bxs,py,bw,50,10); kx.stroke();
+  kx.fillStyle='#d4af37'; kx.font='800 12px sans-serif'; kx.fillText('処  方  箋',W/2,py+19);
+  kx.fillStyle='#fff'; kx.font='800 15px sans-serif'; kx.fillText(RESULT.rx,W/2,py+40);
+  // footer
+  kx.fillStyle='#6b7390'; kx.font='600 11px sans-serif';
+  kx.fillText('scanned by NŌ-SCAN  ·  #脳スキャン',W/2,H-32);
+  kx.fillStyle='rgba(124,132,163,.6)'; kx.font='600 10px sans-serif';
+  kx.fillText('t-aka-h.github.io/idea-radar',W/2,H-16);
+}
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+/* ============== SHARE ============== */
+document.getElementById('shareBtn').onclick=async ()=>{
+  vib(30);
+  card.toBlob(async(blob)=>{
+    const file=new File([blob],'no-scan.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],text:'AI疲れの脳をスキャンした結果 → #脳スキャン'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='no-scan.png'; a.click();
+  },'image/png');
+};
+document.getElementById('againBtn').onclick=()=>{ qi=0; answers.fill(-1); go('quiz'); renderQ(); };
+
+window.addEventListener('resize',()=>{ if(document.getElementById('scanStage').classList.contains('on')){sizeCanvas();} });
+</script>
+</body>
+</html>
