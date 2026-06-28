@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05030d">
+<title>やめとく — Yametoku</title>
+<style>
+  :root{
+    --bg:#05030d; --bg2:#0a0820;
+    --cyan:#00E5FF; --mag:#FF2D87; --green:#34D399; --red:#EC1A33;
+    --gold:#FFD23F; --ink:#F2F4FF; --dim:#8b8fb5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+    touch-action:none;user-select:none;-webkit-user-select:none;}
+  #wrap{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;z-index:5;}
+  .hidden{display:none!important;}
+  h1{font-size:clamp(46px,16vw,92px);font-weight:900;letter-spacing:.04em;line-height:.96;
+    background:linear-gradient(180deg,#fff,var(--cyan) 60%,var(--mag));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 30px rgba(0,229,255,.25);}
+  .romaji{font-size:13px;letter-spacing:.5em;color:var(--dim);margin-top:6px;text-transform:uppercase;}
+  .tag{font-size:15px;color:var(--dim);margin-top:18px;line-height:1.7;max-width:340px;}
+  .tag b{color:var(--cyan);font-weight:700;}
+  .tag .g{color:var(--green);font-weight:700;}
+  .rule{margin-top:22px;display:flex;gap:14px;}
+  .rule .chip{font-size:13px;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.03);line-height:1.5;width:138px;}
+  .rule .chip .k{display:block;font-weight:800;font-size:15px;margin-bottom:3px;}
+  .btn{margin-top:30px;font-size:21px;font-weight:800;letter-spacing:.08em;color:#06121a;
+    background:linear-gradient(180deg,#7af2ff,var(--cyan));border:none;border-radius:999px;
+    padding:17px 46px;box-shadow:0 0 34px rgba(0,229,255,.5);cursor:pointer;}
+  .btn:active{transform:scale(.96);}
+  .btn.mag{background:linear-gradient(180deg,#ff7ab4,var(--mag));box-shadow:0 0 34px rgba(255,45,135,.5);color:#1a0410;}
+  .small{font-size:12px;color:var(--dim);margin-top:18px;}
+  /* gameover */
+  #over .gtitle{font-size:30px;font-weight:900;color:var(--mag);text-shadow:0 0 24px rgba(255,45,135,.5);}
+  #over .saved{font-size:clamp(40px,15vw,72px);font-weight:900;color:var(--gold);margin-top:8px;
+    text-shadow:0 0 30px rgba(255,210,63,.45);line-height:1;}
+  #over .savedlbl{font-size:14px;color:var(--dim);letter-spacing:.2em;margin-top:6px;}
+  #over .rank{font-size:24px;font-weight:800;margin-top:18px;color:var(--cyan);}
+  #over .stat{font-size:14px;color:var(--dim);margin-top:10px;line-height:1.8;}
+  .ovbtns{display:flex;gap:14px;margin-top:26px;flex-wrap:wrap;justify-content:center;}
+  #shareCanvas{display:none;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="title" class="layer">
+    <h1>やめとく</h1>
+    <div class="romaji">Yametoku</div>
+    <div class="tag">声に出して断る節約が、新しいステータス。<br>
+      飛んでくる<b>誘惑</b>を<b>タップ</b>して「やめとく！」。<br>
+      浮いた額が誇りジャーに積み上がる。</div>
+    <div class="rule">
+      <div class="chip"><span class="k" style="color:var(--mag)">赤い誘惑</span>タップで断つ＝節約</div>
+      <div class="chip"><span class="k" style="color:var(--green)">緑のホント要る</span>触らず通す（断るとケチ判定）</div>
+    </div>
+    <button class="btn" id="startBtn">はじめる</button>
+    <div class="small">音アリ推奨 · スマホ縦持ち · 完全オンデバイス</div>
+  </div>
+
+  <div id="over" class="layer hidden">
+    <div class="gtitle gtitleEl">今月の締め</div>
+    <div class="saved" id="ovSaved">¥0</div>
+    <div class="savedlbl">やめといた</div>
+    <div class="rank" id="ovRank">見習い倹約家</div>
+    <div class="stat" id="ovStat"></div>
+    <div class="ovbtns">
+      <button class="btn mag" id="shareBtn">称号カードを保存</button>
+      <button class="btn" id="againBtn">もう一回</button>
+    </div>
+    <div class="small">スクショして自慢しよう · #やめとく</div>
+  </div>
+</div>
+<canvas id="shareCanvas" width="1080" height="1920"></canvas>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio (WebAudio synth, no files) ---------- */
+let AC=null;
+function ensureAudio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); }
+function bass(freq, dur, gain){ // missing-fundamental sub
+  if(!AC) return; const t=AC.currentTime; const g=AC.createGain();
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur); g.connect(AC.destination);
+  [1,2,4].forEach((m,i)=>{ const o=AC.createOscillator(); o.type=i===0?'sine':'triangle';
+    o.frequency.setValueAtTime(freq*m,t); o.frequency.exponentialRampToValueAtTime(freq*m*0.8,t+dur);
+    const gg=AC.createGain(); gg.gain.value=[1,0.5,0.28][i]; o.connect(gg); gg.connect(g); o.start(t); o.stop(t+dur); });
+}
+function coinSnd(combo){ if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='square';
+  const f=880+Math.min(combo,8)*120; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*1.7,t+0.06);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.18,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.16);
+}
+function failSnd(){ if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(50,t+0.4);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.25,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.46); bass(48,0.35,0.5); }
+function buzzSnd(){ if(!AC) return; const t=AC.currentTime; // kechi judgement
+  const o=AC.createOscillator(); o.type='square'; o.frequency.setValueAtTime(140,t); o.frequency.linearRampToValueAtTime(90,t+0.18);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.22); }
+function vib(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+/* ---------- content ---------- */
+const TEMPT=[
+  ["二次会",4000],["限定スニーカー",18000],["眠ってるサブスク",1480],["コンビニ寄り道",780],
+  ["推しグッズ",6500],["衝動ポチり",3200],["深夜タクシー",2400],["課金ガチャ",3000],
+  ["デパ地下スイーツ",1200],["限定コスメ",5400],["ノリで予約",9800],["送料無料の罠",1000],
+  ["新作ゲーム",8800],["カフェ連打",680],["福袋",11000],["増額プラン",1280],["ながらポチ",2600]
+];
+const HONMONO=[
+  ["友の誕生日",3000],["親への仕送り",10000],["要る参考書",2200],["歯の治療",3500],
+  ["防災グッズ",4000],["大切な人とご飯",5000],["仕事の必需品",2800]
+];
+const yen=n=>'¥'+n.toLocaleString('ja-JP');
+
+/* ---------- state ---------- */
+const S={mode:'title', cards:[], coins:[], rings:[], floats:[], dots:[],
+  saved:0, dispSaved:0, streak:0, bestStreak:0, combo:0, lives:3,
+  declines:0, elapsed:0, spawnT:0, last:0, shake:0, redflash:0, walletPulse:0, jarPulse:0};
+
+const wallet=()=>({x:W/2, y:H-92});
+const jar=()=>({x:W/2, y:78});
+
+function reset(){
+  S.mode='playing'; S.cards.length=0; S.coins.length=0; S.rings.length=0; S.floats.length=0;
+  S.saved=0; S.dispSaved=0; S.streak=0; S.bestStreak=0; S.combo=0; S.lives=3;
+  S.declines=0; S.elapsed=0; S.spawnT=0; S.shake=0; S.redflash=0; S.walletPulse=0; S.jarPulse=0;
+  if(!S.dots.length){ for(let i=0;i<46;i++) S.dots.push({x:Math.random()*W,y:Math.random()*H,s:Math.random()*1.8+0.4,sp:Math.random()*14+6,h:Math.random()<.5?'0,229,255':'255,45,135'}); }
+}
+
+/* difficulty curves over elapsed seconds */
+function spawnInterval(){ return Math.max(0.62, 1.4 - S.elapsed*0.018); }
+function travelTime(){ return Math.max(1.35, 2.25 - S.elapsed*0.022); }
+function greenRate(){ return Math.min(0.30, S.elapsed*0.006); }
+
+function spawnCard(){
+  const corners=[[0.10,0.10],[0.90,0.10],[0.08,0.62],[0.92,0.62]];
+  const c=corners[(Math.random()*corners.length)|0];
+  const sx=c[0]*W, sy=c[1]*H;
+  const w=wallet();
+  const isGreen=Math.random()<greenRate();
+  const src=isGreen?HONMONO:TEMPT;
+  const d=src[(Math.random()*src.length)|0];
+  S.cards.push({sx,sy, x:sx,y:sy, tx:w.x, ty:w.y, t:0, dur:travelTime(),
+    type:isGreen?'green':'temp', label:d[0], price:d[1], dead:false, w:Math.min(W*0.46,210), h:62, rot:(Math.random()-.5)*0.12});
+}
+
+/* ---------- actions ---------- */
+function declineCard(card){
+  card.dead=true; S.declines++; S.combo++; S.streak++; S.bestStreak=Math.max(S.bestStreak,S.streak);
+  S.saved+=card.price; S.jarPulse=1;
+  // coins toward jar
+  const n=Math.max(6,Math.min(20,Math.round(card.price/900)));
+  const j=jar();
+  for(let i=0;i<n;i++){ S.coins.push({x:card.x+(Math.random()-.5)*card.w*0.6, y:card.y+(Math.random()-.5)*30,
+    jx:j.x,jy:j.y, t:0, dur:0.45+Math.random()*0.25, delay:Math.random()*0.12, vx:(Math.random()-.5)*180, vy:-120-Math.random()*120}); }
+  S.rings.push({x:card.x,y:card.y,r:10,max:60+Math.min(S.combo,8)*16,a:1,col: S.combo>=3?'255,45,135':'0,229,255'});
+  S.floats.push({x:card.x,y:card.y-18,text:'やめとく！',a:1,vy:-46,col:'#fff',size:24});
+  if(S.combo>=2) S.floats.push({x:card.x,y:card.y+14,text:'×'+S.combo,a:1,vy:-30,col:'#FFD23F',size:18});
+  bass(55,0.26,0.6); coinSnd(S.combo);
+  if(S.combo>=3){ vib([10,30,10]); } else vib(15);
+}
+function kechiPenalty(card){ // tapped a green honmono = stingy
+  card.dead=true; S.combo=0; S.streak=0; S.shake=Math.max(S.shake,10);
+  S.floats.push({x:card.x,y:card.y-18,text:'ケチ判定…',a:1,vy:-40,col:'#34D399',size:22});
+  buzzSnd(); vib(40);
+}
+function reachWallet(card){
+  card.dead=true;
+  if(card.type==='temp'){ // failed to decline = spent
+    S.lives--; S.combo=0; S.streak=0; S.shake=14; S.redflash=1; S.walletPulse=1;
+    S.floats.push({x:wallet().x,y:wallet().y-44,text:'-'+yen(card.price),a:1,vy:-44,col:'#EC1A33',size:22});
+    failSnd(); vib(60);
+    if(S.lives<=0) gameOver();
+  } else { // green reached wallet = correctly let it pass (a real need)
+    S.walletPulse=1; S.streak++; S.bestStreak=Math.max(S.bestStreak,S.streak);
+    S.floats.push({x:wallet().x,y:wallet().y-44,text:'ナイス判断',a:1,vy:-40,col:'#34D399',size:18});
+    coinSnd(2);
+  }
+}
+
+/* ---------- input ---------- */
+function pick(px,py){
+  for(let i=S.cards.length-1;i>=0;i--){ const c=S.cards[i]; if(c.dead) continue;
+    if(px>=c.x-c.w/2-8 && px<=c.x+c.w/2+8 && py>=c.y-c.h/2-8 && py<=c.y+c.h/2+8){
+      if(c.type==='temp') declineCard(c); else kechiPenalty(c); return; } }
+}
+cv.addEventListener('pointerdown',e=>{ ensureAudio(); if(S.mode!=='playing') return;
+  const r=cv.getBoundingClientRect(); pick(e.clientX-r.left,e.clientY-r.top); },{passive:true});
+
+/* ---------- loop ---------- */
+function easeIn(t){ return t*t; }
+function update(dt){
+  // background dots
+  for(const d of S.dots){ d.y-=d.sp*dt; if(d.y<-4){ d.y=H+4; d.x=Math.random()*W; } }
+  if(S.mode!=='playing'){ S.dispSaved += (S.saved-S.dispSaved)*Math.min(1,dt*6); return; }
+  S.elapsed+=dt; S.spawnT+=dt;
+  let need=spawnInterval();
+  if(S.spawnT>=need){ S.spawnT=0; spawnCard(); if(S.elapsed>22 && Math.random()<0.35) spawnCard(); }
+  for(const c of S.cards){ if(c.dead) continue; c.t+=dt/c.dur; const e=easeIn(Math.min(1,c.t));
+    c.x=c.sx+(c.tx-c.sx)*e; c.y=c.sy+(c.ty-c.sy)*e; if(c.t>=1) reachWallet(c); }
+  S.cards=S.cards.filter(c=>!c.dead);
+  // coins
+  for(const k of S.coins){ if(k.delay>0){k.delay-=dt;continue;} k.t+=dt/k.dur; const e=k.t<1?k.t:1;
+    const ce=1-Math.pow(1-e,2);
+    const ax=k.x+k.vx*0.0016, ay=k.y+k.vy*0.0016; // slight initial scatter feel
+    k.cx=k.x+(k.jx-k.x)*ce; k.cy=k.y+(k.jy-k.y)*ce + Math.sin(e*Math.PI)*-60;
+    if(k.t>=1){ k.done=true; S.saved=S.saved; } }
+  if(S.coins.some(k=>k.done)){ S.coins=S.coins.filter(k=>!k.done); }
+  // displayed saved counts up smoothly
+  S.dispSaved += (S.saved-S.dispSaved)*Math.min(1,dt*8);
+  // rings/floats
+  for(const r of S.rings){ r.r+=(r.max-r.r)*Math.min(1,dt*9); r.a-=dt*1.7; }
+  S.rings=S.rings.filter(r=>r.a>0);
+  for(const f of S.floats){ f.y+=f.vy*dt; f.a-=dt*1.3; }
+  S.floats=S.floats.filter(f=>f.a>0);
+  S.shake*=Math.pow(0.0025,dt); if(S.shake<0.3)S.shake=0;
+  S.redflash=Math.max(0,S.redflash-dt*2.2);
+  S.walletPulse=Math.max(0,S.walletPulse-dt*2.5);
+  S.jarPulse=Math.max(0,S.jarPulse-dt*2.5);
+}
+
+/* ---------- render ---------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg gradient
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0a0820'); g.addColorStop(1,'#05030d');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // dots
+  for(const d of S.dots){ ctx.fillStyle='rgba('+d.h+','+(0.10+d.s*0.07)+')'; ctx.beginPath(); ctx.arc(d.x,d.y,d.s,0,7); ctx.fill(); }
+  // shake transform
+  ctx.save();
+  if(S.shake>0){ ctx.translate((Math.random()-.5)*S.shake,(Math.random()-.5)*S.shake); }
+
+  if(S.mode==='playing'||S.mode==='over'){
+    drawJar(); drawWallet();
+    // rings
+    for(const r of S.rings){ ctx.strokeStyle='rgba('+r.col+','+r.a.toFixed(3)+')'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.stroke(); }
+    // cards
+    for(const c of S.cards) drawCard(c);
+    // coins
+    for(const k of S.coins){ if(k.delay>0)continue; const cx=k.cx??k.x, cy=k.cy??k.y;
+      ctx.fillStyle='#FFD23F'; ctx.shadowColor='rgba(255,210,63,.8)'; ctx.shadowBlur=8;
+      ctx.beginPath(); ctx.arc(cx,cy,5,0,7); ctx.fill(); ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(cx-1.4,cy-1.4,1.6,0,7); ctx.fill(); }
+    // floats
+    for(const f of S.floats){ ctx.globalAlpha=Math.max(0,f.a); ctx.fillStyle=f.col; ctx.font='800 '+f.size+'px system-ui,sans-serif'; ctx.textAlign='center';
+      ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=6; ctx.fillText(f.text,f.x,f.y); ctx.shadowBlur=0; ctx.globalAlpha=1; }
+    drawHUD();
+  }
+  ctx.restore();
+  // red flash overlay
+  if(S.redflash>0){ ctx.fillStyle='rgba(236,26,51,'+(S.redflash*0.28).toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
+}
+function drawWallet(){
+  const w=wallet(); const p=1+S.walletPulse*0.16;
+  ctx.save(); ctx.translate(w.x,w.y); ctx.scale(p,p);
+  ctx.shadowColor='rgba(0,229,255,.5)'; ctx.shadowBlur=22;
+  ctx.fillStyle='#13183a'; rr(-46,-30,92,58,14); ctx.fill();
+  ctx.shadowBlur=0; ctx.strokeStyle='rgba(0,229,255,.6)'; ctx.lineWidth=2; rr(-46,-30,92,58,14); ctx.stroke();
+  ctx.fillStyle='#0e1230'; rr(-46,-8,92,18,8); ctx.fill();
+  ctx.fillStyle='#FFD23F'; ctx.beginPath(); ctx.arc(30,1,6,0,7); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='rgba(139,143,181,.9)'; ctx.font='700 12px system-ui'; ctx.textAlign='center'; ctx.fillText('財布',w.x,w.y+40);
+}
+function drawJar(){
+  const j=jar(); const p=1+S.jarPulse*0.12;
+  ctx.save(); ctx.translate(j.x,j.y); ctx.scale(p,p);
+  // jar body
+  ctx.shadowColor='rgba(255,210,63,.35)'; ctx.shadowBlur=18;
+  ctx.fillStyle='rgba(255,255,255,.06)'; rr(-58,-26,116,52,16); ctx.fill(); ctx.shadowBlur=0;
+  ctx.strokeStyle='rgba(255,210,63,.55)'; ctx.lineWidth=2; rr(-58,-26,116,52,16); ctx.stroke();
+  // fill amount visual
+  const frac=Math.min(1,S.dispSaved/60000);
+  ctx.fillStyle='rgba(255,210,63,.18)'; rr(-56,26-Math.max(4,48*frac),112,Math.max(4,48*frac),12); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#FFD23F'; ctx.font='900 26px system-ui'; ctx.textAlign='center';
+  ctx.shadowColor='rgba(255,210,63,.5)'; ctx.shadowBlur=10;
+  ctx.fillText(yen(Math.round(S.dispSaved)),j.x,j.y+8); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(139,143,181,.85)'; ctx.font='700 11px system-ui'; ctx.fillText('誇りジャー',j.x,j.y+24);
+}
+function drawCard(c){
+  const isG=c.type==='green'; const col=isG?'52,211,153':'255,45,135';
+  ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.rot);
+  ctx.shadowColor='rgba('+col+',.5)'; ctx.shadowBlur=16;
+  ctx.fillStyle=isG?'rgba(12,38,30,.95)':'rgba(34,12,28,.95)'; rr(-c.w/2,-c.h/2,c.w,c.h,14); ctx.fill();
+  ctx.shadowBlur=0; ctx.strokeStyle='rgba('+col+',.9)'; ctx.lineWidth=2.4; rr(-c.w/2,-c.h/2,c.w,c.h,14); ctx.stroke();
+  // tag
+  ctx.fillStyle='rgba('+col+',1)'; ctx.font='800 11px system-ui'; ctx.textAlign='left';
+  ctx.fillText(isG?'ホント要る':'誘惑', -c.w/2+14, -c.h/2+18);
+  ctx.fillStyle='#fff'; ctx.font='800 17px system-ui'; ctx.fillText(c.label, -c.w/2+14, 2);
+  ctx.fillStyle=isG?'#9af0cf':'#ffd6e8'; ctx.font='900 18px system-ui'; ctx.textAlign='right';
+  ctx.fillText(yen(c.price), c.w/2-14, c.h/2-12);
+  ctx.restore();
+}
+function drawHUD(){
+  // streak top-left
+  ctx.textAlign='left'; ctx.fillStyle='#fff'; ctx.font='900 30px system-ui';
+  ctx.shadowColor='rgba(0,229,255,.55)'; ctx.shadowBlur=12; ctx.fillText(S.streak, 20, 48); ctx.shadowBlur=0;
+  ctx.fillStyle='var(--dim)'; ctx.fillStyle='rgba(139,143,181,.9)'; ctx.font='700 11px system-ui'; ctx.fillText('賢者ストリーク',20,64);
+  if(S.combo>=2){ ctx.fillStyle='#FFD23F'; ctx.font='900 16px system-ui'; ctx.fillText('×'+S.combo+' 声デカ！',20,86); }
+  // lives top-right (hearts)
+  ctx.textAlign='right';
+  for(let i=0;i<3;i++){ const x=W-22-i*26; const on=(2-i)<S.lives;
+    ctx.font='20px system-ui'; ctx.globalAlpha=on?1:0.22; ctx.fillText('❤️',x,46); ctx.globalAlpha=1; }
+}
+
+/* ---------- rank ---------- */
+function rankFor(n){
+  if(n>=70000) return '節約仙人';
+  if(n>=30000) return '節約賢者';
+  if(n>=10000) return '倹約家';
+  return '見習い倹約家';
+}
+
+/* ---------- game over + share ---------- */
+function gameOver(){
+  S.mode='over';
+  S.cards.length=0; S.coins.length=0; S.rings.length=0; S.floats.length=0; S.shake=0;
+  document.getElementById('ovSaved').textContent=yen(S.saved);
+  document.getElementById('ovRank').textContent=rankFor(S.saved);
+  document.getElementById('ovStat').innerHTML='断った誘惑 '+S.declines+' 件 ／ 最長ストリーク '+S.bestStreak;
+  setTimeout(()=>{ document.getElementById('over').classList.remove('hidden'); },650);
+}
+
+function buildShare(){
+  const c=document.getElementById('shareCanvas'), x=c.getContext('2d'), Wc=1080,Hc=1920;
+  const g=x.createLinearGradient(0,0,0,Hc); g.addColorStop(0,'#0a0820'); g.addColorStop(1,'#05030d');
+  x.fillStyle=g; x.fillRect(0,0,Wc,Hc);
+  // neon dots
+  for(let i=0;i<70;i++){ const h=Math.random()<.5?'0,229,255':'255,45,135'; x.fillStyle='rgba('+h+','+(0.05+Math.random()*0.12)+')';
+    x.beginPath(); x.arc(Math.random()*Wc,Math.random()*Hc,Math.random()*3+1,0,7); x.fill(); }
+  // shockwave residue
+  for(let i=0;i<5;i++){ x.strokeStyle='rgba(255,45,135,'+(0.05+i*0.02)+')'; x.lineWidth=2; x.beginPath(); x.arc(Wc/2,860,160+i*70,0,7); x.stroke(); }
+  x.textAlign='center';
+  x.fillStyle='rgba(139,143,181,.9)'; x.font='700 40px system-ui'; x.fillText('今 月 や め と い た',Wc/2,470);
+  // big amount
+  x.fillStyle='#FFD23F'; x.shadowColor='rgba(255,210,63,.5)'; x.shadowBlur=50;
+  x.font='900 180px system-ui'; x.fillText(yen(S.saved),Wc/2,640); x.shadowBlur=0;
+  // rank
+  x.fillStyle='#00E5FF'; x.font='900 86px system-ui'; x.shadowColor='rgba(0,229,255,.4)'; x.shadowBlur=30;
+  x.fillText(rankFor(S.saved),Wc/2,840); x.shadowBlur=0;
+  // streak
+  x.fillStyle='#fff'; x.font='800 54px system-ui'; x.fillText('賢者ストリーク '+S.bestStreak,Wc/2,990);
+  x.fillStyle='rgba(139,143,181,.95)'; x.font='600 40px system-ui';
+  x.fillText('断った誘惑 '+S.declines+' 件',Wc/2,1060);
+  // big logo
+  x.fillStyle='#fff'; x.font='900 150px system-ui';
+  const lg=x.createLinearGradient(0,1380,0,1560); lg.addColorStop(0,'#fff'); lg.addColorStop(.6,'#00E5FF'); lg.addColorStop(1,'#FF2D87');
+  x.fillStyle=lg; x.fillText('やめとく',Wc/2,1500);
+  x.fillStyle='rgba(139,143,181,.85)'; x.font='600 34px system-ui'; x.fillText('YAMETOKU · 声に出す節約',Wc/2,1570);
+  x.fillStyle='rgba(139,143,181,.6)'; x.font='600 28px system-ui'; x.fillText('t-aka-h.github.io/idea-radar',Wc/2,1820);
+  return c;
+}
+async function share(){
+  const c=buildShare();
+  c.toBlob(async (blob)=>{
+    const file=new File([blob],'yametoku.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text:'今月 '+yen(S.saved)+' やめといた！ #やめとく'}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='yametoku.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },'image/png');
+}
+
+/* ---------- buttons ---------- */
+function start(){ ensureAudio(); document.getElementById('title').classList.add('hidden'); document.getElementById('over').classList.add('hidden'); reset(); }
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('againBtn').addEventListener('click',start);
+document.getElementById('shareBtn').addEventListener('click',share);
+
+/* ---------- main loop ---------- */
+function frame(ts){ if(!S.last)S.last=ts; let dt=(ts-S.last)/1000; S.last=ts; if(dt>0.05)dt=0.05;
+  update(dt); draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// expose for verification
+window.__Y={S, start, gameOver, spawnCard, declineCard};
+})();
+</script>
+</body>
+</html>
