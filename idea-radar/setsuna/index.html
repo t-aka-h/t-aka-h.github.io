@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06030d">
+<title>刹那 — SETSUNA</title>
+<style>
+  :root{
+    --cyan:#00e5ff; --mag:#ff2d87; --amber:#ffb547; --bg:#06030d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Segoe UI',sans-serif;
+    color:#eef2ff;-webkit-user-select:none;user-select:none;touch-action:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;}
+  .layer{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;z-index:5;}
+  .hidden{display:none!important;}
+  .title-kanji{font-size:clamp(64px,22vw,150px);font-weight:900;letter-spacing:.12em;
+    background:linear-gradient(180deg,#fff 0%,var(--cyan) 60%,var(--mag) 130%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 24px rgba(0,229,255,.5));line-height:1;}
+  .title-en{font-size:13px;letter-spacing:.62em;color:var(--cyan);margin:14px 0 0 6px;opacity:.85;font-weight:700;}
+  .tag{font-size:14px;line-height:1.85;color:#aeb6d6;margin:26px 8px 0;max-width:340px;}
+  .tag b{color:#fff;font-weight:700;}
+  .hz-word{color:var(--mag);font-weight:800;}
+  .start{margin-top:34px;font-size:16px;font-weight:800;letter-spacing:.16em;color:#06030d;
+    background:linear-gradient(135deg,var(--cyan),#7af6ff);border:none;border-radius:999px;
+    padding:17px 46px;box-shadow:0 0 30px rgba(0,229,255,.55);animation:pulse 1.7s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.92}50%{transform:scale(1.05);opacity:1}}
+  .mini{font-size:11.5px;color:#6c7596;margin-top:22px;letter-spacing:.04em;line-height:1.7;}
+  /* gameover */
+  #over .ov-card{background:rgba(11,8,22,.72);border:1px solid #2a2340;border-radius:22px;
+    padding:26px 24px 24px;max-width:340px;width:100%;backdrop-filter:blur(8px);}
+  .ov-title{font-size:13px;letter-spacing:.4em;color:var(--mag);font-weight:800;}
+  .ov-sho{font-size:30px;font-weight:900;margin:8px 0 18px;color:#fff;
+    filter:drop-shadow(0 0 14px rgba(255,45,135,.45));}
+  .rowgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;}
+  .stat{background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.18);border-radius:14px;padding:12px 8px;}
+  .stat .v{font-size:26px;font-weight:900;color:#fff;line-height:1;}
+  .stat .v.hz{color:var(--cyan);} .stat .v.ms{color:var(--amber);} .stat .v.cb{color:var(--mag);}
+  .stat .k{font-size:10px;color:#8b93b4;letter-spacing:.1em;margin-top:6px;}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btn{flex:1;border:none;border-radius:14px;padding:15px 0;font-size:15px;font-weight:800;letter-spacing:.08em;}
+  .btn.share{background:linear-gradient(135deg,var(--mag),#ff6aa8);color:#fff;box-shadow:0 0 22px rgba(255,45,135,.4);}
+  .btn.again{background:rgba(255,255,255,.08);color:#dfe5ff;border:1px solid #353050;}
+  .credit{position:fixed;bottom:9px;left:0;right:0;text-align:center;font-size:10px;color:#454a63;z-index:6;letter-spacing:.03em;}
+  .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:4;}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div class="flash" id="flash"></div>
+
+<!-- TITLE -->
+<div class="layer" id="title">
+  <div class="title-kanji">刹那</div>
+  <div class="title-en">S E T S U N A</div>
+  <div class="tag">2026年は<b>スマートグラス元年</b>。240Hz ARグラスの“なめらかさ”を、指一本の反射で。<br>
+  ブレて流れる光が、中央で<b>一瞬だけクッキリ重なる0コンマ秒</b>を撃ち抜け。<br>
+  <span class="hz-word">あなたの反応速度が Hz になって世界が滑らかになる。</span></div>
+  <button class="start" id="startBtn">TAP TO START</button>
+  <div class="mini">中央でブレが消えて鋭い点に“スナップ”した瞬間にタップ<br>3回ミスで終了 ・ 完全オンデバイス</div>
+</div>
+
+<!-- GAME OVER -->
+<div class="layer hidden" id="over">
+  <div class="ov-card">
+    <div class="ov-title">S E T S U N A</div>
+    <div class="ov-sho" id="ovSho">刹那の見切り</div>
+    <div class="rowgrid">
+      <div class="stat"><div class="v hz" id="ovHz">240Hz</div><div class="k">到達 RESOLUTION</div></div>
+      <div class="stat"><div class="v ms" id="ovMs">000ms</div><div class="k">最速反応 REACTION</div></div>
+    </div>
+    <div class="rowgrid" style="grid-template-columns:1fr 1fr;">
+      <div class="stat"><div class="v cb" id="ovCombo">0</div><div class="k">MAX COMBO</div></div>
+      <div class="stat"><div class="v" id="ovHit">0</div><div class="k">命中 HITS</div></div>
+    </div>
+    <div class="btns">
+      <button class="btn share" id="shareBtn">結果をシェア</button>
+      <button class="btn again" id="againBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<div class="credit">📡 Idea Radar — 刹那（Setsuna） · L16 スマートグラス元年 / 240Hz</div>
+
+<script>
+"use strict";
+(function(){
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const flashEl = document.getElementById('flash');
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- Audio: missing-fundamental bass + snap ---------- */
+let AC=null;
+function audioInit(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(AC && AC.state==='suspended') AC.resume(); }
+function now(){ return AC?AC.currentTime:0; }
+// thick bass with overtones so a phone speaker "feels" the sub
+function boom(){
+  if(!AC) return; const t=now();
+  const harm=[1,2,3,4,5], base=48, gains=[0.5,0.85,0.7,0.45,0.3];
+  const out=AC.createGain(); out.gain.setValueAtTime(0.0001,t);
+  out.gain.exponentialRampToValueAtTime(0.9,t+0.012);
+  out.gain.exponentialRampToValueAtTime(0.0008,t+0.34); out.connect(AC.destination);
+  harm.forEach((h,i)=>{ const o=AC.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(base*h,t);
+    o.frequency.exponentialRampToValueAtTime(base*h*0.8,t+0.3);
+    const g=AC.createGain(); g.gain.value=gains[i]; o.connect(g); g.connect(out);
+    o.start(t); o.stop(t+0.36); });
+}
+function snap(){ // high "kin" on hit
+  if(!AC) return; const t=now();
+  const o=AC.createOscillator(); o.type='triangle';
+  o.frequency.setValueAtTime(2300,t); o.frequency.exponentialRampToValueAtTime(1500,t+0.08);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.4,t+0.006); g.gain.exponentialRampToValueAtTime(0.0006,t+0.12);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.13);
+}
+function cue(){ // pre-cue "ti" when lock window opens
+  if(!AC) return; const t=now();
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.value=1560;
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.16,t+0.004); g.gain.exponentialRampToValueAtTime(0.0005,t+0.05);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.06);
+}
+function buzz(){ // miss: down sweep
+  if(!AC) return; const t=now();
+  const o=AC.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(80,t+0.22);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.28,t+0.01); g.gain.exponentialRampToValueAtTime(0.0006,t+0.24);
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+  o.connect(lp); lp.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.26);
+}
+function chirpUp(){ // hz tier up
+  if(!AC) return; const t=now();
+  [0,0.07].forEach((d,i)=>{ const o=AC.createOscillator(); o.type='square';
+    o.frequency.value= i? 1760:1320; const g=AC.createGain();
+    g.gain.setValueAtTime(0.0001,t+d); g.gain.exponentialRampToValueAtTime(0.12,t+d+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0005,t+d+0.07); o.connect(g); g.connect(AC.destination);
+    o.start(t+d); o.stop(t+d+0.08); });
+}
+function vib(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+/* ---------- Game state ---------- */
+const HZ = [60,90,120,165,240,360];
+const HZ_WINDOW = [400,320,250,180,120,90]; // ms target stays inside the "shootable" band
+const HIT_FOCUS = 0.78;   // need focus above this to score
+const CUE_FOCUS = 0.50;   // lock window opens -> pre-cue
+let G = null;
+function newGame(){
+  return { state:'play', hzIdx:0, combo:0, maxCombo:0, hits:0, misses:0,
+    score:0, peakHzIdx:0, bestMs:99999, spawnCount:0,
+    target:null, particles:[], shock:[], shake:0, flashA:0,
+    tutorial:true, t:0 };
+}
+function spawnTarget(){
+  G.spawnCount++;
+  // first 3 spawns are slow tutorial targets
+  const tut = G.spawnCount<=3;
+  let hzIdx = tut?0:G.hzIdx;
+  const winMs = (tut? 520 : HZ_WINDOW[hzIdx]);
+  const R = Math.min(W*0.42, 230);               // gate radius (px from center)
+  const gateBand = R*0.22;                        // half-width of shootable band (focus>0.78 region approx)
+  const speed = (2*gateBand) / (winMs/1000);      // px per second
+  const dir = Math.random()<0.5? 1 : -1;
+  const cx = W/2;
+  // vertical position: mid zone, varied
+  const yBand = H*0.30 + Math.random()*H*0.30;
+  const startX = dir>0? -R*1.25 : W + R*1.25;
+  return { x:startX, y:yBand, dir, speed, R, cx, winMs, tut,
+    hzIdx, cued:false, tCue:0, dead:false, hist:[], passed:false };
+}
+function focusOf(tg){
+  const d = Math.abs(tg.x - tg.cx);
+  return Math.max(0, 1 - d/tg.R);
+}
+
+/* ---------- particles ---------- */
+function burst(x,y,color,n){
+  for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, sp=2+Math.random()*7;
+    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,
+      col:color,r:1.5+Math.random()*2.5}); }
+}
+
+/* ---------- input ---------- */
+function onTap(){
+  audioInit();
+  if(G.state!=='play') return;
+  const tg=G.target; if(!tg||tg.dead) return;
+  const f=focusOf(tg);
+  if(f>=HIT_FOCUS){
+    // HIT
+    const reactMs = performance.now() - tg.tCue;
+    const quality = (f-HIT_FOCUS)/(1-HIT_FOCUS); // 0..1
+    G.hits++; G.combo++; if(G.combo>G.maxCombo)G.maxCombo=G.combo;
+    G.score += Math.round(100 + quality*120) * (1+Math.floor(G.combo/3));
+    if(!tg.tut && reactMs<G.bestMs) G.bestMs=reactMs;
+    // hz climbs every 3 combo
+    const newIdx = Math.min(Math.floor(G.combo/3), HZ.length-1);
+    if(newIdx>G.hzIdx){ G.hzIdx=newIdx; chirpUp(); vib([14,30,14]); }
+    if(G.hzIdx>G.peakHzIdx)G.peakHzIdx=G.hzIdx;
+    boom(); snap(); vib(28);
+    G.flashA = 0.55; G.shake = 13;
+    burst(tg.x,tg.y,'#ffffff',14); burst(tg.x,tg.y,'#00e5ff',10);
+    G.shock.push({x:tg.x,y:tg.y,r:6,life:1,col:'#ff2d87'});
+    G.shock.push({x:tg.x,y:tg.y,r:6,life:1,col:'#ffffff'});
+    tg.dead=true;
+    setTimeout(()=>{ if(G.state==='play') G.target=spawnTarget(); }, 230);
+  } else {
+    // MISS — tapped the blur
+    registerMiss(tg.x,tg.y);
+    tg.dead=true;
+    setTimeout(()=>{ if(G.state==='play') G.target=spawnTarget(); }, 260);
+  }
+}
+function registerMiss(x,y){
+  G.combo=0; G.misses++; buzz(); vib([40,30,40]);
+  G.hzIdx=Math.max(0, G.hzIdx-2); // resolution drops, world blurs more
+  burst(x,y,'#ff2d55',8);
+  if(G.misses>=3) endGame();
+}
+
+/* ---------- loop ---------- */
+let last=performance.now();
+function frame(t){
+  const dt=Math.min(0.05,(t-last)/1000); last=t;
+  if(G && G.state==='play') update(dt,t);
+  render(t);
+  requestAnimationFrame(frame);
+}
+function update(dt,t){
+  G.t+=dt;
+  const tg=G.target;
+  if(tg && !tg.dead){
+    tg.x += tg.dir*tg.speed*dt;
+    // record motion-blur history
+    tg.hist.unshift({x:tg.x,y:tg.y}); if(tg.hist.length>16)tg.hist.pop();
+    const f=focusOf(tg);
+    if(!tg.cued && f>=CUE_FOCUS){ tg.cued=true; tg.tCue=performance.now(); cue(); vib(10); }
+    // passed through without being hit
+    if((tg.dir>0 && tg.x>tg.cx+tg.R) || (tg.dir<0 && tg.x<tg.cx-tg.R)){
+      tg.dead=true; registerMiss(tg.cx, tg.y);
+      setTimeout(()=>{ if(G.state==='play') G.target=spawnTarget(); }, 260);
+    }
+  }
+  // particles
+  for(let i=G.particles.length-1;i>=0;i--){ const p=G.particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vx*=0.92; p.vy*=0.92; p.life-=dt*2.2;
+    if(p.life<=0)G.particles.splice(i,1); }
+  for(let i=G.shock.length-1;i>=0;i--){ const s=G.shock[i];
+    s.r+=600*dt; s.life-=dt*2.5; if(s.life<=0)G.shock.splice(i,1); }
+  if(G.shake>0)G.shake*=0.86;
+  if(G.flashA>0)G.flashA-=dt*2.2;
+}
+
+function hzColor(idx){
+  // blue -> white as resolution rises
+  const k=idx/(HZ.length-1);
+  const r=Math.round(0+255*k), g=Math.round(229+26*k*0), b=255;
+  return 'rgb('+Math.round(120+135*k)+','+Math.round(229+0)+','+255+')';
+}
+function render(t){
+  ctx.save();
+  // shake
+  if(G && G.shake>0.4){ ctx.translate((Math.random()-0.5)*G.shake,(Math.random()-0.5)*G.shake); }
+  // bg
+  ctx.fillStyle='#06030d'; ctx.fillRect(-20,-20,W+40,H+40);
+  // vignette grid hint (very subtle)
+  const cx=W/2;
+  // focus gate guides (thin, low alpha — NOT a heavy band)
+  if(G && G.state==='play'){
+    const R=Math.min(W*0.42,230), band=R*0.22;
+    ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(0,229,255,0.16)';
+    ctx.beginPath(); ctx.moveTo(cx-band,H*0.2); ctx.lineTo(cx-band,H*0.8);
+    ctx.moveTo(cx+band,H*0.2); ctx.lineTo(cx+band,H*0.8); ctx.stroke();
+    // center crosshair
+    ctx.strokeStyle='rgba(255,255,255,0.10)';
+    ctx.beginPath(); ctx.moveTo(cx,H*0.18); ctx.lineTo(cx,H*0.82); ctx.stroke();
+  }
+  // target
+  if(G && G.target && !G.target.dead){
+    const tg=G.target, f=focusOf(tg);
+    const sharp=Math.pow(f,1.6);                 // 0 blurred .. 1 crisp
+    const ghosts=Math.round((1-sharp)*12);       // more ghosts when blurred
+    const baseR=8+ (G.hzIdx*0.6);
+    // motion-blur ghost trail
+    for(let i=ghosts;i>=1;i--){
+      const idx=Math.min(tg.hist.length-1, i);
+      const h=tg.hist[idx]||tg; const a=(1-i/(ghosts+1))*0.5*(1-sharp);
+      ctx.globalAlpha=a; ctx.fillStyle='#00e5ff';
+      ctx.shadowBlur=18*(1-sharp); ctx.shadowColor='#00e5ff';
+      ctx.beginPath(); ctx.arc(h.x,h.y,baseR*(0.8+0.4*Math.random()),0,7); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // main dot: glow shrinks to crisp at peak focus
+    ctx.shadowBlur = 26*(1-sharp) + 6;
+    ctx.shadowColor = sharp>0.7? '#ffffff':'#00e5ff';
+    const col = sharp>0.85? '#ffffff' : '#7af6ff';
+    ctx.fillStyle=col;
+    ctx.beginPath(); ctx.arc(tg.x,tg.y,baseR,0,7); ctx.fill();
+    ctx.shadowBlur=0;
+    // lock ring when shootable
+    if(f>=HIT_FOCUS){
+      const lr = baseR + 6 + (1-(f-HIT_FOCUS)/(1-HIT_FOCUS))*26;
+      ctx.strokeStyle='#ff2d87'; ctx.lineWidth=2.4; ctx.globalAlpha=0.9;
+      ctx.beginPath(); ctx.arc(tg.x,tg.y,lr,0,7); ctx.stroke();
+      ctx.globalAlpha=1;
+      // sharp white core
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(tg.x,tg.y,baseR*0.5,0,7); ctx.fill();
+    } else if(f>=CUE_FOCUS){
+      // approaching cue ring
+      ctx.strokeStyle='rgba(255,181,71,0.5)'; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.arc(tg.x,tg.y,baseR+14,0,7); ctx.stroke();
+    }
+  }
+  // shockwaves
+  if(G) for(const s of G.shock){ ctx.globalAlpha=Math.max(0,s.life)*0.8;
+    ctx.strokeStyle=s.col; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+  // particles
+  if(G) for(const p of G.particles){ ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+  // HUD
+  if(G && G.state==='play'){ drawHUD(); }
+  ctx.restore();
+  // white flash (only during play; never leak onto title/result screens)
+  if(G && G.state==='play' && G.flashA>0){ flashEl.style.opacity=Math.min(0.85,G.flashA); }
+  else flashEl.style.opacity=0;
+}
+function drawHUD(){
+  const hz=HZ[G.hzIdx];
+  ctx.textAlign='left';
+  // Hz big
+  ctx.fillStyle=hzColor(G.hzIdx);
+  ctx.font='900 40px -apple-system,sans-serif';
+  ctx.fillText(hz+'', 20, 58);
+  ctx.font='800 15px -apple-system,sans-serif'; ctx.fillStyle='rgba(255,255,255,.6)';
+  ctx.fillText('Hz', 20+ctx.measureText(hz+'').width*1.0+ (hz<100?24:34), 58);
+  ctx.font='600 11px -apple-system,sans-serif'; ctx.fillStyle='#6c7596';
+  ctx.fillText('RESOLUTION', 21, 74);
+  // combo center-top
+  if(G.combo>1){ ctx.textAlign='center'; ctx.fillStyle='#ff2d87';
+    ctx.font='900 30px -apple-system,sans-serif';
+    ctx.fillText(G.combo+' COMBO', W/2, 50); ctx.textAlign='left'; }
+  // misses (3 dots) right
+  for(let i=0;i<3;i++){ const on=i<(3-G.misses);
+    ctx.fillStyle = on? '#ff2d55':'rgba(255,255,255,.16)';
+    ctx.beginPath(); ctx.arc(W-26-i*22, 40, 6, 0, 7); ctx.fill(); }
+  // tutorial hint
+  if(G.spawnCount<=3 && G.target && !G.target.dead){
+    ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.72)';
+    ctx.font='700 15px -apple-system,sans-serif';
+    ctx.fillText('中央でブレが消えてクッキリした瞬間にタップ', W/2, H*0.86);
+    ctx.fillStyle='#6c7596'; ctx.font='600 12px -apple-system,sans-serif';
+    ctx.fillText('連続で当てるほど世界の解像度（Hz）が上がる', W/2, H*0.86+22);
+    ctx.textAlign='left';
+  }
+}
+
+/* ---------- flow ---------- */
+function startGame(){ audioInit(); G=newGame(); G.target=spawnTarget();
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('over').classList.add('hidden'); }
+const SHO=[
+  {hz:90,  name:'寝ぼけ眼'},
+  {hz:120, name:'動体視力ふつう'},
+  {hz:165, name:'見切りの使い手'},
+  {hz:240, name:'刹那の見切り'},
+  {hz:360, name:'残像狩り'}
+];
+function shoFor(peakIdx,maxCombo){
+  const hz=HZ[peakIdx];
+  let s=SHO[0];
+  for(const e of SHO){ if(hz>=e.hz)s=e; }
+  if(hz>=360 && maxCombo>=18) return '神速';
+  return s.name;
+}
+let LAST=null;
+function endGame(){
+  G.state='over'; G.flashA=0; G.shake=0;
+  const peakHz=HZ[G.peakHzIdx];
+  const ms = G.bestMs<99999? Math.round(G.bestMs) : 0;
+  const sho = shoFor(G.peakHzIdx, G.maxCombo);
+  LAST={peakHz,ms,combo:G.maxCombo,hits:G.hits,sho};
+  document.getElementById('ovSho').textContent=sho;
+  document.getElementById('ovHz').textContent=peakHz+'Hz';
+  document.getElementById('ovMs').textContent=(ms?String(ms).padStart(3,'0'):'—')+'ms';
+  document.getElementById('ovCombo').textContent=G.maxCombo;
+  document.getElementById('ovHit').textContent=G.hits;
+  setTimeout(()=>document.getElementById('over').classList.remove('hidden'),260);
+}
+
+/* ---------- share card 9:16 ---------- */
+function makeCard(){
+  const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+  const x=c.getContext('2d');
+  // bg
+  const g=x.createLinearGradient(0,0,0,1920); g.addColorStop(0,'#0a0518'); g.addColorStop(1,'#06030d');
+  x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // burned-in streak trails (uniqueness)
+  for(let i=0;i<26;i++){ const y=120+Math.random()*1680, w=200+Math.random()*620;
+    const gx=x.createLinearGradient(0,0,1080,0);
+    gx.addColorStop(0,'rgba(0,229,255,0)'); gx.addColorStop(0.5,'rgba(0,229,255,'+(0.05+Math.random()*0.12)+')');
+    gx.addColorStop(1,'rgba(0,229,255,0)');
+    x.fillStyle=gx; x.fillRect((1080-w)/2,y,w,2+Math.random()*2); }
+  // central crisp snap point
+  x.shadowBlur=40; x.shadowColor='#ff2d87'; x.fillStyle='#fff';
+  x.beginPath(); x.arc(540,560,16,0,7); x.fill();
+  x.strokeStyle='#ff2d87'; x.lineWidth=4; x.beginPath(); x.arc(540,560,34,0,7); x.stroke();
+  x.shadowBlur=0;
+  x.textAlign='center';
+  // title
+  x.fillStyle='#fff'; x.font='900 150px -apple-system,sans-serif';
+  x.fillText('刹那', 540, 360);
+  x.fillStyle='#00e5ff'; x.font='800 34px -apple-system,sans-serif';
+  x.fillText('S E T S U N A', 540, 430);
+  // shogo
+  x.fillStyle='#ff2d87'; x.font='900 84px -apple-system,sans-serif';
+  x.fillText(LAST.sho, 540, 760);
+  x.fillStyle='#8b93b4'; x.font='700 28px -apple-system,sans-serif';
+  x.fillText('REFLEX  RANK', 540, 818);
+  // big stats
+  function stat(label,val,col,y){
+    x.fillStyle=col; x.font='900 132px -apple-system,sans-serif'; x.fillText(val,540,y);
+    x.fillStyle='#6c7596'; x.font='700 26px -apple-system,sans-serif'; x.fillText(label,540,y+46);
+  }
+  stat('到達 RESOLUTION', LAST.peakHz+'Hz', '#00e5ff', 1080);
+  stat('最速反応 REACTION', (LAST.ms?LAST.ms:'—')+'ms', '#ffb547', 1330);
+  // combo + hits row
+  x.fillStyle='#ff2d87'; x.font='900 96px -apple-system,sans-serif';
+  x.fillText(LAST.combo+'', 330, 1620);
+  x.fillStyle='#fff'; x.fillText(LAST.hits+'', 750, 1620);
+  x.fillStyle='#6c7596'; x.font='700 24px -apple-system,sans-serif';
+  x.fillText('MAX COMBO', 330, 1664); x.fillText('命中 HITS', 750, 1664);
+  // footer
+  x.fillStyle='#5a6080'; x.font='700 26px -apple-system,sans-serif';
+  x.fillText('#刹那  #Setsuna  ·  240Hz を指で', 540, 1820);
+  x.fillStyle='#3f4560'; x.font='600 22px -apple-system,sans-serif';
+  x.fillText('Idea Radar — t-aka-h.github.io/idea-radar', 540, 1864);
+  return c;
+}
+async function share(){
+  if(!LAST) return;
+  const c=makeCard();
+  c.toBlob(async (blob)=>{
+    const file=new File([blob],'setsuna.png',{type:'image/png'});
+    const txt='刹那 SETSUNA — 到達 '+LAST.peakHz+'Hz / 最速 '+(LAST.ms||'—')+'ms / '+LAST.sho+'\n#刹那 #Setsuna';
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], text:txt}); return; }catch(e){}
+    }
+    // fallback: download
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='setsuna.png'; a.click();
+  },'image/png');
+}
+
+/* ---------- bindings ---------- */
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+document.getElementById('shareBtn').addEventListener('click', share);
+// global tap = shoot (only while playing)
+cv.addEventListener('pointerdown', function(e){ e.preventDefault(); onTap(); }, {passive:false});
+window.addEventListener('keydown', function(e){ if(e.code==='Space'){ e.preventDefault();
+  if(G&&G.state==='play') onTap(); } });
+
+// read-only inspection hook (no gameplay effect)
+window.__setsuna=function(){ return G? {state:G.state,hz:HZ[G.hzIdx],combo:G.combo,maxCombo:G.maxCombo,
+  hits:G.hits,misses:G.misses,peakHz:HZ[G.peakHzIdx],bestMs:(G.bestMs<99999?Math.round(G.bestMs):0),
+  focus:(G.target&&!G.target.dead?+focusOf(G.target).toFixed(3):0)} : {state:'none'}; };
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
