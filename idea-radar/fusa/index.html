@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#05030d">
+<title>房（ふさ／Fusa）— タフティングASMR</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#05030d;
+    font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    color:#e8eaf0;touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* top HUD */
+  #hud{position:fixed;top:0;left:0;right:0;padding:14px 16px calc(env(safe-area-inset-top));
+    display:flex;align-items:center;justify-content:space-between;pointer-events:none;z-index:5;}
+  #logo{font-size:15px;font-weight:900;letter-spacing:4px;color:#fff;
+    text-shadow:0 0 14px rgba(255,45,135,.65);}
+  #logo small{font-size:10px;letter-spacing:2px;color:#9aa0b4;font-weight:700;}
+  #fillwrap{display:flex;align-items:center;gap:8px;}
+  #fillbar{width:96px;height:7px;border-radius:6px;background:#161a2c;overflow:hidden;
+    border:1px solid #262d44;}
+  #fillfg{height:100%;width:0%;border-radius:6px;
+    background:linear-gradient(90deg,#00e5ff,#ff2d87);transition:width .12s linear;}
+  #fillpct{font-size:12px;font-weight:800;color:#cfd4e6;min-width:34px;text-align:right;
+    font-variant-numeric:tabular-nums;}
+  #reset{position:fixed;top:calc(12px + env(safe-area-inset-top));right:14px;z-index:6;
+    width:38px;height:38px;border-radius:50%;background:rgba(20,24,38,.7);border:1px solid #2b3350;
+    color:#9aa0b4;font-size:17px;display:none;align-items:center;justify-content:center;
+    backdrop-filter:blur(6px);pointer-events:auto;}
+  /* bottom hint */
+  #hint{position:fixed;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));
+    text-align:center;font-size:14px;color:#aab0c6;z-index:5;pointer-events:none;
+    letter-spacing:1px;transition:opacity .4s;line-height:1.7;}
+  #hint b{color:#fff;}
+  /* cut button */
+  #cutbtn{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(30px + env(safe-area-inset-bottom));z-index:7;display:none;
+    padding:15px 34px;border-radius:40px;border:1px solid rgba(0,229,255,.5);
+    background:linear-gradient(180deg,rgba(0,229,255,.18),rgba(255,45,135,.16));
+    color:#fff;font-size:16px;font-weight:900;letter-spacing:3px;
+    box-shadow:0 0 26px rgba(0,229,255,.4);pointer-events:auto;backdrop-filter:blur(4px);
+    animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{transform:translateX(-50%) scale(1);}50%{transform:translateX(-50%) scale(1.05);}}
+  /* share overlay */
+  #share{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(3,2,8,.92);backdrop-filter:blur(8px);
+    padding:18px;gap:16px;}
+  #cardimg{max-width:74vw;max-height:62vh;border-radius:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.7),0 0 30px rgba(255,45,135,.22);}
+  #shrow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .btn{padding:13px 22px;border-radius:34px;font-size:15px;font-weight:800;letter-spacing:1px;
+    border:1px solid #2b3350;background:#141826;color:#e8eaf0;}
+  .btn.pri{background:linear-gradient(180deg,#00e5ff,#0099c4);color:#04121a;border:none;
+    box-shadow:0 0 22px rgba(0,229,255,.45);}
+  .btn.go{background:linear-gradient(180deg,#ff2d87,#c41a5e);color:#fff;border:none;
+    box-shadow:0 0 22px rgba(255,45,135,.4);}
+  #stitle{font-size:13px;color:#9aa0b4;letter-spacing:2px;}
+  /* start veil */
+  #veil{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:22px;background:rgba(5,3,13,.82);backdrop-filter:blur(3px);
+    text-align:center;padding:24px;transition:opacity .5s;}
+  #veil h1{font-size:30px;font-weight:900;letter-spacing:8px;color:#fff;
+    text-shadow:0 0 22px rgba(255,45,135,.6);}
+  #veil h1 span{display:block;font-size:13px;letter-spacing:4px;color:#00e5ff;margin-top:8px;font-weight:700;}
+  #veil p{font-size:14px;color:#aab0c6;line-height:1.85;max-width:300px;}
+  #veil p b{color:#fff;}
+  #go{padding:16px 46px;border-radius:40px;border:none;font-size:17px;font-weight:900;letter-spacing:3px;
+    color:#04121a;background:linear-gradient(180deg,#00e5ff,#0099c4);
+    box-shadow:0 0 30px rgba(0,229,255,.5);}
+  .tag{font-size:11px;color:#6b7187;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="rug"></canvas>
+  <canvas id="fx"></canvas>
+</div>
+
+<div id="hud">
+  <div id="logo">房<small> FUSA</small></div>
+  <div id="fillwrap">
+    <div id="fillbar"><div id="fillfg"></div></div>
+    <div id="fillpct">0%</div>
+  </div>
+</div>
+<div id="reset">↻</div>
+<div id="hint"><b>指でなぞって</b>もこもこを打ち込もう</div>
+<button id="cutbtn">カットして仕上げる</button>
+
+<div id="veil">
+  <h1>房<span>ふさ ／ FUSA</span></h1>
+  <p>タフティングガンで<b>ネオンのヤーン</b>を打ち込み、もこもこの房で塗りつぶすと、<b>隠れた図柄</b>が浮かび上がる。打ち込みASMR体感トイ。</p>
+  <button id="go">はじめる</button>
+  <div class="tag">🔊 音ON推奨 ・ 指でなぞるだけ ・ 完全オンデバイス</div>
+</div>
+
+<div id="share">
+  <div id="stitle">今日のラグ — 長押しで保存も可</div>
+  <img id="cardimg" alt="今日のラグ">
+  <div id="shrow">
+    <button class="btn pri" id="shShare">シェア</button>
+    <button class="btn" id="shSave">画像保存</button>
+    <button class="btn go" id="shNew">もう一枚</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+/* ---------- canvas setup ---------- */
+const rug = document.getElementById('rug');
+const fx  = document.getElementById('fx');
+const rctx = rug.getContext('2d');
+const fctx = fx.getContext('2d');
+let W=0,H=0,DPR=1;
+// mask (logical px) for figure inside/colour sampling
+const mask = document.createElement('canvas');
+const mctx = mask.getContext('2d');
+let maskData=null;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth||document.documentElement.clientWidth||390;
+  H = window.innerHeight||document.documentElement.clientHeight||844;
+  W = Math.max(1,W); H = Math.max(1,H);
+  for(const c of [rug,fx]){ c.width=W*DPR; c.height=H*DPR; }
+  rctx.setTransform(DPR,0,0,DPR,0,0);
+  fctx.setTransform(DPR,0,0,DPR,0,0);
+  mask.width=W; mask.height=H;
+  buildFigure();
+  paintBase();
+}
+window.addEventListener('resize',resize);
+
+/* ---------- audio (WebAudio synth, no files) ---------- */
+let AC=null, master=null;
+function audioInit(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
+  }catch(e){ AC=null; }
+}
+function noiseBuf(dur){
+  const n=Math.floor(AC.sampleRate*dur), b=AC.createBuffer(1,n,AC.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1);
+  return b;
+}
+// short punch: filtered noise burst + sub-bass missing-fundamental thud
+function punch(strength){
+  if(!AC) return;
+  const t=AC.currentTime;
+  // noise "ジャッ"
+  const src=AC.createBufferSource(); src.buffer=noiseBuf(0.05);
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1400+Math.random()*900; bp.Q.value=0.8;
+  const ng=AC.createGain(); ng.gain.setValueAtTime(0.0,t);
+  ng.gain.linearRampToValueAtTime(0.16*strength,t+0.004);
+  ng.gain.exponentialRampToValueAtTime(0.0008,t+0.05);
+  src.connect(bp); bp.connect(ng); ng.connect(master); src.start(t); src.stop(t+0.06);
+  // sub-bass missing fundamental (44Hz + harmonics)
+  const base=44, parts=[1,2,3,4,5], g=AC.createGain();
+  g.gain.setValueAtTime(0.0,t);
+  g.gain.linearRampToValueAtTime(0.085*strength,t+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0006,t+0.13);
+  g.connect(master);
+  parts.forEach((p,i)=>{ const o=AC.createOscillator(); o.type='sine'; o.frequency.value=base*p;
+    const og=AC.createGain(); og.gain.value=(1/(i+1))*0.9; o.connect(og); og.connect(g); o.start(t); o.stop(t+0.14); });
+}
+function chordReveal(){
+  if(!AC) return; const t=AC.currentTime;
+  const notes=[196,261.6,329.6,392,523.3]; // ascending arpeggio
+  notes.forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type='triangle'; o.frequency.value=f;
+    const g=AC.createGain(); const ts=t+i*0.09;
+    g.gain.setValueAtTime(0,ts); g.gain.linearRampToValueAtTime(0.13,ts+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0008,ts+0.9);
+    o.connect(g); g.connect(master); o.start(ts); o.stop(ts+0.95);
+  });
+  // sub boom
+  const base=44; [1,2,3].forEach(p=>{ const o=AC.createOscillator(); o.type='sine'; o.frequency.value=base*p;
+    const g=AC.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.1/p,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0006,t+1.1); o.connect(g); g.connect(master); o.start(t); o.stop(t+1.15); });
+}
+function cutSweep(){
+  if(!AC) return; const t=AC.currentTime;
+  const src=AC.createBufferSource(); src.buffer=noiseBuf(0.4);
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.1;
+  bp.frequency.setValueAtTime(800,t); bp.frequency.exponentialRampToValueAtTime(5200,t+0.34);
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0,t); g.gain.linearRampToValueAtTime(0.18,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0008,t+0.4);
+  src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t+0.42);
+}
+function buzz(ms){ if(navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+
+/* ---------- figures ---------- */
+const PAL = {
+  cyan:'#00e5ff', mag:'#ff2d87', amber:'#fbbf24', lime:'#c8ff3c',
+  violet:'#b07cff', rose:'#ff6fae', sky:'#5ad6ff', gold:'#ffd86b', red:'#ff4d5e', green:'#4cf08a'
+};
+const FIGS = [
+  {name:'ハート', draw:(c,cx,cy,s)=>{ c.fillStyle=PAL.mag; heart(c,cx,cy,s*0.92); }},
+  {name:'ほし', draw:(c,cx,cy,s)=>{ c.fillStyle=PAL.amber; star(c,cx,cy,s*0.98,5,0.45); }},
+  {name:'さかな', draw:(c,cx,cy,s)=>{ fish(c,cx,cy,s); }},
+  {name:'はな', draw:(c,cx,cy,s)=>{ flower(c,cx,cy,s); }},
+  {name:'ねこ', draw:(c,cx,cy,s)=>{ cat(c,cx,cy,s); }},
+  {name:'ちょう', draw:(c,cx,cy,s)=>{ butterfly(c,cx,cy,s); }},
+  {name:'きのこ', draw:(c,cx,cy,s)=>{ mushroom(c,cx,cy,s); }},
+];
+function heart(c,cx,cy,s){ c.beginPath();
+  const t=cy - s*0.34;
+  c.moveTo(cx, cy+s*0.62);
+  c.bezierCurveTo(cx+s*0.95, cy-s*0.05, cx+s*0.55, t-s*0.55, cx, t);
+  c.bezierCurveTo(cx-s*0.55, t-s*0.55, cx-s*0.95, cy-s*0.05, cx, cy+s*0.62);
+  c.closePath(); c.fill();
+}
+function star(c,cx,cy,R,pts,inner){ c.beginPath();
+  for(let i=0;i<pts*2;i++){ const r=i%2? R*inner:R; const a=-Math.PI/2 + i*Math.PI/pts;
+    const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r; i?c.lineTo(x,y):c.moveTo(x,y); }
+  c.closePath(); c.fill();
+}
+function fish(c,cx,cy,s){
+  c.fillStyle=PAL.cyan;
+  c.beginPath(); c.ellipse(cx,cy,s*0.85,s*0.5,0,0,Math.PI*2); c.fill();
+  c.beginPath(); c.moveTo(cx+s*0.6,cy); c.lineTo(cx+s*1.15,cy-s*0.5); c.lineTo(cx+s*1.15,cy+s*0.5); c.closePath(); c.fill();
+  c.fillStyle=PAL.gold; // eye
+  c.beginPath(); c.arc(cx-s*0.45,cy-s*0.08,s*0.1,0,Math.PI*2); c.fill();
+}
+function flower(c,cx,cy,s){
+  c.fillStyle=PAL.rose;
+  for(let i=0;i<6;i++){ const a=i*Math.PI/3; c.beginPath();
+    c.ellipse(cx+Math.cos(a)*s*0.55,cy+Math.sin(a)*s*0.55,s*0.36,s*0.22,a,0,Math.PI*2); c.fill(); }
+  c.fillStyle=PAL.amber; c.beginPath(); c.arc(cx,cy,s*0.34,0,Math.PI*2); c.fill();
+}
+function cat(c,cx,cy,s){
+  c.fillStyle=PAL.violet;
+  // ears
+  c.beginPath(); c.moveTo(cx-s*0.62,cy-s*0.35); c.lineTo(cx-s*0.78,cy-s*0.95); c.lineTo(cx-s*0.2,cy-s*0.62); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(cx+s*0.62,cy-s*0.35); c.lineTo(cx+s*0.78,cy-s*0.95); c.lineTo(cx+s*0.2,cy-s*0.62); c.closePath(); c.fill();
+  c.beginPath(); c.arc(cx,cy,s*0.7,0,Math.PI*2); c.fill();
+  c.fillStyle=PAL.lime; c.beginPath(); c.ellipse(cx-s*0.28,cy-s*0.06,s*0.1,s*0.15,0,0,Math.PI*2);
+  c.ellipse(cx+s*0.28,cy-s*0.06,s*0.1,s*0.15,0,0,Math.PI*2); c.fill();
+  c.fillStyle=PAL.mag; c.beginPath(); c.arc(cx,cy+s*0.22,s*0.08,0,Math.PI*2); c.fill();
+}
+function butterfly(c,cx,cy,s){
+  c.fillStyle=PAL.sky;
+  for(const sx of [-1,1]){
+    c.beginPath(); c.ellipse(cx+sx*s*0.5,cy-s*0.32,s*0.46,s*0.4,sx*0.5,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse(cx+sx*s*0.42,cy+s*0.36,s*0.36,s*0.34,-sx*0.5,0,Math.PI*2); c.fill();
+  }
+  c.fillStyle=PAL.amber; c.beginPath(); c.ellipse(cx,cy,s*0.13,s*0.62,0,0,Math.PI*2); c.fill();
+}
+function mushroom(c,cx,cy,s){
+  c.fillStyle=PAL.red;
+  c.beginPath(); c.arc(cx,cy-s*0.1,s*0.8,Math.PI,0); c.closePath(); c.fill();
+  c.fillStyle='#ffe7c4';
+  c.beginPath(); c.moveTo(cx-s*0.34,cy-s*0.12); c.lineTo(cx+s*0.34,cy-s*0.12);
+  c.lineTo(cx+s*0.24,cy+s*0.7); c.quadraticCurveTo(cx,cy+s*0.85,cx-s*0.24,cy+s*0.7); c.closePath(); c.fill();
+  c.fillStyle='#fff3'; // spots via overlay color baked in mask as light
+}
+
+let curFig=null;
+function buildFigure(){
+  curFig = FIGS[(Math.random()*FIGS.length)|0];
+  mctx.clearRect(0,0,W,H);
+  const cx=W*0.5, cy=H*0.47, s=Math.min(W,H)*0.30;
+  curFig.draw(mctx,cx,cy,s);
+  maskData = mctx.getImageData(0,0,W,H).data;
+  // grid for fill tracking
+  cell = Math.max(11, Math.round(Math.min(W,H)/34));
+  gcols = Math.ceil(W/cell); grows = Math.ceil(H/cell);
+  filled = new Uint8Array(gcols*grows);
+  insideCell = new Uint8Array(gcols*grows);
+  totalInside=0;
+  for(let gy=0;gy<grows;gy++)for(let gx=0;gx<gcols;gx++){
+    const px=Math.min(W-1,(gx*cell+cell/2)|0), py=Math.min(H-1,(gy*cell+cell/2)|0);
+    const a=maskData[(py*W+px)*4+3];
+    if(a>20){ insideCell[gy*gcols+gx]=1; totalInside++; }
+  }
+}
+function sampleColor(x,y){
+  const xi=Math.max(0,Math.min(W-1,x|0)), yi=Math.max(0,Math.min(H-1,y|0));
+  const i=(yi*W+xi)*4;
+  const a=maskData[i+3];
+  if(a>20) return [maskData[i],maskData[i+1],maskData[i+2],true];
+  return [42,52,80,false]; // muted base outside figure
+}
+
+/* ---------- fill grid ---------- */
+let cell=14,gcols=0,grows=0,filled=null,insideCell=null,totalInside=0,filledInside=0;
+function markCell(x,y){
+  const gx=(x/cell)|0, gy=(y/cell)|0;
+  if(gx<0||gy<0||gx>=gcols||gy>=grows) return;
+  const idx=gy*gcols+gx;
+  if(!filled[idx]){ filled[idx]=1; if(insideCell[idx]) filledInside++; }
+}
+
+/* ---------- tuft drawing ---------- */
+function lighten(r,g,b,f){ return `rgb(${Math.min(255,r+(255-r)*f)|0},${Math.min(255,g+(255-g)*f)|0},${Math.min(255,b+(255-b)*f)|0})`; }
+function darken(r,g,b,f){ return `rgb(${(r*(1-f))|0},${(g*(1-f))|0},${(b*(1-f))|0})`; }
+
+function stampTuft(x,y){
+  const [r,g,b,inside]=sampleColor(x,y);
+  const baseR = inside? (cell*0.72) : (cell*0.62);
+  const rad = baseR*(0.85+Math.random()*0.4);
+  const ang0 = Math.random()*Math.PI*2;
+  // soft fuzzy base (radial: light center -> dark edge = 3D bump)
+  const grad=rctx.createRadialGradient(x-rad*0.25,y-rad*0.3,rad*0.1, x,y,rad);
+  grad.addColorStop(0, lighten(r,g,b, inside?0.55:0.3));
+  grad.addColorStop(0.55, inside? `rgb(${r},${g},${b})` : darken(r,g,b,0.1));
+  grad.addColorStop(1, darken(r,g,b, inside?0.45:0.55));
+  rctx.fillStyle=grad;
+  rctx.beginPath(); rctx.arc(x,y,rad,0,Math.PI*2); rctx.fill();
+  // yarn loop strokes (short tapered)
+  const n=inside?6:4;
+  rctx.lineCap='round';
+  for(let i=0;i<n;i++){
+    const a=ang0 + i*(Math.PI*2/n) + (Math.random()-0.5)*0.5;
+    const len=rad*(0.7+Math.random()*0.5);
+    const x2=x+Math.cos(a)*len, y2=y+Math.sin(a)*len;
+    rctx.strokeStyle = darken(r,g,b, inside?0.2:0.35);
+    rctx.lineWidth=rad*0.34; rctx.beginPath(); rctx.moveTo(x,y); rctx.lineTo(x2,y2); rctx.stroke();
+    rctx.strokeStyle = lighten(r,g,b, inside?0.4:0.18);
+    rctx.lineWidth=rad*0.16; rctx.beginPath(); rctx.moveTo(x,y); rctx.lineTo(x2*0.7+x*0.3,y2*0.7+y*0.3); rctx.stroke();
+  }
+  // highlight specular dot
+  rctx.fillStyle = inside? 'rgba(255,255,255,0.5)':'rgba(255,255,255,0.16)';
+  rctx.beginPath(); rctx.arc(x-rad*0.28,y-rad*0.32,rad*0.16,0,Math.PI*2); rctx.fill();
+  markCell(x,y);
+}
+
+/* ---------- base / outline render ---------- */
+function paintBase(){
+  rctx.clearRect(0,0,W,H);
+  // deep gradient bg
+  const bg=rctx.createRadialGradient(W*0.5,H*0.42,40, W*0.5,H*0.5,Math.max(W,H)*0.75);
+  bg.addColorStop(0,'#0c0a1f'); bg.addColorStop(1,'#05030d');
+  rctx.fillStyle=bg; rctx.fillRect(0,0,W,H);
+}
+
+/* ---------- state ---------- */
+let started=false, revealed=false, cutDone=false, lastX=0,lastY=0, hasLast=false;
+let lastSound=0, stampCount=0, breath=0;
+let flash=0, flashY=-1; // reveal flash
+const particles=[];
+
+function pct(){ return totalInside? filledInside/totalInside : 0; }
+const REVEAL_AT = 0.80;
+
+/* ---------- FX loop ---------- */
+let prevT=performance.now();
+function loop(now){
+  const dt=Math.min(50, now-prevT)/1000; prevT=now;
+  step(dt);
+  requestAnimationFrame(loop);
+}
+function step(dt){
+  breath += dt;
+  fctx.clearRect(0,0,W,H);
+  // faint figure outline (before reveal: subtle; pulsing)
+  if(!revealed && started){
+    drawOutline((0.10 + 0.06*Math.sin(breath*2.2)));
+  }
+  // reveal glow overlay
+  if(revealed){
+    drawOutline(0.0, true);
+  }
+  // particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.life-=dt; if(p.life<=0){ particles.splice(i,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=240*dt;
+    const a=Math.max(0,p.life/p.max);
+    fctx.globalAlpha=a; fctx.fillStyle=p.col;
+    fctx.beginPath(); fctx.arc(p.x,p.y,p.r*a+0.6,0,Math.PI*2); fctx.fill();
+  }
+  fctx.globalAlpha=1;
+  // reveal flash
+  if(flash>0){
+    fctx.fillStyle='rgba(255,255,255,'+(flash*0.42)+')';
+    fctx.fillRect(0,0,W,H); flash-=dt*2.4;
+  }
+  // cut light sweep
+  if(cutSweepY>=0){
+    cutSweepY += H*1.6*dt;
+    const grd=fctx.createLinearGradient(0,cutSweepY-60,0,cutSweepY+40);
+    grd.addColorStop(0,'rgba(255,255,255,0)'); grd.addColorStop(0.5,'rgba(255,255,255,0.55)');
+    grd.addColorStop(1,'rgba(255,255,255,0)');
+    fctx.fillStyle=grd; fctx.fillRect(0,cutSweepY-60,W,100);
+    if(cutSweepY>H+80) cutSweepY=-1;
+  }
+}
+function drawOutline(alpha, bright){
+  const cx=W*0.5, cy=H*0.47, s=Math.min(W,H)*0.30;
+  fctx.save();
+  if(bright){
+    // bright neon edge after reveal
+    fctx.globalCompositeOperation='lighter';
+    fctx.strokeStyle='rgba(255,255,255,0.0)';
+  }
+  // draw figure shape edge by re-running draw into fx as stroke glow
+  fctx.lineJoin='round';
+  const passes = bright? [[18,'rgba(0,229,255,0.10)'],[9,'rgba(255,45,135,0.16)'],[3,'rgba(255,255,255,0.5)']]
+                       : [[6,'rgba(180,200,255,'+alpha+')'],[1.5,'rgba(255,255,255,'+(alpha*1.2)+')']];
+  for(const [lw,col] of passes){
+    fctx.lineWidth=lw; fctx.strokeStyle=col;
+    strokeFigure(fctx,cx,cy,s);
+  }
+  fctx.restore();
+}
+function strokeFigure(c,cx,cy,s){
+  // re-issue figure path but stroke: simplest is to fill into temp & trace edge.
+  // Instead, draw the figure filled to an offscreen alpha and stroke its silhouette via shadow trick is heavy;
+  // approximate by stroking the same primitive paths.
+  c.save();
+  c.globalCompositeOperation=c.globalCompositeOperation;
+  // reuse mask: stroke the mask silhouette using its bounding via drawImage shadow is costly.
+  // Simpler: stroke primitive shapes per figure name.
+  outlinePaths(c,cx,cy,s);
+  c.restore();
+}
+function outlinePaths(c,cx,cy,s){
+  const n=curFig.name;
+  c.beginPath();
+  if(n==='ハート'){ const t=cy-s*0.92*0.34; const ss=s*0.92;
+    c.moveTo(cx,cy+ss*0.62);
+    c.bezierCurveTo(cx+ss*0.95,cy-ss*0.05,cx+ss*0.55,t-ss*0.55,cx,t);
+    c.bezierCurveTo(cx-ss*0.55,t-ss*0.55,cx-ss*0.95,cy-ss*0.05,cx,cy+ss*0.62); c.closePath();
+  } else if(n==='ほし'){ const R=s*0.98,inner=0.45;
+    for(let i=0;i<10;i++){ const r=i%2?R*inner:R,a=-Math.PI/2+i*Math.PI/5,x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r; i?c.lineTo(x,y):c.moveTo(x,y);} c.closePath();
+  } else if(n==='さかな'){ c.ellipse(cx,cy,s*0.85,s*0.5,0,0,Math.PI*2);
+    c.moveTo(cx+s*0.6,cy); c.lineTo(cx+s*1.15,cy-s*0.5); c.lineTo(cx+s*1.15,cy+s*0.5); c.closePath();
+  } else if(n==='はな'){ for(let i=0;i<6;i++){ const a=i*Math.PI/3; c.moveTo(cx+Math.cos(a)*s*0.55+s*0.36,cy+Math.sin(a)*s*0.55);
+      c.ellipse(cx+Math.cos(a)*s*0.55,cy+Math.sin(a)*s*0.55,s*0.36,s*0.22,a,0,Math.PI*2);} c.moveTo(cx+s*0.34,cy); c.arc(cx,cy,s*0.34,0,Math.PI*2);
+  } else if(n==='ねこ'){ c.arc(cx,cy,s*0.7,0,Math.PI*2);
+    c.moveTo(cx-s*0.62,cy-s*0.35); c.lineTo(cx-s*0.78,cy-s*0.95); c.lineTo(cx-s*0.2,cy-s*0.62);
+    c.moveTo(cx+s*0.62,cy-s*0.35); c.lineTo(cx+s*0.78,cy-s*0.95); c.lineTo(cx+s*0.2,cy-s*0.62);
+  } else if(n==='ちょう'){ for(const sx of[-1,1]){ c.moveTo(cx+sx*s*0.5+s*0.46,cy-s*0.32);
+      c.ellipse(cx+sx*s*0.5,cy-s*0.32,s*0.46,s*0.4,sx*0.5,0,Math.PI*2);
+      c.moveTo(cx+sx*s*0.42+s*0.36,cy+s*0.36); c.ellipse(cx+sx*s*0.42,cy+s*0.36,s*0.36,s*0.34,-sx*0.5,0,Math.PI*2);}
+  } else if(n==='きのこ'){ c.arc(cx,cy-s*0.1,s*0.8,Math.PI,0);
+    c.moveTo(cx-s*0.34,cy-s*0.12); c.lineTo(cx+s*0.34,cy-s*0.12); c.lineTo(cx+s*0.24,cy+s*0.7);
+    c.quadraticCurveTo(cx,cy+s*0.85,cx-s*0.24,cy+s*0.7); c.closePath();
+  }
+  c.stroke();
+}
+
+function burst(x,y,col,inside){
+  const n=inside?5:2;
+  for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, sp=30+Math.random()*70;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-20,r:1.5+Math.random()*2,col,life:0.5+Math.random()*0.3,max:0.8}); }
+}
+
+/* ---------- input ---------- */
+function pos(e){ const t=e.touches?e.touches[0]:e; return [t.clientX,t.clientY]; }
+function down(e){ e.preventDefault(); if(!started) return; audioInit(); if(AC&&AC.state==='suspended')AC.resume();
+  const [x,y]=pos(e); hasLast=true; lastX=x; lastY=y; paintStroke(x,y,true); }
+function move(e){ e.preventDefault(); if(!started||!hasLast) return; const [x,y]=pos(e); paintStroke(x,y,false); }
+function up(e){ hasLast=false; }
+
+function paintStroke(x,y,first){
+  if(revealed && !cutDone){ /* still allow extra fill */ }
+  if(first){ stampTuft(x,y); afterStamp(x,y); lastX=x; lastY=y; return; }
+  const dx=x-lastX, dy=y-lastY, dist=Math.hypot(dx,dy);
+  const stepd=Math.max(7, cell*0.55);
+  if(dist<stepd) return;
+  const steps=Math.floor(dist/stepd);
+  for(let i=1;i<=steps;i++){ const t=i/steps; const sx=lastX+dx*t, sy=lastY+dy*t; stampTuft(sx,sy); }
+  afterStamp(x,y);
+  lastX=x; lastY=y;
+}
+function afterStamp(x,y){
+  stampCount++;
+  const now=performance.now();
+  if(now-lastSound>62){ lastSound=now; const [r,g,b,inside]=sampleColor(x,y);
+    punch(inside?1:0.7); burst(x,y,inside?`rgb(${r},${g},${b})`:'#5a6a90',inside);
+    if(stampCount%3===0) buzz(8);
+  }
+  updateFill();
+}
+
+let cutSweepY=-1;
+function updateFill(){
+  const p=pct();
+  const pc=Math.min(100,Math.round(p*100));
+  document.getElementById('fillfg').style.width=pc+'%';
+  document.getElementById('fillpct').textContent=pc+'%';
+  if(!revealed && p>=REVEAL_AT){ doReveal(); }
+}
+function doReveal(){
+  revealed=true; flash=1; chordReveal(); buzz([0,40,40,120]);
+  // brighten figure tufts: overlay vivid glow using mask shape
+  rctx.save(); rctx.globalCompositeOperation='lighter';
+  rctx.globalAlpha=0.18;
+  rctx.drawImage(mask,0,0,W,H); rctx.restore();
+  document.getElementById('hint').innerHTML='図柄が出た！ <b>カットして仕上げよう</b>';
+  document.getElementById('cutbtn').style.display='block';
+  // particle pop along figure
+  for(let i=0;i<40;i++){ const a=Math.random()*Math.PI*2, R=Math.min(W,H)*0.3*Math.random();
+    burst(W*0.5+Math.cos(a)*R, H*0.47+Math.sin(a)*R, '#fff', true); }
+}
+function doCut(){
+  if(cutDone) return; cutDone=true;
+  cutSweepY=0; cutSweep(); buzz([0,30,20,60]);
+  document.getElementById('cutbtn').style.display='none';
+  document.getElementById('hint').style.opacity='0';
+  // even-out: top sheen + slight contrast lift over whole rug
+  rctx.save();
+  const sh=rctx.createLinearGradient(0,0,0,H);
+  sh.addColorStop(0,'rgba(255,255,255,0.10)'); sh.addColorStop(0.4,'rgba(255,255,255,0.0)');
+  sh.addColorStop(1,'rgba(0,0,0,0.12)');
+  rctx.fillStyle=sh; rctx.fillRect(0,0,W,H);
+  rctx.restore();
+  setTimeout(showShare, 1100);
+}
+
+/* ---------- share card ---------- */
+function showShare(){
+  const card=document.createElement('canvas'); card.width=1080; card.height=1920;
+  const c=card.getContext('2d');
+  const bg=c.createLinearGradient(0,0,0,1920); bg.addColorStop(0,'#0c0a1f'); bg.addColorStop(1,'#05030d');
+  c.fillStyle=bg; c.fillRect(0,0,1080,1920);
+  // neon frame
+  c.strokeStyle='#ff2d87'; c.lineWidth=6; c.shadowColor='#ff2d87'; c.shadowBlur=28;
+  roundRect(c,40,40,1000,1840,40); c.stroke(); c.shadowBlur=0;
+  c.strokeStyle='rgba(0,229,255,0.5)'; c.lineWidth=2; roundRect(c,58,58,964,1804,32); c.stroke();
+  // title
+  c.textAlign='center'; c.fillStyle='#fff'; c.shadowColor='#ff2d87'; c.shadowBlur=24;
+  c.font='900 120px -apple-system,sans-serif'; c.fillText('房', 540, 250);
+  c.shadowBlur=0; c.fillStyle='#00e5ff'; c.font='800 40px -apple-system,sans-serif';
+  c.fillText('ふ さ ／ F U S A', 540, 318);
+  // rug image (current rug canvas) fit into a rounded box, centered on figure
+  const boxX=120,boxY=380,boxW=840,boxH=1040;
+  c.save(); roundRect(c,boxX,boxY,boxW,boxH,30); c.clip();
+  c.fillStyle='#06040f'; c.fillRect(boxX,boxY,boxW,boxH);
+  // crop centered region of rug around figure
+  const srcCx=W*0.5, srcCy=H*0.47, half=Math.min(W,H)*0.46;
+  const sx=srcCx-half, sy=srcCy-half, sw=half*2, sh=half*2;
+  c.drawImage(rug, sx*DPR, sy*DPR, sw*DPR, sh*DPR, boxX,boxY,boxW,boxH);
+  c.restore();
+  c.strokeStyle='rgba(0,229,255,0.4)'; c.lineWidth=3; roundRect(c,boxX,boxY,boxW,boxH,30); c.stroke();
+  // stats
+  const dens=Math.min(100,Math.round(pct()*100));
+  const comment = dens>=98? '#職人級の打ち込み' : dens>=90? '#もこもこ過剰' : '#のびしろあり';
+  c.fillStyle='#fff'; c.textAlign='center';
+  c.font='900 64px -apple-system,sans-serif'; c.fillText('「'+curFig.name+'」のラグ', 540, 1560);
+  c.fillStyle='#c8ff3c'; c.font='800 50px -apple-system,sans-serif';
+  c.fillText('房密度 '+dens+'%', 540, 1640);
+  c.fillStyle='#fbbf24'; c.font='700 42px -apple-system,sans-serif'; c.fillText(comment, 540, 1712);
+  // footer
+  c.fillStyle='#9aa0b4'; c.font='600 32px -apple-system,sans-serif';
+  c.fillText('房（ふさ／Fusa）— タフティングASMR', 540, 1810);
+  c.fillStyle='#6b7187'; c.font='600 28px -apple-system,sans-serif';
+  c.fillText('#房 #Fusa #タフティング #ASMR', 540, 1856);
+
+  const url=card.toDataURL('image/png');
+  document.getElementById('cardimg').src=url;
+  document.getElementById('share').style.display='flex';
+  window._cardCanvas=card;
+}
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+/* ---------- share actions ---------- */
+document.getElementById('shSave').onclick=()=>{ const a=document.createElement('a');
+  a.download='fusa_rug.png'; a.href=window._cardCanvas.toDataURL('image/png'); a.click(); };
+document.getElementById('shShare').onclick=async()=>{
+  try{
+    window._cardCanvas.toBlob(async(blob)=>{
+      const file=new File([blob],'fusa_rug.png',{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], text:'房（Fusa）でラグを打ち込んだ #房 #Fusa #タフティング'});
+      } else { const a=document.createElement('a'); a.download='fusa_rug.png'; a.href=window._cardCanvas.toDataURL(); a.click(); }
+    },'image/png');
+  }catch(e){}
+};
+document.getElementById('shNew').onclick=()=>{ document.getElementById('share').style.display='none'; resetGame(); };
+
+/* ---------- reset ---------- */
+function resetGame(){
+  revealed=false; cutDone=false; filledInside=0; stampCount=0; cutSweepY=-1; flash=0; particles.length=0;
+  document.getElementById('fillfg').style.width='0%';
+  document.getElementById('fillpct').textContent='0%';
+  document.getElementById('hint').style.opacity='1';
+  document.getElementById('hint').innerHTML='<b>指でなぞって</b>もこもこを打ち込もう';
+  document.getElementById('cutbtn').style.display='none';
+  buildFigure(); paintBase();
+}
+document.getElementById('reset').onclick=resetGame;
+document.getElementById('cutbtn').onclick=doCut;
+
+/* ---------- start ---------- */
+document.getElementById('go').onclick=()=>{
+  audioInit(); if(AC&&AC.state==='suspended')AC.resume();
+  started=true;
+  const v=document.getElementById('veil'); v.style.opacity='0'; setTimeout(()=>v.style.display='none',500);
+  document.getElementById('reset').style.display='flex';
+};
+
+// input listeners on fx (top canvas)
+fx.addEventListener('touchstart',down,{passive:false});
+fx.addEventListener('touchmove',move,{passive:false});
+fx.addEventListener('touchend',up,{passive:false});
+fx.addEventListener('mousedown',down);
+window.addEventListener('mousemove',e=>{ if(hasLast) move(e); });
+window.addEventListener('mouseup',up);
+
+resize();
+requestAnimationFrame(loop);
+
+// expose for headless verification
+window.__fusa={ stampAt:(x,y,first)=>{ if(!started)return; if(first){hasLast=true;lastX=x;lastY=y;} paintStroke(x,y,first); },
+  fillTo:(target)=>{ // programmatically fill figure cells for testing
+    started=true; let guard=0;
+    while(pct()<target && guard<6000){ // stamp across inside cells
+      for(let gy=0;gy<grows;gy++)for(let gx=0;gx<gcols;gx++){ if(insideCell[gy*gcols+gx]&&!filled[gy*gcols+gx]){
+        const x=gx*cell+cell/2, y=gy*cell+cell/2; stampTuft(x,y); if(pct()>=target)break; } }
+      guard++; if(guard>3)break;
+    }
+    updateFill();
+  },
+  state:()=>({started,revealed,cutDone,pct:pct(),fig:curFig&&curFig.name}),
+  doCut, showShare };
+})();
+</script>
+</body>
+</html>
