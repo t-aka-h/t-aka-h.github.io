@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070a12">
+<title>湯治（とうじ／Tōji）— スマホを預けるほど世界が色づく</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#070a12;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;color:#eef2fb;}
+  #stage{position:fixed;inset:0;touch-action:none;}
+  canvas#scene{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:0;left:0;right:0;padding:14px 18px calc(env(safe-area-inset-top));z-index:5;pointer-events:none;display:flex;justify-content:space-between;align-items:flex-start;}
+  .hud .left .title{font-size:15px;font-weight:900;letter-spacing:6px;color:#fbe6c0;text-shadow:0 0 12px rgba(251,191,36,.35);}
+  .hud .left .romaji{font-size:9px;letter-spacing:3px;color:#8b93ac;margin-top:2px;}
+  .hud .right{text-align:right;}
+  .hud .right .timeLbl{font-size:9px;letter-spacing:2px;color:#8b93ac;}
+  .hud .right .time{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#eef2fb;line-height:1;text-shadow:0 0 10px rgba(70,227,255,.25);}
+  .hud .right .stars{font-size:13px;letter-spacing:2px;margin-top:3px;color:#fbbf24;text-shadow:0 0 8px rgba(251,191,36,.5);}
+  .stageName{position:absolute;top:64px;left:0;right:0;text-align:center;z-index:5;pointer-events:none;font-size:12px;letter-spacing:5px;color:#cdd6ee;opacity:.0;transition:opacity .6s;text-shadow:0 0 10px rgba(0,0,0,.6);}
+  .center{position:absolute;left:0;right:0;top:42%;transform:translateY(-50%);text-align:center;z-index:5;pointer-events:none;padding:0 26px;}
+  .center .lead{font-size:17px;font-weight:700;line-height:1.85;color:#eaf0ff;text-shadow:0 1px 10px rgba(0,0,0,.7);}
+  .center .sub{font-size:12px;color:#aeb6cd;margin-top:10px;line-height:1.8;text-shadow:0 1px 8px rgba(0,0,0,.7);}
+  .center.hide{opacity:0;transition:opacity .7s;}
+
+  .kagoWrap{position:absolute;left:0;right:0;bottom:calc(34px + env(safe-area-inset-bottom));z-index:6;display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+  .ring{position:relative;width:138px;height:138px;}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg);filter:drop-shadow(0 0 10px rgba(251,191,36,.25));}
+  .ring .pad{position:absolute;inset:18px;border-radius:50%;background:radial-gradient(circle at 50% 38%,#2a2233,#171019 70%);border:1px solid rgba(251,191,36,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .12s,box-shadow .2s;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+  .ring .pad .kanji{font-size:26px;font-weight:900;color:#f4dca6;letter-spacing:3px;text-shadow:0 0 14px rgba(251,191,36,.4);}
+  .ring .pad .en{font-size:8px;letter-spacing:2px;color:#9b8b6e;margin-top:2px;}
+  #stage.holding .ring .pad{transform:scale(.93);box-shadow:0 0 26px rgba(251,191,36,.5),inset 0 0 20px rgba(0,0,0,.5);}
+  .kagoHint{margin-top:12px;font-size:11px;letter-spacing:1px;color:#9aa3bd;text-align:center;line-height:1.6;}
+  .kagoHint b{color:#fbe6c0;font-weight:700;}
+
+  .issueBtn{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(196px + env(safe-area-inset-bottom));z-index:7;pointer-events:auto;
+    background:linear-gradient(180deg,#3a2c12,#241a08);border:1px solid rgba(251,191,36,.55);color:#fde9bf;font-size:12px;font-weight:800;letter-spacing:2px;
+    padding:9px 18px;border-radius:999px;box-shadow:0 0 18px rgba(251,191,36,.3);opacity:0;visibility:hidden;transition:opacity .5s,visibility .5s;}
+  .issueBtn.show{opacity:1;visibility:visible;}
+
+  /* result overlay */
+  .overlay{position:fixed;inset:0;z-index:20;background:rgba(5,7,14,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;opacity:0;visibility:hidden;transition:opacity .5s,visibility .5s;}
+  .overlay.show{opacity:1;visibility:visible;}
+  .overlay canvas#card{width:auto;height:64vh;max-height:560px;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.6);}
+  .ovTitle{font-size:13px;letter-spacing:4px;color:#fbe6c0;margin-bottom:14px;text-align:center;}
+  .ovBtns{display:flex;gap:12px;margin-top:18px;}
+  .ovBtns button{font-family:inherit;border:none;border-radius:999px;padding:12px 22px;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;}
+  .b-share{background:linear-gradient(180deg,#46e3ff,#1f9fc7);color:#04222b;box-shadow:0 0 18px rgba(70,227,255,.4);}
+  .b-again{background:#1b2233;color:#cdd6ee;border:1px solid #2c3650;}
+  .saveHint{font-size:10px;color:#8b93ac;margin-top:12px;text-align:center;letter-spacing:1px;}
+  .holdsurface{position:absolute;inset:0;z-index:4;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="scene"></canvas>
+  <div class="holdsurface" id="hold"></div>
+
+  <div class="hud">
+    <div class="left"><div class="title">湯　治</div><div class="romaji">T O J I ・ 逗 留</div></div>
+    <div class="right"><div class="timeLbl">逗留時間</div><div class="time" id="time">0:00</div><div class="stars" id="stars">・・・</div></div>
+  </div>
+  <div class="stageName" id="stageName"></div>
+
+  <div class="center" id="center">
+    <div class="lead">スマホを、預ける。</div>
+    <div class="sub">下の<b style="color:#f4dca6">脱衣カゴ</b>に指をあてて押さえ続けるほど、<br>灰色の温泉郷が色づき、川音と湯けむりが満ちていく。<br><span style="color:#7f8aa6">指を離すと、すうっと色が褪せる。</span></div>
+  </div>
+
+  <button class="issueBtn" id="issueBtn">湯治証を発行する</button>
+
+  <div class="kagoWrap">
+    <div class="ring">
+      <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="4"/><circle id="prog" cx="50" cy="50" r="45" fill="none" stroke="#fbbf24" stroke-width="4" stroke-linecap="round" stroke-dasharray="282.7" stroke-dashoffset="282.7"/></svg>
+      <div class="pad"><div class="kanji">浴</div><div class="en">HOLD</div></div>
+    </div>
+    <div class="kagoHint" id="kagoHint"><b>押さえて</b>、湯に浸かる。離すと褪せる。</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="ovTitle">― 満願 ―  湯治証を授かりました</div>
+  <canvas id="card" width="1080" height="1920"></canvas>
+  <div class="ovBtns">
+    <button class="b-share" id="shareBtn">シェア / 保存</button>
+    <button class="b-again" id="againBtn">もう一度 浸かる</button>
+  </div>
+  <div class="saveHint">画像を長押しでも保存できます</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+var scene = document.getElementById('scene');
+var sctx = scene.getContext('2d');
+var W=0,H=0;
+function resize(){ W=window.innerWidth; H=window.innerHeight; scene.width=W*DPR; scene.height=H*DPR; sctx.setTransform(DPR,0,0,DPR,0,0); buildScene(); }
+window.addEventListener('resize',resize);
+
+// ---------- state ----------
+var soak=0;            // 0..1 — the single core variable
+var holding=false;
+var stayMs=0;          // accumulated hold time (ms) = 逗留時間
+var stage=0;           // 0 mist,1 forest,2 river,3 stars
+var TH=[0.12,0.45,0.80]; // front-loaded thresholds
+var fullMs=0;          // how long soak has been >=.97
+var completed=false;
+var started=false;
+var last=performance.now();
+
+// ---------- helpers ----------
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function rnd(a,b){return a+Math.random()*(b-a);}
+function mix(c1,c2,t){ // c=[r,g,b]
+  return 'rgb('+(c1[0]+(c2[0]-c1[0])*t|0)+','+(c1[1]+(c2[1]-c1[1])*t|0)+','+(c1[2]+(c2[2]-c1[2])*t|0)+')';
+}
+
+// ---------- procedural scene geometry (rebuilt on resize) ----------
+var mountains=[], trees=[], stars=[];
+function buildScene(){
+  mountains=[];
+  var horizon=H*0.62;
+  for(var l=0;l<3;l++){
+    var pts=[]; var baseY=horizon - l*0; var amp=28+l*14; var seg=6+l*2;
+    for(var i=0;i<=seg;i++){ pts.push({x:i/seg*W, y:horizon - (l*46) - Math.abs(Math.sin(i*1.3+l*2))*amp - rnd(0,12)}); }
+    mountains.push({pts:pts, depth:l});
+  }
+  trees=[];
+  var n=Math.round(W/42);
+  for(var i=0;i<n;i++){ var x=rnd(0,W); var h=rnd(34,72); trees.push({x:x, y:horizon-6, h:h, w:h*0.5}); }
+  stars=[];
+  for(var i=0;i<90;i++){ stars.push({x:rnd(0,W), y:rnd(0,H*0.5), r:rnd(0.6,1.8), p:rnd(0,6.28), sp:rnd(0.6,2.0)}); }
+}
+
+// ---------- particles ----------
+var steam=[], splash=[], burst=[];
+for(var i=0;i<70;i++){ steam.push(newSteam(true)); }
+function newSteam(init){ return {x:Math.random()*1, y:init?Math.random():1, vy:rnd(0.03,0.08), drift:rnd(-0.5,0.5), ph:rnd(0,6.28), life:rnd(0.6,1), sz:rnd(16,46)}; }
+
+function spawnBurst(cx,cy,col,k){ for(var i=0;i<k;i++){ burst.push({x:cx,y:cy,vx:rnd(-1.4,1.4),vy:rnd(-2.4,-.4),a:1,col:col,sz:rnd(2,4)}); } }
+
+// ---------- render ----------
+function buildSceneSafe(){ if(!mountains.length) buildScene(); }
+function draw(t){
+  buildSceneSafe();
+  var horizon=H*0.62;
+  // --- sky ---
+  var sky=sctx.createLinearGradient(0,0,0,horizon+40);
+  // grey -> coloured (top deep indigo/purple, bottom warm amber glow) by soak
+  var topG=[20,23,32], topC=[26,18,52];
+  var midG=[34,37,48], midC=[58,40,86];
+  var botG=[48,46,52], botC=[120,72,34];
+  sky.addColorStop(0, mix(topG,topC,soak));
+  sky.addColorStop(0.55, mix(midG,midC,soak));
+  sky.addColorStop(1, mix(botG,botC,soak));
+  sctx.fillStyle=sky; sctx.fillRect(0,0,W,horizon+40);
+
+  // --- stars (star stage) ---
+  var starA=clamp((soak-0.80)/0.18,0,1);
+  if(starA>0){ for(var i=0;i<stars.length;i++){ var s=stars[i]; var tw=0.5+0.5*Math.sin(t*0.001*s.sp+s.p); sctx.globalAlpha=starA*tw*0.95; sctx.fillStyle='#fffdf2'; sctx.beginPath(); sctx.arc(s.x,s.y,s.r,0,6.28); sctx.fill(); } sctx.globalAlpha=1; }
+
+  // --- moon glow at star stage ---
+  if(starA>0){ var mg=sctx.createRadialGradient(W*0.78,H*0.18,2,W*0.78,H*0.18,70); mg.addColorStop(0,'rgba(255,250,235,'+(starA*0.9)+')'); mg.addColorStop(1,'rgba(255,250,235,0)'); sctx.fillStyle=mg; sctx.beginPath(); sctx.arc(W*0.78,H*0.18,70,0,6.28); sctx.fill(); }
+
+  // --- mountains (grey -> teal) ---
+  var mc=[ [30,33,42],[40,44,54],[52,56,66] ]; // grey by depth
+  var mcc=[ [22,42,52],[28,58,66],[40,80,86] ]; // teal by depth
+  for(var l=0;l<mountains.length;l++){ var m=mountains[l]; sctx.beginPath(); sctx.moveTo(0,horizon+40); for(var i=0;i<m.pts.length;i++){ sctx.lineTo(m.pts[i].x,m.pts[i].y); } sctx.lineTo(W,horizon+40); sctx.closePath(); sctx.fillStyle=mix(mc[l],mcc[l],soak); sctx.fill(); }
+
+  // --- forest trees (appear/colourise from forest stage) ---
+  var forA=clamp((soak-0.04)/0.16,0,1);
+  for(var i=0;i<trees.length;i++){ var tr=trees[i]; var col=mix([46,48,54],[26,74,40],soak); sctx.fillStyle=col; sctx.globalAlpha=0.55+0.45*forA; // pine triangle
+    var x=tr.x,y=tr.y,h=tr.h,w=tr.w; sctx.beginPath(); sctx.moveTo(x,y-h); sctx.lineTo(x-w*0.5,y); sctx.lineTo(x+w*0.5,y); sctx.closePath(); sctx.fill(); sctx.beginPath(); sctx.moveTo(x,y-h*0.65); sctx.lineTo(x-w*0.4,y-h*0.18); sctx.lineTo(x+w*0.4,y-h*0.18); sctx.closePath(); sctx.fill(); }
+  sctx.globalAlpha=1;
+
+  // --- onsen pool (grey -> cyan) below horizon ---
+  var pg=sctx.createLinearGradient(0,horizon,0,H);
+  pg.addColorStop(0, mix([40,42,48],[18,70,86],soak));
+  pg.addColorStop(1, mix([22,24,30],[8,32,48],soak));
+  sctx.fillStyle=pg; sctx.fillRect(0,horizon,W,H-horizon);
+
+  // --- water ripples / river shimmer (river stage) ---
+  var rivA=clamp((soak-0.30)/0.18,0,1);
+  for(var r=0;r<7;r++){ var yy=horizon+12+r*((H-horizon-12)/7); var amp=2+r*0.8; sctx.globalAlpha=(0.10+0.22*rivA); sctx.strokeStyle=mix([120,124,134],[150,235,255],soak); sctx.lineWidth=1.4; sctx.beginPath(); for(var x=0;x<=W;x+=10){ var yo=Math.sin(x*0.025 + t*0.0016 + r*0.9)*amp; if(x===0) sctx.moveTo(x,yy+yo); else sctx.lineTo(x,yy+yo);} sctx.stroke(); }
+  sctx.globalAlpha=1;
+
+  // moon reflection
+  if(starA>0){ sctx.globalAlpha=starA*0.5; sctx.fillStyle='rgba(255,250,235,0.5)'; for(var r=0;r<5;r++){ var yy=horizon+20+r*26; sctx.fillRect(W*0.78-12, yy, 24, 3+Math.sin(t*0.004+r)*1.5);} sctx.globalAlpha=1; }
+
+  // --- steam particles (always; density grows with soak) ---
+  var dens = 0.4 + soak*0.6;
+  for(var i=0;i<steam.length;i++){ var p=steam[i]; if(i/steam.length>dens){ continue; }
+    var px=p.x*W + Math.sin(p.ph+t*0.0006)*16 + p.drift*40;
+    var py=(horizon+20) - p.y*(horizon+40);
+    var a=clamp(p.y,0,1)*0.5*p.life;
+    var col = mix([170,172,180],[252,228,180],soak);
+    sctx.globalAlpha=a*0.5; sctx.fillStyle=col; sctx.beginPath(); sctx.arc(px,py,p.sz*(0.6+p.y*0.8),0,6.28); sctx.fill();
+  }
+  sctx.globalAlpha=1;
+
+  // --- bursts ---
+  for(var i=burst.length-1;i>=0;i--){ var b=burst[i]; sctx.globalAlpha=clamp(b.a,0,1); sctx.fillStyle=b.col; sctx.beginPath(); sctx.arc(b.x,b.y,b.sz,0,6.28); sctx.fill(); }
+  sctx.globalAlpha=1;
+
+  // --- vignette ---
+  var vg=sctx.createRadialGradient(W/2,H*0.5,H*0.3,W/2,H*0.5,H*0.75); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.5)'); sctx.fillStyle=vg; sctx.fillRect(0,0,W,H);
+
+  // --- desaturated dim when very low (extra "grey" feel) ---
+  if(soak<0.5){ sctx.globalAlpha=(0.5-soak)*0.5; sctx.fillStyle='#0a0d15'; sctx.fillRect(0,0,W,H); sctx.globalAlpha=1; }
+}
+
+// ---------- physics step (testable, no rAF/draw) ----------
+function step(dt){
+  if(holding){ stayMs+=dt*1000;
+    var rate = soak<0.12 ? 0.075 : 0.046;
+    soak=clamp(soak+rate*dt,0,1);
+  } else {
+    soak=clamp(soak-0.046*1.7*dt,0.05,1);
+  }
+  // stage transitions
+  var ns=0; if(soak>=TH[0])ns=1; if(soak>=TH[1])ns=2; if(soak>=TH[2])ns=3;
+  if(ns>stage){ onStageUp(ns); }
+  if(ns<stage){ stage=ns; updateStageName(false); }
+  stage=ns;
+  // completion
+  if(soak>=0.97){ fullMs+=dt*1000; if(fullMs>3000 && !completed){ completed=true; vibe([20,60,30,60,120]); openCard(); } }
+  else { fullMs=0; }
+
+  // particle update
+  for(var i=0;i<steam.length;i++){ var p=steam[i]; p.y+=p.vy*dt* (holding?1.1:0.8); if(p.y>1.05){ steam[i]=newSteam(false);} }
+  for(var i=burst.length-1;i>=0;i--){ var b=burst[i]; b.x+=b.vx; b.y+=b.vy; b.vy+=0.06; b.a-=0.02; if(b.a<=0) burst.splice(i,1); }
+
+  // ui
+  updateRing(); updateAudio(); updateHUD();
+}
+function tick(now){
+  var dt=Math.min((now-last)/1000, 0.05); last=now;
+  step(dt);
+  draw(now);
+  requestAnimationFrame(tick);
+}
+// test hook (only when ?test in URL; harmless otherwise)
+if(location.search.indexOf('test')>=0){
+  window.__T={ step:step, openCard:openCard,
+    setHold:function(b){ holding=b; document.getElementById('stage').classList.toggle('holding',b); if(b&&!started){started=true;document.getElementById('center').classList.add('hide');} },
+    pump:function(sec,d){ d=d||0.016; var n=Math.round(sec/d); for(var i=0;i<n;i++){ step(d); } },
+    state:function(){ return {soak:+soak.toFixed(3), stage:stage, stayMs:Math.round(stayMs), completed:completed, ring:document.getElementById('prog').style.strokeDashoffset, stars:document.getElementById('stars').textContent, time:document.getElementById('time').textContent, issue:document.getElementById('issueBtn').classList.contains('show'), overlay:document.getElementById('overlay').classList.contains('show')}; } };
+}
+
+// ---------- stage labels ----------
+var stageNames=['','森 が 目 を 覚 ま す','渓 流 が 流 れ だ す','星 空 が ひ ら く'];
+var snEl=document.getElementById('stageName'); var snTimer=null;
+function updateStageName(show){ if(show){ snEl.textContent=stageNames[stage]; snEl.style.opacity='1'; clearTimeout(snTimer); snTimer=setTimeout(function(){snEl.style.opacity='0';},2200);} }
+function onStageUp(ns){ stage=ns; updateStageName(true); var horizon=H*0.62;
+  if(ns===1){ spawnBurst(W*0.5,horizon-30,'#5ee08a',16); vibe([14,40,14]); }
+  if(ns===2){ spawnBurst(W*0.5,horizon+30,'#46e3ff',20); vibe([16,46,16,46,16]); }
+  if(ns===3){ spawnBurst(W*0.5,H*0.3,'#d7c7ff',26); vibe([20,50,80]); document.getElementById('issueBtn').classList.add('show'); }
+  // bell on each stage
+  bell(ns);
+}
+
+// ---------- ring + hud ----------
+var prog=document.getElementById('prog');
+function updateRing(){ prog.style.strokeDashoffset = (282.7*(1-soak)).toFixed(1); }
+var timeEl=document.getElementById('time'), starsEl=document.getElementById('stars');
+function updateHUD(){ var s=Math.floor(stayMs/1000); timeEl.textContent=Math.floor(s/60)+':' + ('0'+(s%60)).slice(-2);
+  var st=['・','・','・']; for(var i=0;i<stage;i++) st[i]='★'; starsEl.textContent=st.join('');
+}
+
+// ---------- audio (WebAudio, all synthesised) ----------
+var actx=null, master=null, droneG=null, riverG=null, birdOn=false, bellReady=false;
+var nextBird=0, nextStarBell=0;
+function initAudio(){ if(actx) return; try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  master=actx.createGain(); master.gain.value=0.0; master.connect(actx.destination);
+  // master fade in
+  master.gain.setTargetAtTime(0.9, actx.currentTime, 0.8);
+  // drone: missing-fundamental ~44Hz (44,88,132,176,220)
+  droneG=actx.createGain(); droneG.gain.value=0.0; droneG.connect(master);
+  var freqs=[44,88,132,176,220], amps=[0.5,0.34,0.22,0.14,0.09];
+  for(var i=0;i<freqs.length;i++){ var o=actx.createOscillator(); o.type='sine'; o.frequency.value=freqs[i]; var g=actx.createGain(); g.gain.value=amps[i]; o.connect(g); g.connect(droneG); o.start(); }
+  // river noise -> bandpass
+  var buf=actx.createBuffer(1, actx.sampleRate*2, actx.sampleRate); var d=buf.getChannelData(0); for(var i=0;i<d.length;i++){ d[i]=(Math.random()*2-1)*0.5; }
+  var src=actx.createBufferSource(); src.buffer=buf; src.loop=true; var bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=0.6;
+  riverG=actx.createGain(); riverG.gain.value=0.0; src.connect(bp); bp.connect(riverG); riverG.connect(master); src.start();
+  bellReady=true;
+}
+function updateAudio(){ if(!actx) return; var ct=actx.currentTime;
+  droneG.gain.setTargetAtTime(0.10+soak*0.22, ct, 0.4);
+  var riv=clamp((soak-0.30)/0.5,0,1); riverG.gain.setTargetAtTime(riv*0.16, ct, 0.4);
+  // birds (forest+)
+  if(soak>0.12 && ct>nextBird){ chirp(); nextBird=ct+rnd(1.6,4.2); }
+  // star bells
+  if(soak>0.80 && ct>nextStarBell){ bell(3,true); nextStarBell=ct+rnd(2.2,5.0); }
+}
+function chirp(){ if(!actx) return; var ct=actx.currentTime; var o=actx.createOscillator(); o.type='sine'; var g=actx.createGain(); var f0=rnd(1800,3200);
+  o.frequency.setValueAtTime(f0,ct); o.frequency.exponentialRampToValueAtTime(f0*1.5,ct+0.07); o.frequency.exponentialRampToValueAtTime(f0*0.9,ct+0.16);
+  g.gain.setValueAtTime(0,ct); g.gain.linearRampToValueAtTime(0.05,ct+0.02); g.gain.exponentialRampToValueAtTime(0.0001,ct+0.22);
+  o.connect(g); g.connect(master); o.start(ct); o.stop(ct+0.26);
+}
+function bell(stageIdx,high){ if(!actx) return; var ct=actx.currentTime; var base=high?880:[0,330,392,523][stageIdx]||392;
+  var parts=high?[base,base*2.0]:[base,base*1.5,base*2.0];
+  for(var i=0;i<parts.length;i++){ var o=actx.createOscillator(); o.type='sine'; o.frequency.value=parts[i]; var g=actx.createGain(); var amp=(high?0.05:0.10)/(i+1);
+    g.gain.setValueAtTime(0,ct); g.gain.linearRampToValueAtTime(amp,ct+0.01); g.gain.exponentialRampToValueAtTime(0.0001,ct+(high?1.2:2.2));
+    o.connect(g); g.connect(master); o.start(ct); o.stop(ct+(high?1.3:2.4)); }
+}
+
+// ---------- haptics ----------
+function vibe(p){ if(navigator.vibrate){ try{navigator.vibrate(p);}catch(e){} } }
+
+// ---------- hold input ----------
+var stageEl=document.getElementById('stage');
+var hold=document.getElementById('hold');
+function startHold(e){ if(e&&e.cancelable) e.preventDefault(); if(!started){ started=true; initAudio(); document.getElementById('center').classList.add('hide'); }
+  if(!actx){ initAudio(); } else if(actx.state==='suspended'){ actx.resume(); }
+  if(!holding){ holding=true; stageEl.classList.add('holding'); vibe(8); }
+}
+function endHold(){ if(holding){ holding=false; stageEl.classList.remove('holding'); vibe(26); } }
+hold.addEventListener('pointerdown',startHold);
+window.addEventListener('pointerup',endHold);
+window.addEventListener('pointercancel',endHold);
+hold.addEventListener('touchstart',function(e){startHold(e);},{passive:false});
+window.addEventListener('touchend',endHold);
+
+// ---------- 湯治証 card ----------
+var card=document.getElementById('card'), cctx=card.getContext('2d');
+var overlay=document.getElementById('overlay');
+document.getElementById('issueBtn').addEventListener('click',function(e){ e.stopPropagation(); endHold(); openCard(); });
+document.getElementById('againBtn').addEventListener('click',function(e){ e.stopPropagation(); overlay.classList.remove('show'); completed=false; fullMs=0; });
+document.getElementById('shareBtn').addEventListener('click',shareCard);
+
+function openCard(){ endHold(); renderCard(); overlay.classList.add('show'); }
+
+function renderCard(){
+  var c=cctx, w=1080, h=1920;
+  // bg night onsen
+  var g=c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#140a2c'); g.addColorStop(0.5,'#241140'); g.addColorStop(1,'#3a1e10'); c.fillStyle=g; c.fillRect(0,0,w,h);
+  // stars
+  for(var i=0;i<140;i++){ c.globalAlpha=Math.random()*0.9; c.fillStyle='#fff7e6'; var r=Math.random()*2.4; c.beginPath(); c.arc(Math.random()*w,Math.random()*h*0.55,r,0,6.28); c.fill(); } c.globalAlpha=1;
+  // moon
+  var mg=c.createRadialGradient(w*0.74,h*0.16,4,w*0.74,h*0.16,150); mg.addColorStop(0,'rgba(255,250,235,1)'); mg.addColorStop(1,'rgba(255,250,235,0)'); c.fillStyle=mg; c.beginPath(); c.arc(w*0.74,h*0.16,150,0,6.28); c.fill();
+  // mountains
+  c.fillStyle='#23323a'; c.beginPath(); c.moveTo(0,h*0.62); for(var x=0;x<=w;x+=120){ c.lineTo(x, h*0.55 - Math.abs(Math.sin(x*0.01))*90); } c.lineTo(w,h*0.62); c.closePath(); c.fill();
+  // onsen water
+  var pg=c.createLinearGradient(0,h*0.62,0,h); pg.addColorStop(0,'#125b6e'); pg.addColorStop(1,'#082233'); c.fillStyle=pg; c.fillRect(0,h*0.62,w,h*0.38);
+  for(var r=0;r<8;r++){ c.globalAlpha=0.18; c.strokeStyle='#9be8ff'; c.lineWidth=3; c.beginPath(); var yy=h*0.66+r*40; for(var x=0;x<=w;x+=20){ c.lineTo(x, yy+Math.sin(x*0.02+r)*6);} c.stroke(); } c.globalAlpha=1;
+  // steam
+  for(var i=0;i<40;i++){ c.globalAlpha=Math.random()*0.16; c.fillStyle='#fbe6c0'; c.beginPath(); c.arc(Math.random()*w, h*0.62-Math.random()*h*0.4, Math.random()*60+20,0,6.28); c.fill(); } c.globalAlpha=1;
+
+  // gold foil frame
+  var fg=c.createLinearGradient(0,0,w,h); fg.addColorStop(0,'#fbe6a0'); fg.addColorStop(0.5,'#c9a14a'); fg.addColorStop(1,'#f5d889');
+  c.strokeStyle=fg; c.lineWidth=8; c.strokeRect(54,54,w-108,h-108);
+  c.lineWidth=2; c.strokeRect(78,78,w-156,h-156);
+
+  // title
+  c.textAlign='center';
+  c.fillStyle='#fde9bf'; c.font='900 130px -apple-system,"Hiragino Sans",sans-serif'; c.shadowColor='rgba(251,191,36,.6)'; c.shadowBlur=30;
+  c.fillText('湯 治 証', w/2, 360); c.shadowBlur=0;
+  c.fillStyle='#cfd8ef'; c.font='600 38px -apple-system,"Hiragino Sans",sans-serif'; c.fillText('― 逗 留 の あ か し ―', w/2, 430);
+
+  // 逗留時間 big
+  var s=Math.floor(stayMs/1000); var mm=Math.floor(s/60), ss=('0'+(s%60)).slice(-2);
+  c.fillStyle='#fff'; c.font='800 90px -apple-system,sans-serif'; c.fillText('逗 留 時 間', w/2, 760);
+  var fg2=c.createLinearGradient(0,820,0,1000); fg2.addColorStop(0,'#9be8ff'); fg2.addColorStop(1,'#46e3ff');
+  c.fillStyle=fg2; c.font='900 230px -apple-system,sans-serif'; c.shadowColor='rgba(70,227,255,.5)'; c.shadowBlur=30;
+  c.fillText(mm+':'+ss, w/2, 1000); c.shadowBlur=0;
+
+  // ととのい stars
+  var lvl = stage; var sttxt=''; for(var i=0;i<3;i++) sttxt+= (i<lvl?'★':'☆');
+  c.fillStyle='#fbbf24'; c.font='900 120px sans-serif'; c.shadowColor='rgba(251,191,36,.6)'; c.shadowBlur=24; c.fillText(sttxt, w/2, 1230); c.shadowBlur=0;
+  var rank = lvl>=3?'満　願':lvl===2?'湯　治　中':lvl===1?'足　湯':'湯　あ　た　り';
+  c.fillStyle='#eaf0ff'; c.font='800 64px -apple-system,sans-serif'; c.fillText('ととのい：'+rank, w/2, 1340);
+
+  // seal (朱印)
+  c.save(); c.translate(w/2,1560); c.rotate(-0.06);
+  c.strokeStyle='#e0483a'; c.lineWidth=8; c.strokeRect(-105,-105,210,210);
+  c.fillStyle='rgba(224,72,58,.92)'; c.font='900 70px -apple-system,"Hiragino Sans",sans-serif'; c.textAlign='center';
+  c.fillText('湯', 0,-12); c.fillText('治', 0,68); c.restore();
+
+  // footer
+  c.fillStyle='#9aa3bd'; c.font='600 34px -apple-system,sans-serif'; c.textAlign='center';
+  c.fillText('湯治（とうじ／Tōji） — スマホを預けるほど世界が色づく', w/2, 1760);
+  c.fillStyle='#6b7390'; c.font='500 28px -apple-system,sans-serif';
+  c.fillText('#湯治  #Tōji  #デジタルデトックス  /  Idea Radar', w/2, 1810);
+}
+
+function shareCard(){
+  card.toBlob(function(blob){
+    if(!blob) return;
+    var file=new File([blob],'toji-card.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], text:'湯治で逗留してきた。スマホを預けるほど世界が色づく。 #湯治 #Tōji'}).catch(function(){});
+    } else {
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='toji-card.png'; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},1500);
+    }
+  },'image/png');
+}
+
+// ---------- go ----------
+resize();
+requestAnimationFrame(function(t){ last=performance.now(); tick(performance.now()); });
+})();
+</script>
+</body>
+</html>
