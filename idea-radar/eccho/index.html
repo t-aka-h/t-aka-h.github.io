@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06030f">
+<title>Eccho（えっほ）— 値上げ坂をエッホエッホ登る</title>
+<style>
+  :root{
+    --bg:#06030f; --ink:#f3f0ff; --mag:#ff2d87; --cyan:#28e6ff; --gold:#ffd34d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Helvetica Neue",sans-serif;
+    color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;background:#06030f;width:100%;height:100%;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:24px;z-index:5;
+    background:radial-gradient(120% 90% at 50% 18%,rgba(40,230,255,.10),transparent 60%),
+               radial-gradient(120% 90% at 50% 92%,rgba(255,45,135,.12),transparent 60%);}
+  .hidden{display:none!important;}
+  .logo{font-weight:900;font-size:clamp(48px,16vw,96px);letter-spacing:2px;line-height:.92;
+    background:linear-gradient(180deg,#fff,var(--cyan) 55%,var(--mag));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 32px rgba(40,230,255,.35);}
+  .sub{margin-top:6px;font-size:clamp(12px,3.6vw,16px);color:#b9b2e0;letter-spacing:1px;}
+  .reading{margin-top:14px;font-size:13px;color:#7d76a8;letter-spacing:3px;}
+  .howto{margin:22px 0 8px;max-width:330px;font-size:13.5px;line-height:1.85;color:#cfc8f2;}
+  .howto b{color:var(--gold);}
+  .btn{margin-top:16px;padding:16px 40px;border:none;border-radius:999px;font-weight:900;
+    font-size:19px;letter-spacing:2px;color:#0a0512;cursor:pointer;
+    background:linear-gradient(135deg,var(--cyan),var(--mag));
+    box-shadow:0 0 28px rgba(255,45,135,.5),0 8px 22px rgba(0,0,0,.5);}
+  .btn:active{transform:scale(.96);}
+  .btn.ghost{background:rgba(255,255,255,.06);color:#e9e4ff;border:1px solid rgba(255,255,255,.18);
+    box-shadow:none;font-size:15px;padding:13px 26px;}
+  .gotitle{font-weight:900;font-size:clamp(30px,9vw,46px);color:var(--mag);
+    text-shadow:0 0 26px rgba(255,45,135,.55);letter-spacing:2px;}
+  .bignum{font-weight:900;font-size:clamp(64px,22vw,128px);line-height:.9;margin:6px 0;
+    background:linear-gradient(180deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(40,230,255,.4);}
+  .gocap{font-size:14px;color:#c7c0ec;margin-bottom:2px;letter-spacing:1px;}
+  .rank{margin:10px 0 4px;font-size:clamp(20px,6vw,28px);font-weight:800;color:var(--gold);
+    text-shadow:0 0 18px rgba(255,211,77,.45);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+  #shareImg{margin-top:14px;max-width:62%;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.6);
+    border:1px solid rgba(255,255,255,.12);}
+  .tip{margin-top:14px;font-size:11.5px;color:#6f6896;max-width:300px;line-height:1.6;}
+  .credit{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:10px;color:#564f7e;z-index:6;}
+  a.credit-link{color:#8d86b8;text-decoration:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<!-- TITLE -->
+<div id="title" class="overlay">
+  <div class="logo">Eccho</div>
+  <div class="sub">えっほ — 値上げ坂をエッホエッホ登れ</div>
+  <div class="reading">2,269品目を背負って、どこまで登れる？</div>
+  <div class="howto">
+    左右の足で<b>交互にタップ</b>して坂を登る。<br>
+    画面の<b>左半分＝左足</b>／<b>右半分＝右足</b>。<br>
+    光った足を<b>ビートに合わせて</b>踏むほど高く跳ねる。<br>
+    値上げのたびにカゴが重くなり坂が急に…<br>
+    踏み外すと<b>ズルッと転落</b>。息切れでゲームオーバー。
+  </div>
+  <button class="btn" id="startBtn">登りはじめる</button>
+  <div class="tip">音が出ます🔊／スマホは縦持ち推奨。1プレイ後に称号カードをシェアできます。</div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover" class="overlay hidden">
+  <div class="gotitle">転落！</div>
+  <div class="gocap">到達標高</div>
+  <div class="bignum"><span id="finalAlt">0</span><span style="font-size:.4em;"> m</span></div>
+  <div class="gocap" id="goItems">2,269品目を背負って登った</div>
+  <div class="rank" id="goRank">物価高エアプ</div>
+  <div class="row">
+    <button class="btn" id="shareBtn">称号カードをシェア</button>
+    <button class="btn ghost" id="retryBtn">もう一度</button>
+  </div>
+  <img id="shareImg" class="hidden" alt="称号カード">
+  <div class="tip" id="shareTip"></div>
+</div>
+
+<div class="credit">
+  Idea Radar 🏆 2026-06-30 ／ レンズ L05×L08 ／
+  <a class="credit-link" href="../">ほかの優勝作を見る</a>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2.5);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize',resize); resize();
+
+  /* ---------- Audio (WebAudio, fully synthesized, no assets) ---------- */
+  let AC=null, master=null, audioOn=false;
+  function initAudio(){
+    if(AC) return;
+    try{
+      AC = new (window.AudioContext||window.webkitAudioContext)();
+      master = AC.createGain(); master.gain.value=0.85; master.connect(AC.destination);
+      audioOn=true;
+    }catch(e){ audioOn=false; }
+  }
+  function tone(freq,dur,type,vol,when){
+    if(!audioOn) return;
+    const t = (when||AC.currentTime);
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type=type||'sine'; o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.3,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02);
+  }
+  function noiseBurst(dur,vol,when){
+    if(!audioOn) return;
+    const t=(when||AC.currentTime);
+    const n=Math.floor(AC.sampleRate*dur);
+    const buf=AC.createBuffer(1,n,AC.sampleRate); const d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=AC.createBufferSource(); s.buffer=buf;
+    const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1400;
+    const g=AC.createGain(); g.gain.value=vol||0.3;
+    s.connect(f); f.connect(g); g.connect(master); s.start(t);
+  }
+  // footstep — left low, right high; pitch rises slightly with combo
+  function stepSound(foot,combo,perfect){
+    if(!audioOn) return;
+    const base = (foot==='L'?138:208) * (1 + Math.min(combo,30)*0.006);
+    tone(base, 0.13, 'triangle', 0.32);
+    tone(base*0.5, 0.16, 'sine', 0.22);          // body
+    if(perfect){ tone(base*2, 0.07, 'square', 0.12); } // bright click
+  }
+  function stumbleSound(){
+    if(!audioOn) return;
+    const t=AC.currentTime;
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(220,t);
+    o.frequency.exponentialRampToValueAtTime(70,t+0.35);
+    g.gain.setValueAtTime(0.25,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.42);
+    noiseBurst(0.18,0.2,t);
+  }
+  // price-hike: missing-fundamental sub-bass (55Hz + harmonics) + thump
+  function priceHikeSound(){
+    if(!audioOn) return;
+    const t=AC.currentTime;
+    [55,110,165,220,275].forEach((f,i)=>{ tone(f,0.7,'sine',0.26-i*0.03,t); });
+    noiseBurst(0.12,0.32,t);
+    tone(880,0.5,'sine',0.06,t+0.02); // shimmer
+  }
+  function fallSound(){
+    if(!audioOn) return;
+    const t=AC.currentTime;
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(300,t);
+    o.frequency.exponentialRampToValueAtTime(40,t+0.9);
+    g.gain.setValueAtTime(0.3,t); g.gain.exponentialRampToValueAtTime(0.0001,t+1.0);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+1.05);
+    [55,82,110].forEach(f=>tone(f,1.0,'sine',0.2,t));
+    noiseBurst(0.4,0.3,t);
+  }
+  // light 4/4 kick to guide cadence
+  function kick(when){
+    if(!audioOn) return;
+    const t=when||AC.currentTime;
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(95,t);
+    o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+    g.gain.setValueAtTime(0.34,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18);
+  }
+
+  function vib(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+  /* ---------- Game state ---------- */
+  const ITEMS = [
+    {n:'食パン',y:12},{n:'たまご',y:30},{n:'即席麺',y:20},{n:'ガソリン',y:9},
+    {n:'焼酎',y:40},{n:'電気代',y:300},{n:'バター',y:35},{n:'コーヒー',y:60},
+    {n:'お米',y:80},{n:'チーズ',y:45},{n:'冷凍食品',y:25},{n:'カップ麺',y:18}
+  ];
+  const TOTAL_ITEMS = 2269; // 帝国データバンク 2026年7月 食品値上げ品目
+  let G = null;
+  function newGame(){
+    return {
+      state:'climbing',
+      alt:0,            // meters climbed
+      bestStreak:0, combo:0, missStreak:0,
+      bpm:96, beatLen:60/96,
+      nextBeat: 0,      // audio-clock time of next expected step
+      foot:'L',         // expected foot
+      window:0.26,      // timing half-window for GOOD (PERFECT = 0.42x)
+      slope:0.16,       // visual steepness 0..1
+      basket:[],        // carried items
+      carriedItems:0,   // count of 品目 carried (scaled toward TOTAL_ITEMS)
+      hikeAt:55,        // next altitude that triggers a price hike
+      hikeStep:55,
+      perfects:0, steps:0,
+      // visuals
+      hero:{x:0,y:0,bob:0,lean:0,vy:0,sweat:0},
+      scrollY:0,
+      particles:[],
+      floatTexts:[],
+      flash:0, shake:0,
+      ringT:0,          // 0..1 progress to next beat for the converging ring
+      started:false,
+      lastTapFoot:null,
+      judge:'', judgeT:0, judgeColor:'#fff',
+      tStart:0
+    };
+  }
+
+  /* ---------- Particles ---------- */
+  function spark(x,y,color,n,spd){
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2, s=(Math.random()*spd+spd*0.3);
+      G.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:1,col:color,r:Math.random()*3+1.5});
+    }
+  }
+  function moneyBurst(){
+    for(let i=0;i<26;i++){
+      G.particles.push({
+        x:Math.random()*W, y:H*0.2+Math.random()*H*0.3,
+        vx:(Math.random()-.5)*2, vy:-Math.random()*2-1,
+        life:1.4, col:'#ffd34d', r:Math.random()*4+2, money:true,
+        rot:Math.random()*6.28
+      });
+    }
+  }
+  function floatText(txt,x,y,color){
+    G.floatTexts.push({txt,x,y,life:1,col:color||'#fff'});
+  }
+
+  /* ---------- Step / judge ---------- */
+  function doStep(side){
+    if(!G || G.state!=='climbing') return;
+    if(!G.started){
+      // first tap kicks off the beat clock
+      G.started=true; G.tStart=AC?AC.currentTime:0;
+      G.nextBeat = (AC?AC.currentTime:0) + G.beatLen;
+    }
+    const now = AC?AC.currentTime:performance.now()/1000;
+
+    // wrong foot?
+    if(side !== G.foot){
+      onStumble('逆足！','#ff7676');
+      return;
+    }
+    // timing error vs nearest beat
+    let err = Math.abs(now - G.nextBeat);
+    // also allow stepping slightly before — fold into next beat
+    if(now > G.nextBeat + G.window){ // too late -> treat as miss handled by loop; but still register
+      onStumble('おそい','#ffae54'); return;
+    }
+    const perfWin = G.window*0.42;
+    let mult, label, col;
+    if(err < perfWin){ mult=1.6; label='PERFECT'; col='#28e6ff'; G.perfects++; }
+    else if(err < G.window){ mult=1.0; label='ナイス'; col='#7dffb0'; }
+    else { mult=0.55; label='あまい'; col='#ffd34d'; }
+
+    // climb
+    G.combo = (label==='あまい') ? Math.max(0,G.combo) : G.combo+1;
+    if(label==='あまい') G.combo=Math.max(0,G.combo-1);
+    G.bestStreak=Math.max(G.bestStreak,G.combo);
+    G.missStreak=0;
+    G.steps++;
+    const stride = (2.4 + G.slope*3.2) * mult * (1 + Math.min(G.combo,40)*0.035);
+    G.alt += stride;
+
+    // hop visual
+    G.hero.vy = -3.4 - mult*1.2;
+    G.hero.lean = (side==='L'?-0.18:0.18);
+    G.hero.sweat = Math.min(1, G.hero.sweat+0.12);
+
+    spark(G.hero.x, G.hero.y, side==='L'?'#28e6ff':'#ff2d87', label==='PERFECT'?16:8, label==='PERFECT'?4:2.6);
+    G.judge=label; G.judgeT=1; G.judgeColor=col;
+    if(G.combo>=4) floatText('×'+G.combo, G.hero.x+30, G.hero.y-50, '#ffd34d');
+
+    stepSound(side, G.combo, label==='PERFECT');
+    vib(label==='PERFECT'?[22]:[12]);
+
+    // advance beat
+    G.foot = (side==='L')?'R':'L';
+    G.nextBeat += G.beatLen;
+    // keep beat near now to avoid runaway
+    if(G.nextBeat < now) G.nextBeat = now + G.beatLen;
+
+    checkHike();
+  }
+
+  function onStumble(label,col){
+    G.combo=0; G.missStreak++;
+    G.alt = Math.max(0, G.alt - (6 + G.slope*6));
+    G.hero.vy=2.2; G.shake=8;
+    G.judge=label; G.judgeT=1; G.judgeColor=col;
+    stumbleSound(); vib([40,30,60]);
+    // advance expected beat so player can recover
+    const now = AC?AC.currentTime:performance.now()/1000;
+    G.nextBeat = now + G.beatLen;
+    if(G.missStreak>=4 || (G.alt<=0 && G.steps>4)){ fall(); }
+  }
+
+  function checkHike(){
+    if(G.alt >= G.hikeAt){
+      G.hikeAt += G.hikeStep;
+      G.hikeStep = Math.min(90, G.hikeStep+6);
+      const it = ITEMS[Math.floor(Math.random()*ITEMS.length)];
+      G.basket.push(it);
+      // scale carried 品目 toward the real headline number
+      G.carriedItems = Math.min(TOTAL_ITEMS, Math.round(G.alt*4.6) + G.basket.length*7);
+      // harder: faster bpm, narrower window, steeper slope
+      G.bpm = Math.min(190, G.bpm+7);
+      G.beatLen = 60/G.bpm;
+      G.window = Math.max(0.12, G.window-0.012);
+      G.slope = Math.min(0.92, G.slope+0.05);
+      G.flash=1; G.shake=10;
+      moneyBurst();
+      floatText('値上げ！ '+it.n+' +¥'+it.y, W/2, H*0.34, '#ff2d87');
+      priceHikeSound(); vib([40,30,70]);
+    }
+  }
+
+  function fall(){
+    G.state='fall'; G.fallT=0; fallSound(); vib([80,40,80,40,120]);
+  }
+
+  /* ---------- Beat / miss loop driving ---------- */
+  let lastKickBeat = -1;
+  function updateBeat(dt){
+    if(!G.started) return;
+    const now = AC?AC.currentTime:performance.now()/1000;
+    // converging ring progress
+    const prevBeat = G.nextBeat - G.beatLen;
+    G.ringT = Math.max(0,Math.min(1,(now - prevBeat)/G.beatLen));
+    // schedule guide kick on each beat
+    if(audioOn){
+      const beatIndex = Math.floor((now - G.tStart)/G.beatLen);
+      if(beatIndex!==lastKickBeat){ lastKickBeat=beatIndex; kick(now); }
+    }
+    // miss if beat passed with no step
+    if(now > G.nextBeat + G.window){
+      onStumble('踏み外し','#ff7676');
+    }
+  }
+
+  /* ---------- Update ---------- */
+  function update(dt){
+    if(!G) return;
+    // hero physics (vertical bob)
+    G.hero.x = W*0.5;
+    const groundY = H*0.62;
+    G.hero.vy += 16*dt;
+    G.hero.bob += G.hero.vy;
+    if(G.hero.bob>0){ G.hero.bob=0; G.hero.vy=0; }
+    G.hero.y = groundY + G.hero.bob;
+    G.hero.lean *= 0.85;
+    G.hero.sweat = Math.max(0, G.hero.sweat-dt*0.4);
+
+    G.scrollY += (40 + G.alt*0.4)*dt; // background parallax
+    G.flash = Math.max(0, G.flash - dt*2.2);
+    G.shake = Math.max(0, G.shake - dt*40);
+    G.judgeT = Math.max(0, G.judgeT - dt*1.6);
+
+    if(G.state==='climbing') updateBeat(dt);
+    if(G.state==='fall'){
+      G.fallT += dt;
+      G.hero.bob += 200*dt; G.scrollY -= 260*dt;
+      if(G.fallT>1.1){ endGame(); }
+    }
+
+    // particles
+    for(let i=G.particles.length-1;i>=0;i--){
+      const p=G.particles[i];
+      p.x+=p.vx; p.y+=p.vy; p.vy+=p.money?0.12:0.18; p.life-=dt*(p.money?0.7:1.6);
+      if(p.money) p.rot+=0.1;
+      if(p.life<=0) G.particles.splice(i,1);
+    }
+    for(let i=G.floatTexts.length-1;i>=0;i--){
+      const f=G.floatTexts[i]; f.y-=0.7; f.life-=dt*0.9;
+      if(f.life<=0) G.floatTexts.splice(i,1);
+    }
+  }
+
+  /* ---------- Draw ---------- */
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    let sx=0,sy=0;
+    if(G && G.shake>0){ sx=(Math.random()-.5)*G.shake; sy=(Math.random()-.5)*G.shake; }
+    ctx.save(); ctx.translate(sx,sy);
+
+    // bg gradient
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#0a0420'); bg.addColorStop(0.55,'#0a0518'); bg.addColorStop(1,'#06030f');
+    ctx.fillStyle=bg; ctx.fillRect(-20,-20,W+40,H+40);
+
+    if(G) drawSlope();
+    if(G) drawHero();
+    if(G) drawParticles();
+    if(G) drawHUD();
+    if(G) drawFloatTexts();
+
+    // price flash
+    if(G && G.flash>0){
+      ctx.fillStyle='rgba(255,45,135,'+(G.flash*0.28)+')';
+      ctx.fillRect(-20,-20,W+40,H+40);
+    }
+    ctx.restore();
+  }
+
+  function drawSlope(){
+    const groundY=H*0.62;
+    const ang = G.slope; // 0..~0.9
+    // neon parallax slope lines (diagonal going up-right)
+    const dy = 46;
+    const off = (G.scrollY % dy);
+    for(let layer=0; layer<2; layer++){
+      ctx.lineWidth = layer===0?2:1.2;
+      for(let i=-2;i<H/dy+3;i++){
+        const baseY = groundY + i*dy - off + layer*8;
+        ctx.beginPath();
+        // slope rises to the right
+        ctx.moveTo(-40, baseY + W*ang*0.0);
+        ctx.lineTo(W+40, baseY - W*ang*0.55);
+        const c = layer===0
+          ? 'rgba(40,230,255,'+(0.10+0.04*Math.sin((i+off)*0.3))+')'
+          : 'rgba(255,45,135,0.05)';
+        ctx.strokeStyle=c; ctx.stroke();
+      }
+    }
+    // solid ground edge under hero
+    ctx.beginPath();
+    ctx.moveTo(-40, groundY+30);
+    ctx.lineTo(W+40, groundY+30 - W*ang*0.55);
+    ctx.lineTo(W+40,H+40); ctx.lineTo(-40,H+40); ctx.closePath();
+    const gg=ctx.createLinearGradient(0,groundY,0,H);
+    gg.addColorStop(0,'rgba(20,12,44,0.9)'); gg.addColorStop(1,'rgba(8,5,18,1)');
+    ctx.fillStyle=gg; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-40, groundY+30);
+    ctx.lineTo(W+40, groundY+30 - W*ang*0.55);
+    ctx.strokeStyle='rgba(40,230,255,0.5)'; ctx.lineWidth=2.5; ctx.stroke();
+  }
+
+  function drawHero(){
+    const x=G.hero.x, y=G.hero.y;
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(G.hero.lean*0.6);
+    const s=Math.min(W,H)/420;
+    ctx.scale(s,s);
+
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(0,8,26,7,0,0,6.28); ctx.fill();
+
+    // basket on back (grows with items)
+    const bw=22+Math.min(G.basket.length,18)*1.6;
+    const bh=16+Math.min(G.basket.length,18)*1.5;
+    ctx.save();
+    ctx.translate(18,-34-bh*0.3);
+    ctx.fillStyle='rgba(255,211,77,0.12)';
+    ctx.strokeStyle='#ffd34d'; ctx.lineWidth=2;
+    roundRect(-bw/2,-bh/2,bw,bh,4); ctx.fill(); ctx.stroke();
+    // items poking out
+    for(let i=0;i<Math.min(G.basket.length,7);i++){
+      ctx.fillStyle=i%2? '#ff2d87':'#28e6ff';
+      ctx.beginPath(); ctx.arc(-bw/2+6+i*((bw-10)/7), -bh/2-3-(i%2)*4, 3.5,0,6.28); ctx.fill();
+    }
+    ctx.restore();
+
+    // legs (alternate based on lean direction)
+    const legPhase = G.hero.lean;
+    ctx.strokeStyle='#cfc8f2'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(-10+legPhase*40, 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4,-2); ctx.lineTo(10+legPhase*40, 12); ctx.stroke();
+    // body
+    ctx.fillStyle='#f3f0ff';
+    roundRect(-9,-30,18,30,7); ctx.fill();
+    // arms
+    ctx.strokeStyle='#e9e4ff'; ctx.lineWidth=4.5;
+    ctx.beginPath(); ctx.moveTo(-7,-22); ctx.lineTo(-16,-10-legPhase*16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(7,-22); ctx.lineTo(16,-10+legPhase*16); ctx.stroke();
+    // head
+    ctx.fillStyle='#ffe9c9';
+    ctx.beginPath(); ctx.arc(0,-40,11,0,6.28); ctx.fill();
+    // strained face
+    ctx.strokeStyle='#3a2b4a'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.arc(-4,-41,1.6,0,6.28); ctx.moveTo(4,-41); ctx.arc(4,-41,1.6,0,6.28); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,-35,3,0.15*Math.PI,0.85*Math.PI); ctx.stroke(); // open "ハァ" mouth
+    // sweat
+    if(G.hero.sweat>0.2){
+      ctx.fillStyle='rgba(120,220,255,'+G.hero.sweat+')';
+      ctx.beginPath(); ctx.arc(11,-44,2.4,0,6.28); ctx.fill();
+    }
+    ctx.restore();
+
+    // "エッホ" puff text near head on step
+    if(G.judgeT>0.4 && G.state==='climbing'){
+      ctx.save();
+      ctx.globalAlpha=(G.judgeT-0.4)/0.6;
+      ctx.fillStyle='#fff'; ctx.font='900 '+(20*s)+'px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(G.foot==='R'?'エッ':'ホ', x+ (G.hero.lean<0?-44:44), y-58);
+      ctx.restore();
+    }
+  }
+
+  function drawParticles(){
+    for(const p of G.particles){
+      ctx.save();
+      ctx.globalAlpha=Math.max(0,Math.min(1,p.life));
+      if(p.money){
+        ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+        ctx.fillStyle='#ffd34d'; ctx.font='900 16px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('¥',0,5);
+      }else{
+        ctx.fillStyle=p.col;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.28); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawFloatTexts(){
+    for(const f of G.floatTexts){
+      ctx.save(); ctx.globalAlpha=Math.max(0,f.life);
+      ctx.fillStyle=f.col; ctx.font='900 22px sans-serif'; ctx.textAlign='center';
+      ctx.shadowColor=f.col; ctx.shadowBlur=12;
+      ctx.fillText(f.txt,f.x,f.y); ctx.restore();
+    }
+  }
+
+  function drawHUD(){
+    // altitude meter (left vertical neon gauge)
+    const mx=20, mtop=H*0.10, mh=H*0.40, mw=10;
+    ctx.fillStyle='rgba(255,255,255,0.06)'; roundRect(mx,mtop,mw,mh,5); ctx.fill();
+    const frac=Math.min(1, G.alt/600);
+    const gh=mh*frac;
+    const gd=ctx.createLinearGradient(0,mtop+mh,0,mtop+mh-gh);
+    gd.addColorStop(0,'#28e6ff'); gd.addColorStop(1,'#ff2d87');
+    ctx.fillStyle=gd; roundRect(mx,mtop+mh-gh,mw,gh,5); ctx.fill();
+
+    // altitude big number (top center)
+    ctx.textAlign='center';
+    ctx.fillStyle='#fff'; ctx.font='900 '+Math.min(W*0.16,72)+'px sans-serif';
+    ctx.shadowColor='#28e6ff'; ctx.shadowBlur=22;
+    ctx.fillText(Math.floor(G.alt), W/2, H*0.13);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#b9b2e0'; ctx.font='700 13px sans-serif';
+    ctx.fillText('m  登った', W/2, H*0.155);
+
+    // carried items + combo
+    ctx.fillStyle='#ffd34d'; ctx.font='800 13px sans-serif';
+    ctx.fillText(G.carriedItems.toLocaleString()+' 品目を背負い中', W/2, H*0.185);
+    if(G.combo>=2){
+      ctx.fillStyle='#28e6ff'; ctx.font='900 18px sans-serif';
+      ctx.fillText(G.combo+' コンボ', W/2, H*0.21);
+    }
+
+    // judge text
+    if(G.judgeT>0){
+      ctx.globalAlpha=Math.min(1,G.judgeT*1.4);
+      ctx.fillStyle=G.judgeColor; ctx.font='900 26px sans-serif';
+      ctx.shadowColor=G.judgeColor; ctx.shadowBlur=16;
+      ctx.fillText(G.judge, W/2, H*0.40);
+      ctx.shadowBlur=0; ctx.globalAlpha=1;
+    }
+
+    // foot pads (bottom L / R) with converging ring on active foot
+    const padY=H*0.86, padR=Math.min(W*0.17,76);
+    drawPad(W*0.27, padY, padR, 'L', G.foot==='L');
+    drawPad(W*0.73, padY, padR, 'R', G.foot==='R');
+
+    if(!G.started){
+      ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font='800 16px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('左足からタップして登りだそう', W/2, H*0.74);
+    }
+  }
+
+  function drawPad(x,y,r,label,active){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x,y,r,0,6.28);
+    ctx.fillStyle = active? (label==='L'?'rgba(40,230,255,0.18)':'rgba(255,45,135,0.18)') : 'rgba(255,255,255,0.04)';
+    ctx.fill();
+    ctx.lineWidth=2.5;
+    ctx.strokeStyle = active? (label==='L'?'#28e6ff':'#ff2d87') : 'rgba(255,255,255,0.16)';
+    ctx.stroke();
+    // converging ring
+    if(active && G.started){
+      const rr = r + 36 - G.ringT*36;
+      ctx.beginPath(); ctx.arc(x,y,Math.max(r+2,rr),0,6.28);
+      ctx.globalAlpha = 0.35 + 0.5*(1-Math.abs(G.ringT-1));
+      ctx.lineWidth=3; ctx.strokeStyle = label==='L'?'#28e6ff':'#ff2d87'; ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=active?'#fff':'rgba(255,255,255,0.4)';
+    ctx.font='900 '+(r*0.5)+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label==='L'?'エッ':'ホ', x, y);
+    ctx.textBaseline='alphabetic';
+    ctx.restore();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+
+  /* ---------- Loop ---------- */
+  let last=performance.now();
+  function loop(t){
+    const dt=Math.min(0.05,(t-last)/1000); last=t;
+    if(G && (G.state==='climbing'||G.state==='fall')) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /* ---------- Input ---------- */
+  function tapAt(clientX){
+    if(!G || G.state!=='climbing') return;
+    const side = (clientX < W/2) ? 'L' : 'R';
+    doStep(side);
+  }
+  cv.addEventListener('pointerdown', e=>{ e.preventDefault(); tapAt(e.clientX); }, {passive:false});
+
+  /* ---------- Rank ---------- */
+  function rankFor(alt){
+    if(alt<50) return '物価高エアプ';
+    if(alt<120) return '値上げビギナー';
+    if(alt<220) return '節約登山家';
+    if(alt<350) return '物価高サバイバー';
+    if(alt<500) return 'インフレ耐性者';
+    return 'インフレ仙人';
+  }
+
+  /* ---------- Screens ---------- */
+  const elTitle=document.getElementById('title');
+  const elGO=document.getElementById('gameover');
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('retryBtn').addEventListener('click', start);
+  document.getElementById('shareBtn').addEventListener('click', share);
+
+  function start(){
+    initAudio(); if(AC && AC.state==='suspended') AC.resume();
+    G=newGame(); lastKickBeat=-1;
+    elTitle.classList.add('hidden'); elGO.classList.add('hidden');
+    document.getElementById('shareImg').classList.add('hidden');
+    document.getElementById('shareTip').textContent='';
+  }
+
+  function endGame(){
+    G.state='dead';
+    document.getElementById('finalAlt').textContent=Math.floor(G.alt);
+    document.getElementById('goItems').textContent =
+      G.carriedItems.toLocaleString()+' 品目を背負って登った';
+    document.getElementById('goRank').textContent=rankFor(G.alt);
+    elGO.classList.remove('hidden');
+  }
+
+  /* ---------- Share card (9:16, drawn to offscreen canvas) ---------- */
+  let lastBlob=null, lastURL=null;
+  function buildCard(){
+    const cw=1080, ch=1920;
+    const cc=document.createElement('canvas'); cc.width=cw; cc.height=ch;
+    const x=cc.getContext('2d');
+    // bg
+    const g=x.createLinearGradient(0,0,0,ch);
+    g.addColorStop(0,'#0c0626'); g.addColorStop(0.6,'#0a0518'); g.addColorStop(1,'#06030f');
+    x.fillStyle=g; x.fillRect(0,0,cw,ch);
+    // neon vignettes
+    rg(x,540,300,520,'rgba(40,230,255,0.18)');
+    rg(x,540,1650,560,'rgba(255,45,135,0.18)');
+    // slope lines
+    x.lineWidth=2;
+    for(let i=0;i<30;i++){ x.beginPath(); const yy=300+i*60;
+      x.moveTo(-40,yy); x.lineTo(cw+40,yy-360);
+      x.strokeStyle='rgba(40,230,255,'+(0.05+0.03*Math.sin(i))+')'; x.stroke(); }
+
+    x.textAlign='center';
+    // logo
+    x.fillStyle='#28e6ff'; x.font='900 70px sans-serif';
+    x.shadowColor='#28e6ff'; x.shadowBlur=30; x.fillText('Eccho', cw/2, 230);
+    x.shadowBlur=0;
+    x.fillStyle='#b9b2e0'; x.font='700 34px sans-serif';
+    x.fillText('えっほ — 値上げ坂', cw/2, 290);
+
+    // big altitude
+    x.fillStyle='#fff'; x.font='900 360px sans-serif';
+    x.shadowColor='#ff2d87'; x.shadowBlur=50;
+    x.fillText(Math.floor(G.alt), cw/2, 760);
+    x.shadowBlur=0;
+    x.fillStyle='#28e6ff'; x.font='900 90px sans-serif';
+    x.fillText('m 登頂', cw/2, 870);
+
+    // carried items
+    x.fillStyle='#ffd34d'; x.font='800 48px sans-serif';
+    x.fillText(G.carriedItems.toLocaleString()+' 品目を背負って', cw/2, 1010);
+
+    // basket silhouette
+    drawCardBasket(x, cw/2, 1190, Math.min(G.basket.length,16));
+
+    // rank badge
+    x.fillStyle='rgba(255,211,77,0.12)';
+    roundRectX(x, cw/2-330, 1410, 660, 150, 28); x.fill();
+    x.strokeStyle='#ffd34d'; x.lineWidth=3; x.stroke();
+    x.fillStyle='#ffd34d'; x.font='900 64px sans-serif';
+    x.shadowColor='#ffd34d'; x.shadowBlur=18;
+    x.fillText(rankFor(G.alt), cw/2, 1505);
+    x.shadowBlur=0;
+
+    // stats
+    x.fillStyle='#cfc8f2'; x.font='700 40px sans-serif';
+    x.fillText('最大 '+G.bestStreak+' コンボ ／ PERFECT '+G.perfects+' 回', cw/2, 1640);
+
+    // footer
+    x.fillStyle='#8d86b8'; x.font='700 34px sans-serif';
+    x.fillText('#Eccho で値上げ坂を登れ', cw/2, 1770);
+    x.fillStyle='#564f7e'; x.font='600 26px sans-serif';
+    x.fillText('t-aka-h.github.io/idea-radar/eccho', cw/2, 1830);
+    return cc;
+  }
+  function rg(x,cx,cy,r,col){ const rr=x.createRadialGradient(cx,cy,0,cx,cy,r);
+    rr.addColorStop(0,col); rr.addColorStop(1,'transparent'); x.fillStyle=rr; x.fillRect(0,0,1080,1920); }
+  function roundRectX(x,a,b,w,h,r){ x.beginPath(); x.moveTo(a+r,b);
+    x.arcTo(a+w,b,a+w,b+h,r); x.arcTo(a+w,b+h,a,b+h,r); x.arcTo(a,b+h,a,b,r); x.arcTo(a,b,a+w,b,r); x.closePath(); }
+  function drawCardBasket(x,cx,cy,n){
+    const bw=200+n*10, bh=110+n*5;
+    x.fillStyle='rgba(255,211,77,0.10)';
+    roundRectX(x,cx-bw/2,cy-bh/2,bw,bh,14); x.fill();
+    x.strokeStyle='#ffd34d'; x.lineWidth=4; x.stroke();
+    for(let i=0;i<n;i++){
+      x.fillStyle=i%2?'#ff2d87':'#28e6ff';
+      x.beginPath(); x.arc(cx-bw/2+30+i*((bw-60)/Math.max(1,n-1||1)), cy-bh/2-12-(i%2)*16, 13,0,6.28); x.fill();
+    }
+  }
+
+  async function share(){
+    const card=buildCard();
+    const tip=document.getElementById('shareTip');
+    card.toBlob(async (blob)=>{
+      lastBlob=blob;
+      if(lastURL) URL.revokeObjectURL(lastURL);
+      lastURL=URL.createObjectURL(blob);
+      const img=document.getElementById('shareImg');
+      img.src=lastURL; img.classList.remove('hidden');
+      const file=new File([blob],'eccho.png',{type:'image/png'});
+      const text='Ecchoで値上げ坂を '+Math.floor(G.alt)+'m 登った！ 称号「'+rankFor(G.alt)+'」 #Eccho';
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], text}); tip.textContent='シェアありがとう！'; return; }
+        catch(e){ /* cancelled */ }
+      }
+      tip.textContent='画像を長押しで保存できます（上の称号カード）。';
+    },'image/png');
+  }
+})();
+</script>
+</body>
+</html>
