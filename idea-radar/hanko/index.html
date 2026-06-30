@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>判子 — Hanko</title>
+<meta name="description" content="AIエージェントの承認依頼を判子でポンポン捌くほど速くなる。紛れた1件の危険依頼だけを見抜いて弾く、承認疲れ体感ゲー。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#05070b;overflow:hidden;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#eef2f7;}
+  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(100vw,56.25vh);height:min(177.78vw,100vh);background:#080b11;overflow:hidden;
+    box-shadow:0 0 60px rgba(0,0,0,.7);}
+  canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;}
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;z-index:5;pointer-events:none;font-variant-numeric:tabular-nums;}
+  .hud-cell{font-size:12px;letter-spacing:.08em;color:#7d8aa0;text-transform:uppercase;}
+  .hud-val{font-size:22px;font-weight:800;color:#eef2f7;line-height:1;margin-top:2px;}
+  #combo .hud-val{color:#2ee6a0;}
+  #lives .hud-val{font-size:20px;letter-spacing:2px;}
+  .overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;background:radial-gradient(120% 90% at 50% 30%,rgba(12,18,28,.86),rgba(5,7,11,.97));
+    backdrop-filter:blur(2px);}
+  .overlay.hidden{display:none;}
+  .logo{font-size:64px;font-weight:900;letter-spacing:.14em;color:#fff;
+    text-shadow:0 0 26px rgba(255,45,85,.55);position:relative;}
+  .logo .seal{display:inline-block;color:#ff2d55;}
+  .rom{font-size:13px;letter-spacing:.42em;color:#8aa0c0;margin-top:6px;text-transform:uppercase;}
+  .story{margin:26px 6px 6px;font-size:15px;line-height:1.85;color:#c2cee0;max-width:300px;}
+  .story b{color:#ff5d7e;font-weight:700;}
+  .ctrl{margin-top:22px;display:flex;gap:18px;font-size:13px;color:#9fb0c8;}
+  .ctrl span{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .ctrl .k{font-size:11px;letter-spacing:.1em;color:#6f7f97;}
+  .ctrl .g{font-size:26px;}
+  .btn{margin-top:30px;border:none;border-radius:999px;padding:17px 52px;font-size:18px;font-weight:800;
+    letter-spacing:.06em;color:#06140d;background:linear-gradient(180deg,#3bffb0,#16c882);
+    box-shadow:0 8px 30px rgba(46,230,160,.4);cursor:pointer;}
+  .btn:active{transform:translateY(2px);}
+  .btn.red{color:#fff;background:linear-gradient(180deg,#ff5d7e,#e01040);box-shadow:0 8px 30px rgba(255,45,85,.4);}
+  /* gameover */
+  #go .gtitle{font-size:30px;font-weight:900;letter-spacing:.1em;color:#fff;}
+  #go .score{font-size:78px;font-weight:900;color:#2ee6a0;line-height:1;margin:6px 0 2px;
+    text-shadow:0 0 30px rgba(46,230,160,.45);}
+  #go .sub{font-size:13px;color:#8090a8;letter-spacing:.08em;}
+  #go .rank{margin-top:16px;font-size:20px;font-weight:800;color:#ffd24a;}
+  #go .rankdesc{font-size:12.5px;color:#9aa8bf;margin-top:4px;max-width:280px;line-height:1.6;}
+  #go .missed{margin-top:14px;font-size:11.5px;color:#ff7a92;max-width:290px;line-height:1.6;}
+  #go .row{margin-top:24px;display:flex;gap:12px;}
+  .btn.ghost{background:transparent;border:1px solid #2c3850;color:#cdd8ea;box-shadow:none;padding:15px 26px;font-size:15px;}
+  .tiny{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#3f4a5e;letter-spacing:.12em;z-index:6;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div><div class="hud-cell">承認済</div><div class="hud-val" id="vCount">0</div></div>
+    <div id="combo" style="text-align:center"><div class="hud-cell">コンボ</div><div class="hud-val" id="vCombo">0</div></div>
+    <div id="lives" style="text-align:right"><div class="hud-cell">残ライフ</div><div class="hud-val" id="vLives">♥♥♥</div></div>
+  </div>
+
+  <div class="overlay" id="intro">
+    <div class="logo">判<span class="seal">子</span></div>
+    <div class="rom">H A N K O</div>
+    <div class="story">
+      ある朝、AIから<b>50件</b>の承認依頼が届いた。<br>
+      読込・下書き・検索——どれも無害。<br>だからつい、<b>読まずにポンポン</b>判子を押す。<br>
+      でも50件に1件、<b>取り返しのつかない</b>ものが紛れている。
+    </div>
+    <div class="ctrl">
+      <span><span class="g">🟢</span><span class="k">無害＝タップ</span><span style="color:#2ee6a0;font-weight:700">承認</span></span>
+      <span><span class="g">🔴</span><span class="k">危険＝スワイプ</span><span style="color:#ff5d7e;font-weight:700">却下</span></span>
+    </div>
+    <button class="btn" id="startBtn">承認をはじめる</button>
+  </div>
+
+  <div class="overlay hidden" id="go">
+    <div class="gtitle">業務終了</div>
+    <div class="score" id="goScore">0</div>
+    <div class="sub">承認 <span id="goCount">0</span>件 ・ 最長コンボ <span id="goCombo">0</span></div>
+    <div class="rank" id="goRank">—</div>
+    <div class="rankdesc" id="goRankDesc"></div>
+    <div class="missed" id="goMissed"></div>
+    <div class="row">
+      <button class="btn red" id="shareBtn">結果をシェア</button>
+      <button class="btn ghost" id="againBtn">もう一度</button>
+    </div>
+  </div>
+  <div class="tiny">IDEA RADAR ・ t-aka-h.github.io/idea-radar/hanko</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const stage=document.getElementById('stage');
+let W=0,H=0,DPR=1;
+function resize(){
+  const r=stage.getBoundingClientRect();
+  W=r.width; H=r.height; DPR=Math.min(window.devicePixelRatio||1,2.5);
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- audio (all synth, no files) ---------- */
+let actx=null;
+function A(){ if(!actx){ try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;} } if(actx.state==='suspended')actx.resume(); return actx; }
+let noiseBuf=null;
+function noise(){ const c=A(); if(!c)return null; if(!noiseBuf){ noiseBuf=c.createBuffer(1,c.sampleRate*0.5,c.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; } const s=c.createBufferSource(); s.buffer=noiseBuf; return s; }
+function env(g,t,a,peak,dur){ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); }
+function sndApprove(combo){ const c=A(); if(!c)return; const t=c.currentTime;
+  const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=68+Math.min(combo,14)*3;
+  env(g,t,0.004,0.34,0.10); o.connect(g).connect(c.destination); o.start(t); o.stop(t+0.12);
+  // crisp "pon" tick
+  const o2=c.createOscillator(),g2=c.createGain(); o2.type='triangle'; o2.frequency.setValueAtTime(680+combo*8,t); o2.frequency.exponentialRampToValueAtTime(300,t+0.05);
+  env(g2,t,0.002,0.12,0.06); o2.connect(g2).connect(c.destination); o2.start(t); o2.stop(t+0.07);
+}
+function sndReject(){ const c=A(); if(!c)return; const t=c.currentTime; const n=noise(); if(!n)return;
+  const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(2600,t); bp.frequency.exponentialRampToValueAtTime(500,t+0.14); bp.Q.value=0.8;
+  const g=c.createGain(); env(g,t,0.003,0.3,0.16); n.connect(bp).connect(g).connect(c.destination); n.start(t); n.stop(t+0.18);
+}
+function sndDanger(){ const c=A(); if(!c)return; const t=c.currentTime;
+  // missing-fundamental rumble for phone speakers
+  const freqs=[55,110,165,220], gains=[0.5,0.32,0.22,0.16];
+  const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=420;
+  const mg=c.createGain(); env(mg,t,0.006,0.42,0.30); lp.connect(mg).connect(c.destination);
+  freqs.forEach((f,i)=>{ const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=f; g.gain.value=gains[i]; o.connect(g).connect(lp); o.start(t); o.stop(t+0.34); });
+  const n=noise(); if(n){ const ng=c.createGain(); env(ng,t,0.004,0.12,0.16); const nf=c.createBiquadFilter(); nf.type='lowpass'; nf.frequency.value=900; n.connect(nf).connect(ng).connect(c.destination); n.start(t); n.stop(t+0.18); }
+}
+function sndOver(){ const c=A(); if(!c)return; const t=c.currentTime; const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(55,t+0.7); const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600; env(g,t,0.01,0.3,0.8); o.connect(lp).connect(g).connect(c.destination); o.start(t); o.stop(t+0.85); }
+function vib(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+/* ---------- content ---------- */
+const SAFE=["ファイルを読み込む","下書きを作成","検索を実行","ログを確認","カレンダーを参照","メモを保存","天気を取得","要約を生成","リンクを開く","スペルを修正","履歴を表示","通知を既読化"];
+const DANGER=["本番DBを全削除","全社員にメール送信","¥480,000 を送金","管理者権限に昇格","顧客名簿を外部送信","本番サーバーを再起動","全ファイルを暗号化","支払い情報を変更","リポジトリを公開","バックアップを消去"];
+
+/* ---------- game state ---------- */
+let cards=[], particles=[], flash=0, shake=0, running=false;
+let count=0, combo=0, maxCombo=0, lives=3, score=0;
+let missedDangers=[], dangerSeen=0, dangerCaught=0;
+let lastSpawn=0, t0=0, raf=0;
+const CARDH=()=>Math.max(78,Math.min(104,H*0.135));
+const LANEW=()=>W*0.84;
+
+function reset(){
+  cards=[];particles=[];flash=0;shake=0;
+  count=0;combo=0;maxCombo=0;lives=3;score=0;
+  missedDangers=[];dangerSeen=0;dangerCaught=0;
+  lastSpawn=0; t0=performance.now();
+}
+function tier(){ if(count<18)return 0; if(count<46)return 1; return 2; }
+function spawnInterval(){ return [1250,880,640][tier()]; }
+function maxConc(){ return [1,2,2][tier()]; }
+function dangerRate(){ return [0.085,0.11,0.14][tier()]; }
+function speedPx(){ const base=H*0.215; const tmult=[1,1.32,1.6][tier()]; const cmult=1+Math.min(combo,16)*0.028; return base*tmult*cmult; }
+
+function trySpawn(now){
+  if(cards.length>=maxConc())return;
+  if(now-lastSpawn<spawnInterval())return;
+  // keep vertical gap: topmost (smallest y) must have descended enough
+  const ch=CARDH();
+  let topMost=Infinity; for(const c of cards) if(c.state==='live'&&c.y<topMost)topMost=c.y;
+  if(cards.length>0 && topMost<ch+46)return;
+  const danger=Math.random()<dangerRate();
+  const text= danger? DANGER[(Math.random()*DANGER.length)|0] : SAFE[(Math.random()*SAFE.length)|0];
+  cards.push({danger,text,x:W/2,y:-ch,vy:speedPx(),state:'live',anim:0,off:0,rot:0,born:now});
+  if(danger)dangerSeen++;
+  lastSpawn=now;
+}
+
+function burst(x,y,color,n){ for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2,sp=40+Math.random()*150; particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-30,life:1,color,r:2+Math.random()*3}); } }
+
+function loseLife(action){
+  lives--; combo=0; flash=1; shake=14; sndDanger(); vib([45,35,45]);
+  if(action) missedDangers.push(action);
+  if(lives<=0) gameOver();
+}
+
+/* resolve a card by user action */
+function act(card, kind){ // kind: 'tap' | 'swipe'
+  if(card.state!=='live')return;
+  if(card.danger){
+    if(kind==='swipe'){ // correct reject
+      card.state='reject'; card.anim=0; card.dir=(card.lastDx>=0?1:-1);
+      combo++; maxCombo=Math.max(maxCombo,combo); score+=25+combo*2; dangerCaught++;
+      sndReject(); vib(22); burst(card.x,card.y+CARDH()/2,'#ff5d7e',10);
+    }else{ // approved a danger = disaster
+      card.state='mistake'; card.anim=0; loseLife(card.text);
+    }
+  }else{
+    if(kind==='tap'){ // correct approve
+      card.state='approve'; card.anim=0;
+      combo++; maxCombo=Math.max(maxCombo,combo); count++; score+=10+Math.floor(combo*1.2);
+      sndApprove(combo); vib(10); burst(card.x,card.y+CARDH()/2,'#ff2d55',14);
+    }else{ // wrongly rejected a safe one
+      card.state='reject'; card.anim=0; card.dir=(card.lastDx>=0?1:-1);
+      combo=0; sndReject(); vib(14);
+    }
+  }
+}
+
+/* ---------- input ---------- */
+let down=null;
+function pos(e){ const r=cv.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; return {x:p.clientX-r.left,y:p.clientY-r.top}; }
+function pickCard(x,y){
+  const ch=CARDH(),hw=LANEW()/2; let hit=null,lowest=null;
+  for(const c of cards){ if(c.state!=='live')continue; if(!lowest||c.y>lowest.y)lowest=c;
+    if(x>=c.x-hw&&x<=c.x+hw&&y>=c.y&&y<=c.y+ch){ if(!hit||c.y>hit.y)hit=c; } }
+  return hit||lowest;
+}
+function onDown(e){ A(); if(!running)return; const p=pos(e); down={x:p.x,y:p.y,card:pickCard(p.x,p.y),moved:0}; }
+function onMove(e){ if(!down)return; const p=pos(e); const dx=p.x-down.x; down.moved=Math.max(down.moved,Math.abs(dx)); if(down.card)down.card.lastDx=dx; }
+function onUp(e){ if(!down||!running){down=null;return;} const c=down.card; if(c){ const dx=(down.card.lastDx)||0;
+    if(Math.abs(dx)>40){ act(c,'swipe'); } else if(down.moved<16){ act(c,'tap'); } }
+  down=null; }
+cv.addEventListener('pointerdown',onDown);
+cv.addEventListener('pointermove',onMove);
+cv.addEventListener('pointerup',onUp);
+cv.addEventListener('pointercancel',()=>{down=null;});
+
+/* ---------- loop ---------- */
+function update(dt,now){
+  trySpawn(now);
+  const ch=CARDH();
+  for(const c of cards){
+    if(c.state==='live'){ c.vy=speedPx(); c.y+=c.vy*dt;
+      if(c.y>H-ch*0.55){ // reached bottom
+        if(c.danger){ c.state='mistake'; c.anim=0; loseLife(c.text); }
+        else { c.state='gone'; c.anim=0; combo=0; }
+      }
+    } else { c.anim+=dt;
+      if(c.state==='reject'){ c.off+=(c.dir||1)*900*dt; c.rot+=(c.dir||1)*4*dt; }
+      if(c.state==='mistake'){ c.shk=Math.sin(c.anim*60)*8*(1-c.anim/0.45); }
+    }
+  }
+  cards=cards.filter(c=> c.state==='live' || c.anim< (c.state==='reject'?0.5:0.42));
+  for(const p of particles){ p.vy+=420*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*2.2; }
+  particles=particles.filter(p=>p.life>0);
+  if(flash>0)flash=Math.max(0,flash-dt*6.5);
+  if(shake>0)shake=Math.max(0,shake-dt*55);
+  // hud
+  vCount.textContent=count; vCombo.textContent=combo; vLives.textContent='♥'.repeat(Math.max(0,lives))||'—';
+}
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawCard(c,now){
+  const ch=CARDH(),w=LANEW(),x=c.x-w/2+(c.off||0)+(c.shk||0),y=c.y;
+  let alpha=1;
+  if(c.state==='approve'||c.state==='gone'||c.state==='mistake') alpha=Math.max(0,1-c.anim/0.42);
+  if(c.state==='reject') alpha=Math.max(0,1-c.anim/0.5);
+  ctx.save(); ctx.globalAlpha=alpha;
+  if(c.state==='reject'){ ctx.translate(x+w/2,y+ch/2); ctx.rotate(c.rot||0); ctx.translate(-(x+w/2),-(y+ch/2)); }
+  const pulse=c.danger&&c.state==='live'?(1+0.04*Math.sin(now/120)):1;
+  const accent=c.danger?'#ff2d55':'#2ee6a0';
+  // glow
+  ctx.shadowColor=c.danger?'rgba(255,45,85,'+(0.55*pulse)+')':'rgba(46,230,160,.3)';
+  ctx.shadowBlur=c.danger?26*pulse:14;
+  rr(x,y,w,ch,16); ctx.fillStyle=c.danger?'#1a0e15':'#0e1620'; ctx.fill();
+  ctx.shadowBlur=0;
+  // border
+  ctx.lineWidth=c.danger?2.4*pulse:1.6; ctx.strokeStyle=accent; rr(x+1,y+1,w-2,ch-2,15); ctx.stroke();
+  // left accent bar
+  ctx.fillStyle=accent; rr(x+10,y+14,5,ch-28,3); ctx.fill();
+  // header
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillStyle=c.danger?'#ff8aa0':'#5fd6aa'; ctx.font='600 11px -apple-system,sans-serif';
+  ctx.fillText(c.danger?'⚠ AI エージェント':'AI エージェント', x+28, y+26);
+  // action text
+  ctx.fillStyle='#eef2f7'; ctx.font='800 '+(ch>92?20:18)+'px -apple-system,"Hiragino Kaku Gothic ProN",sans-serif';
+  ctx.fillText(c.text, x+28, y+ch*0.62);
+  // sub
+  ctx.fillStyle='#7d8aa0'; ctx.font='500 11px -apple-system,sans-serif';
+  ctx.fillText('承認しますか？', x+28, y+ch-14);
+  // approved stamp
+  if(c.state==='approve'){ const s=Math.min(1,c.anim/0.08); const sc=1.3-0.3*s; const sx=x+w-44,sy=y+ch/2;
+    ctx.save(); ctx.translate(sx,sy); ctx.scale(sc,sc); ctx.globalAlpha=alpha*Math.min(1,c.anim/0.04);
+    ctx.strokeStyle='#ff2d55'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,0,22,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='#ff2d55'; ctx.font='900 22px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('可',0,1); ctx.restore(); }
+  // mistake X
+  if(c.state==='mistake'){ const sx=x+w-44,sy=y+ch/2; ctx.strokeStyle='#ff2d55'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(sx-16,sy-16); ctx.lineTo(sx+16,sy+16); ctx.moveTo(sx+16,sy-16); ctx.lineTo(sx-16,sy+16); ctx.stroke(); }
+  ctx.restore();
+}
+
+function draw(now){
+  const ox=(Math.random()-0.5)*shake, oy=(Math.random()-0.5)*shake;
+  ctx.save(); ctx.translate(ox,oy);
+  // bg
+  ctx.fillStyle='#080b11'; ctx.fillRect(-20,-20,W+40,H+40);
+  // subtle vertical lane guides
+  ctx.strokeStyle='rgba(255,255,255,.03)'; ctx.lineWidth=1;
+  const lw=LANEW(); ctx.beginPath(); ctx.moveTo(W/2-lw/2,0);ctx.lineTo(W/2-lw/2,H); ctx.moveTo(W/2+lw/2,0);ctx.lineTo(W/2+lw/2,H); ctx.stroke();
+  // danger line near bottom
+  const ch=CARDH(); const dl=H-ch*0.55; ctx.strokeStyle='rgba(255,45,85,.16)'; ctx.setLineDash([6,8]); ctx.beginPath(); ctx.moveTo(0,dl);ctx.lineTo(W,dl); ctx.stroke(); ctx.setLineDash([]);
+  // tier hint darken
+  const dk=[0,0.05,0.12][tier()]; if(dk){ctx.fillStyle='rgba(0,0,0,'+dk+')';ctx.fillRect(0,0,W,H);}
+  for(const c of cards) drawCard(c,now);
+  for(const p of particles){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
+  ctx.globalAlpha=1;
+  ctx.restore();
+  if(flash>0){ ctx.fillStyle='rgba(220,20,40,'+(flash*0.5)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+let last=0;
+function frame(now){
+  if(!last)last=now; let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(running) update(dt,now);
+  draw(now);
+  raf=requestAnimationFrame(frame);
+}
+
+/* ---------- screens ---------- */
+const intro=document.getElementById('intro'), go=document.getElementById('go');
+const vCount=document.getElementById('vCount'),vCombo=document.getElementById('vCombo'),vLives=document.getElementById('vLives');
+function start(){ A(); reset(); running=true; intro.classList.add('hidden'); go.classList.add('hidden'); last=0; }
+function rankFor(){
+  const seen=dangerSeen||1, missRate=missedDangers.length/seen;
+  if(dangerSeen>=3 && missedDangers.length===0) return ['人間の最後の砦','一件も見逃さなかった。AIの暴走を止めるのは、結局あなたの目だった。'];
+  if(missRate<=0.25) return ['判断する管理職','ほとんどの地雷を見抜いた。でも、押した指は正直だった。'];
+  if(missRate<=0.5) return ['見習い決裁者','半分は止めた。残り半分は…ポンと押してしまった。'];
+  return ['ラバースタンプ係長','テンポに乗って、読まずにポンポン。これがapproval fatigueの正体。'];
+}
+function gameOver(){
+  running=false; sndOver();
+  const [rk,desc]=rankFor();
+  document.getElementById('goScore').textContent=score;
+  document.getElementById('goCount').textContent=count;
+  document.getElementById('goCombo').textContent=maxCombo;
+  document.getElementById('goRank').textContent='称号：'+rk;
+  document.getElementById('goRankDesc').textContent=desc;
+  const md=document.getElementById('goMissed');
+  if(missedDangers.length){ const uniq=[...new Set(missedDangers)].slice(0,4); md.textContent='見逃した致命的承認：'+uniq.join(' / ')+(missedDangers.length>uniq.length?' …':''); }
+  else md.textContent='危険な承認、見逃しゼロ。';
+  go.classList.remove('hidden');
+}
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('againBtn').addEventListener('click',start);
+
+/* ---------- share card ---------- */
+async function shareCard(){
+  const sc=document.createElement('canvas'); sc.width=1080; sc.height=1920; const g=sc.getContext('2d');
+  const [rk,desc]=rankFor();
+  // bg
+  g.fillStyle='#070a10'; g.fillRect(0,0,1080,1920);
+  const grad=g.createRadialGradient(540,560,80,540,560,900); grad.addColorStop(0,'rgba(255,45,85,.16)'); grad.addColorStop(1,'rgba(7,10,16,0)'); g.fillStyle=grad; g.fillRect(0,0,1080,1920);
+  g.textAlign='center';
+  // logo
+  g.fillStyle='#fff'; g.font='900 150px -apple-system,"Hiragino Kaku Gothic ProN",sans-serif'; g.fillText('判',430,360);
+  g.fillStyle='#ff2d55'; g.fillText('子',650,360);
+  g.fillStyle='#8aa0c0'; g.font='600 30px sans-serif'; g.fillText('H  A  N  K  O',540,420);
+  // score
+  g.fillStyle='#8090a8'; g.font='600 34px sans-serif'; g.fillText('SCORE',540,640);
+  g.fillStyle='#2ee6a0'; g.font='900 240px -apple-system,sans-serif'; g.fillText(String(score),540,860);
+  // stats
+  g.fillStyle='#cdd8ea'; g.font='700 40px sans-serif';
+  g.fillText('承認 '+count+'件   ・   最長コンボ '+maxCombo,540,980);
+  // rank plate
+  g.fillStyle='rgba(255,210,74,.12)'; g.strokeStyle='#ffd24a'; g.lineWidth=3;
+  const px=140,py=1080,pw=800,ph=300,r=28;
+  g.beginPath();g.moveTo(px+r,py);g.arcTo(px+pw,py,px+pw,py+ph,r);g.arcTo(px+pw,py+ph,px,py+ph,r);g.arcTo(px,py+ph,px,py,r);g.arcTo(px,py,px+pw,py,r);g.closePath();g.fill();g.stroke();
+  g.fillStyle='#ffd24a'; g.font='900 64px -apple-system,sans-serif'; g.fillText(rk,540,1200);
+  g.fillStyle='#aeb9cf'; g.font='500 30px sans-serif'; wrap(g,desc,540,1270,720,42);
+  // missed
+  g.fillStyle=missedDangers.length?'#ff7a92':'#5fd6aa'; g.font='600 30px sans-serif';
+  const mtxt= missedDangers.length? '見逃した致命的承認 '+missedDangers.length+'件' : '危険な承認 見逃しゼロ';
+  g.fillText(mtxt,540,1560);
+  // footer
+  g.fillStyle='#5a6680'; g.font='600 30px sans-serif'; g.fillText('AIの承認依頼、あなたは見抜けるか',540,1740);
+  g.fillStyle='#3f4a5e'; g.font='600 26px sans-serif'; g.fillText('t-aka-h.github.io/idea-radar/hanko',540,1810);
+  sc.toBlob(async (blob)=>{
+    const file=new File([blob],'hanko.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],title:'判子 — Hanko',text:'称号：'+rk+'／SCORE '+score}); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hanko.png'; a.click();
+  },'image/png');
+}
+function wrap(g,text,cx,cy,maxw,lh){ const ch=[...text]; let line='',y=cy; for(let i=0;i<ch.length;i++){ const test=line+ch[i]; if(g.measureText(test).width>maxw && line){ g.fillText(line,cx,y); line=ch[i]; y+=lh; } else line=test; } g.fillText(line,cx,y); }
+document.getElementById('shareBtn').addEventListener('click',shareCard);
+
+raf=requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
