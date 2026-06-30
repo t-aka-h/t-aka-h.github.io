@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<title>ご来光 — Goraikō</title>
+<meta name="description" content="弾丸登山を避け、山小屋で一息。夜明けの刹那、頂きでご来光をジャストタップで掴む富士登山タイミング体感ゲー。7月1日 富士山 山開き。">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; background:#05060a; overflow:hidden; overscroll-behavior:none;
+    font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans",system-ui,sans-serif;
+    touch-action:none; user-select:none; -webkit-user-select:none; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  #stage { position:relative; aspect-ratio:9/16; height:100dvh; max-width:100vw; }
+  @media (max-aspect-ratio:9/16){ #stage{ width:100vw; height:auto; } }
+  canvas { display:block; width:100%; height:100%; border-radius:0; }
+  #ui { position:absolute; inset:0; pointer-events:none; }
+  .btn { pointer-events:auto; position:absolute; left:50%; transform:translateX(-50%);
+    border:none; border-radius:999px; font-weight:800; letter-spacing:.08em; font-size:4.0vmin;
+    padding:3.2vmin 8vmin; color:#05060a; cursor:pointer; font-family:inherit;
+    box-shadow:0 0 24px rgba(255,211,77,.45), 0 0 60px rgba(255,211,77,.25); }
+  #btnReplay { bottom:11%; background:linear-gradient(180deg,#fff6d8,#ffd34d); display:none; }
+  #btnShare  { bottom:4%;  background:linear-gradient(180deg,#9ff0ff,#5be1ff); display:none; }
+  #hint { position:absolute; left:0; right:0; bottom:6%; text-align:center; color:#cfe9ff;
+    font-size:3.4vmin; opacity:.0; letter-spacing:.1em; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="ui">
+    <button class="btn" id="btnReplay">もう一度</button>
+    <button class="btn" id="btnShare">称号をシェア</button>
+    <div id="hint"></div>
+  </div>
+</div></div>
+<script>
+"use strict";
+/* ===== ご来光 / Goraikō =====  single-file, no deps. Canvas + WebAudio + vibrate. */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const btnReplay = document.getElementById('btnReplay'), btnShare = document.getElementById('btnShare');
+const hintEl = document.getElementById('hint');
+const W = 540, H = 960;                 // logical 9:16 resolution
+let DPR = 1;
+function resize(){
+  const r = cv.getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  cv.width = Math.round(r.width*DPR); cv.height = Math.round(r.height*DPR);
+}
+window.addEventListener('resize', resize);
+
+/* ---------- audio ---------- */
+let AC=null, drone=[], droneGain=null, restGain=null, restOsc=null, masterReady=false;
+function ensureAudio(){
+  if(AC) return;
+  try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  // solemn drone: 55Hz + detuned 110Hz through lowpass
+  droneGain = AC.createGain(); droneGain.gain.value=0.0001;
+  const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=520; lp.Q.value=0.6;
+  droneGain.connect(lp); lp.connect(AC.destination);
+  [55, 110.3, 82.5].forEach((f,i)=>{
+    const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=AC.createGain(); g.gain.value=(i===0?0.9:i===1?0.5:0.35);
+    o.connect(g); g.connect(droneGain); o.start(); drone.push({o,g});
+  });
+  // rest warm pad
+  restGain=AC.createGain(); restGain.gain.value=0.0001;
+  const rlp=AC.createBiquadFilter(); rlp.type='lowpass'; rlp.frequency.value=900;
+  restGain.connect(rlp); rlp.connect(AC.destination);
+  restOsc=AC.createOscillator(); restOsc.type='triangle'; restOsc.frequency.value=146.8;
+  const ro2=AC.createOscillator(); ro2.type='sine'; ro2.frequency.value=220;
+  const rg2=AC.createGain(); rg2.gain.value=0.4;
+  restOsc.connect(restGain); ro2.connect(rg2); rg2.connect(restGain);
+  restOsc.start(); ro2.start();
+  masterReady=true;
+}
+function now(){ return AC?AC.currentTime:0; }
+function droneTo(v,t=0.6){ if(!AC)return; droneGain.gain.cancelScheduledValues(now()); droneGain.gain.setTargetAtTime(v, now(), t); }
+function restTo(v,t=0.25){ if(!AC)return; restGain.gain.setTargetAtTime(v, now(), t); }
+function blip(type){
+  if(!AC) return; const t=now();
+  if(type==='step'||type==='good'){
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='square'; o.frequency.setValueAtTime(type==='good'?260:200,t);
+    o.frequency.exponentialRampToValueAtTime(90,t+0.10);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.18);
+    if(type==='good'){ // little cyan chime
+      const o2=AC.createOscillator(), g2=AC.createGain();
+      o2.type='sine'; o2.frequency.setValueAtTime(880,t); o2.frequency.exponentialRampToValueAtTime(1320,t+0.12);
+      g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(0.10,t+0.01);
+      g2.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+      o2.connect(g2); g2.connect(AC.destination); o2.start(t); o2.stop(t+0.2);
+    }
+  } else if(type==='miss'){
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(48,t+0.5);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+    const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600;
+    o.connect(lp); lp.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.62);
+  } else if(type==='collapse'){
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(35,t+0.9);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.28,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.0);
+    // noise crash
+    const nb=AC.createBuffer(1,AC.sampleRate*0.4,AC.sampleRate); const d=nb.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+    const ns=AC.createBufferSource(); ns.buffer=nb; const ng=AC.createGain(); ng.gain.value=0.25;
+    ns.connect(ng); ng.connect(AC.destination); ns.start(t);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+1.0);
+  }
+}
+// the glorious goraiko peak: ramp drone + harmonics fade-in (missing fundamental)
+function sunriseChord(strength){
+  if(!AC) return; const t=now();
+  droneTo(0.55*strength+0.18, 0.15);
+  [165,220,275,330].forEach((f,i)=>{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.12*strength*(1-i*0.12)+0.01, t+0.5+i*0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+3.4);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+3.5);
+  });
+  // bright bell
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(1320,t); o.frequency.exponentialRampToValueAtTime(1976,t+0.3);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.12*strength,t+0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+1.4);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+1.5);
+}
+function buzz(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} }
+
+/* ---------- game state ---------- */
+const TOTAL_STEPS = 24;
+const HUTS = [8, 16];            // steps where a hut forces a rest stop
+let state, step, stamina, combo, goodCount, climber, stars, gold, shake;
+let breathPhase, dawnT, dawnSpeed, windowHalf, tapResult, rankInfo, tFlash, summitGlow;
+let holding=false, restAccrued=0, nightShift=0, t0=0, splashT=0, resultPulse=0;
+
+function reset(){
+  state='title'; step=0; stamina=100; combo=0; goodCount=0;
+  climber={x:0,y:0,t:0};
+  stars=[]; for(let i=0;i<90;i++) stars.push({x:Math.random()*W, y:Math.random()*H*0.62, r:Math.random()*1.6+0.3, tw:Math.random()*6.28});
+  gold=[]; shake=0; breathPhase=0; dawnT=0; tapResult=null; rankInfo=null; tFlash=0; summitGlow=0;
+  holding=false; restAccrued=0; nightShift=0; splashT=0; resultPulse=0;
+  btnReplay.style.display='none'; btnShare.style.display='none'; hint('');
+}
+function hint(s,op=0.85){ hintEl.textContent=s; hintEl.style.opacity = s? op:0; }
+
+/* layout helpers (logical coords) */
+const baseY = H*0.90, summitY = H*0.30, ridgeX0 = W*0.20, ridgeXs = W*0.50;
+function ridgePoint(p){ // p:0..1 along left ridge (base->summit)
+  return { x: ridgeX0 + (ridgeXs-ridgeX0)*p, y: baseY + (summitY-baseY)*p };
+}
+
+/* ---------- input ---------- */
+function startGame(){
+  ensureAudio();
+  if(AC && AC.state==='suspended') AC.resume();
+  reset(); state='climb'; t0=performance.now();
+  droneTo(0.10, 1.2);
+  hint('呼吸を整え、リズムよく登る', .8);
+  setTimeout(()=>{ if(state==='climb') hint(''); }, 2200);
+}
+function onDown(){
+  if(state==='title'){ startGame(); return; }
+  if(state==='climb'){ doStep(); return; }
+  if(state==='rest'){ holding=true; restTo(0.16); return; }
+  if(state==='dawn'){ doDawnTap(); return; }
+}
+function onUp(){
+  if(state==='rest' && holding){ holding=false; restTo(0.0001); leaveRest(); }
+}
+cv.addEventListener('pointerdown', e=>{ e.preventDefault(); onDown(); }, {passive:false});
+cv.addEventListener('pointerup',   e=>{ e.preventDefault(); onUp(); }, {passive:false});
+cv.addEventListener('pointercancel', onUp);
+
+function doStep(){
+  // breathing sweet-spot: ring contracts when sin near +1
+  const s = Math.sin(breathPhase);
+  const good = s > 0.55;                 // sweet window
+  step++;
+  if(good){ goodCount++; combo++; stamina -= 1.6; blip('good'); buzz(8);
+            spawnGood(); }
+  else    { combo=0; stamina -= 4.2; blip('step'); buzz([0,18]); }
+  if(stamina<=0){ stamina=0; collapse(); return; }
+  if(HUTS.includes(step)){ enterRest(); return; }
+  if(step>=TOTAL_STEPS){ enterDawn(); return; }
+}
+function enterRest(){
+  state='rest'; restAccrued=0;
+  hint('長押しで一息つく（山小屋）', .85);
+}
+function leaveRest(){
+  hint('');
+  if(step>=TOTAL_STEPS){ enterDawn(); return; }
+  state='climb';
+}
+function enterDawn(){
+  state='dawn'; dawnT=0;
+  const eff = goodCount/TOTAL_STEPS;       // efficiency 0..1
+  windowHalf = 0.030 + 0.055*eff;          // efficient climb => wider gold window
+  dawnSpeed = 0.165 - 0.02*eff;            // and slightly slower (more forgiving)
+  droneTo(0.16, 0.8);
+  hint('東の空が白む…ご来光をジャストでタップ', .9);
+}
+function doDawnTap(){
+  if(tapResult!==null) return;
+  const err = Math.abs(dawnT - 0.5);
+  tapResult = err;
+  let rank, msg, strength;
+  if(err <= windowHalf*0.34){ rank='日輪'; msg='完璧なご来光！'; strength=1.0; }
+  else if(err <= windowHalf){ rank='御来光'; msg='ご来光を拝んだ'; strength=0.8; }
+  else if(err <= windowHalf*2.2){ rank='薄日'; msg='雲間にわずかな朝日'; strength=0.45; }
+  else { rank='霧中'; msg='ガスに巻かれ見逃した'; strength=0.12; }
+  finishGoraiko(rank,msg,strength,err);
+}
+function finishGoraiko(rank,msg,strength,err){
+  const prec = Math.max(0, 100 - err/Math.max(windowHalf,0.001)*60);
+  rankInfo = { rank, msg, strength, prec:Math.round(Math.min(100,prec)),
+               alt: 3776, stamina:Math.round(stamina), good:goodCount, collapsed:false };
+  if(strength>0.4){ sunriseChord(strength); buzz([0,30,40,30,140]); burstGold(strength); tFlash=1; }
+  else { blip('miss'); buzz(200); }
+  goResult();
+}
+function collapse(){
+  rankInfo = { rank:'弾丸の墓標', msg:'体力尽き、高山病に沈む', strength:0, prec:0,
+               alt: Math.round(3776*step/TOTAL_STEPS), stamina:0, good:goodCount, collapsed:true };
+  blip('collapse'); buzz([0,200,60,200]); shake=22; droneTo(0.0001,0.6);
+  goResult();
+}
+function goResult(){
+  state='result'; resultPulse=0;
+  setTimeout(()=>{ btnReplay.style.display='block'; btnShare.style.display='block'; }, 700);
+  hint('');
+}
+
+/* ---------- particles ---------- */
+function spawnGood(){
+  const p=ridgePoint(step/TOTAL_STEPS);
+  for(let i=0;i<8;i++) gold.push({x:p.x,y:p.y, vx:(Math.random()-.5)*1.4, vy:-Math.random()*2-0.5,
+     life:1, col:'#5be1ff', g:0.02, sz:Math.random()*2+1});
+}
+function burstGold(strength){
+  const p=ridgePoint(1);
+  const n=Math.floor(80*strength+40);
+  for(let i=0;i<n;i++){ const a=-Math.PI/2 + (Math.random()-.5)*Math.PI*1.4, sp=Math.random()*6+2;
+    gold.push({x:p.x,y:p.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 1, life:1,
+      col: Math.random()<0.7?'#ffd34d':'#fff6d8', g:-0.012, sz:Math.random()*3+1.4}); }
+}
+
+/* ---------- draw ---------- */
+function skyColors(t){
+  // keyframes: deep night -> purple -> orange -> gold
+  const stops=[
+    {t:0.0, top:[8,7,20],    bot:[16,12,34]},
+    {t:0.42,top:[42,26,74],  bot:[120,40,70]},
+    {t:0.62,top:[120,60,90], bot:[255,107,61]},
+    {t:0.78,top:[255,150,80],bot:[255,211,77]},
+    {t:1.0, top:[255,210,120],bot:[255,246,216]}
+  ];
+  let a=stops[0], b=stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){ if(t>=stops[i].t && t<=stops[i+1].t){ a=stops[i]; b=stops[i+1]; break; } }
+  const f = (t-a.t)/Math.max(0.0001,(b.t-a.t));
+  const mix=(p,q)=>p.map((v,i)=>Math.round(v+(q[i]-v)*f));
+  const top=mix(a.top,b.top), bot=mix(a.bot,b.bot);
+  return { top:`rgb(${top[0]},${top[1]},${top[2]})`, bot:`rgb(${bot[0]},${bot[1]},${bot[2]})`, f:t };
+}
+
+function draw(time){
+  const dt = Math.min(40, time - (draw._last||time)); draw._last=time;
+  // logical->device scale
+  ctx.setTransform(cv.width/W,0,0,cv.height/H,0,0);
+  // screen shake
+  let sx=0,sy=0; if(shake>0){ sx=(Math.random()-.5)*shake; sy=(Math.random()-.5)*shake; shake*=0.88; if(shake<0.4)shake=0; }
+  ctx.save(); ctx.translate(sx,sy);
+
+  // --- update timers ---
+  if(state==='climb'){ breathPhase += dt*0.0052; }
+  if(state==='rest' && holding){
+    stamina = Math.min(100, stamina + dt*0.045);
+    restAccrued += dt; nightShift = Math.min(0.12, nightShift + dt*0.00002);
+    if(Math.random()<0.5) gold.push({x:ridgePoint(step/TOTAL_STEPS).x+(Math.random()-.5)*30,
+        y:ridgePoint(step/TOTAL_STEPS).y, vx:(Math.random()-.5)*0.6, vy:-Math.random()*1.5-0.4,
+        life:1, col: Math.random()<0.5?'#ff8a3d':'#ffd34d', g:-0.01, sz:Math.random()*2+1});
+  }
+  if(state==='dawn' && tapResult===null){ dawnT += dt*0.001*dawnSpeed; if(dawnT>1){ dawnT=1; doDawnTimeout(); } }
+  if(tFlash>0) tFlash=Math.max(0,tFlash-dt*0.0014);
+  if(state==='result') resultPulse+=dt*0.004;
+
+  // --- sky ---
+  let skyT;
+  if(state==='title') skyT=0.05;
+  else if(state==='dawn') skyT = 0.30 + dawnT*0.70;
+  else if(state==='result') skyT = rankInfo? (rankInfo.collapsed?0.04 : 0.30 + (0.7)*(rankInfo.strength>0.4?0.62+rankInfo.strength*0.38:0.5)) : 0.4;
+  else skyT = 0.10 + nightShift;       // climbing/rest: deep night, slight warm from rest
+  const sky=skyColors(skyT);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,sky.top); g.addColorStop(1,sky.bot);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // --- stars (fade as sky brightens) ---
+  const starA = Math.max(0, 1 - skyT*1.7);
+  if(starA>0.02){ ctx.save();
+    for(const s of stars){ s.tw+=dt*0.004; const a=starA*(0.5+0.5*Math.sin(s.tw));
+      ctx.globalAlpha=a; ctx.fillStyle='#dfeaff'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.29); ctx.fill(); }
+    ctx.restore(); }
+
+  // --- sun glow behind summit (during dawn / good result) ---
+  const sunT = (state==='dawn')? dawnT : (state==='result'&&rankInfo&&!rankInfo.collapsed? (rankInfo.strength>0.4?0.5:0.32):-1);
+  if(sunT>=0){
+    const sp=ridgePoint(1.0); const cx=W*0.62, cy=summitY+6;
+    const rad = 30 + sunT*sunT*420 + (tFlash*260);
+    const sg=ctx.createRadialGradient(cx,cy,2,cx,cy,rad);
+    sg.addColorStop(0,'rgba(255,250,235,'+(0.9)+')');
+    sg.addColorStop(0.25,'rgba(255,224,150,'+(0.7)+')');
+    sg.addColorStop(1,'rgba(255,180,90,0)');
+    ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(cx,cy,rad,0,6.29); ctx.fill();
+  }
+
+  // --- Mt Fuji silhouette (neon edge) ---
+  drawFuji(skyT);
+
+  // --- particles ---
+  for(let i=gold.length-1;i>=0;i--){ const p=gold[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=p.g; p.life-=0.012;
+    if(p.life<=0){ gold.splice(i,1); continue; }
+    ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.col;
+    ctx.globalCompositeOperation='lighter';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,6.29); ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+  }
+  ctx.globalAlpha=1;
+
+  // --- climber dot ---
+  if(state==='climb'||state==='rest'||state==='dawn'){
+    const p = ridgePoint(state==='dawn'?1: step/TOTAL_STEPS);
+    // breathing ring while climbing
+    if(state==='climb'){
+      const s=Math.sin(breathPhase); const rr=14 - s*7;
+      ctx.strokeStyle = s>0.55? 'rgba(91,225,255,0.95)':'rgba(120,150,200,0.5)';
+      ctx.lineWidth=2.4; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(6,rr),0,6.29); ctx.stroke();
+    }
+    ctx.fillStyle='#ff2d7e'; ctx.shadowColor='#ff2d7e'; ctx.shadowBlur=16;
+    ctx.beginPath(); ctx.arc(p.x,p.y,6,0,6.29); ctx.fill(); ctx.shadowBlur=0;
+  }
+
+  // --- white-gold flood on perfect ---
+  if(tFlash>0){ ctx.globalAlpha=tFlash*0.9; ctx.fillStyle='#fff6e0'; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+
+  // --- HUD ---
+  if(state==='climb'||state==='rest'||state==='dawn') drawHUD();
+
+  // --- screens ---
+  if(state==='title') drawTitle(time);
+  if(state==='dawn')  drawDawnGuide();
+  if(state==='result') drawResult();
+
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+
+function drawFuji(skyT){
+  // body
+  ctx.beginPath();
+  ctx.moveTo(-20,baseY+40);
+  ctx.lineTo(ridgeX0, baseY);
+  ctx.lineTo(W*0.50, summitY);     // summit
+  ctx.lineTo(W*0.50, summitY);
+  ctx.lineTo(W*0.86, baseY);
+  ctx.lineTo(W+20, baseY+40);
+  ctx.closePath();
+  const body=ctx.createLinearGradient(0,summitY,0,baseY);
+  // darker at night, warmer when bright
+  const dark = skyT<0.5? '#0a0c18':'#1a1320';
+  body.addColorStop(0, skyT>0.7?'#3a2a40':'#10131f');
+  body.addColorStop(1, dark);
+  ctx.fillStyle=body; ctx.fill();
+  // snow cap
+  ctx.beginPath(); ctx.moveTo(W*0.50,summitY);
+  ctx.lineTo(W*0.43, summitY+60); ctx.lineTo(W*0.47,summitY+52); ctx.lineTo(W*0.50,summitY+66);
+  ctx.lineTo(W*0.53,summitY+52); ctx.lineTo(W*0.57,summitY+60); ctx.closePath();
+  ctx.fillStyle= skyT>0.6?'rgba(255,240,220,0.85)':'rgba(180,200,230,0.5)'; ctx.fill();
+  // neon left ridge (the climb path)
+  ctx.strokeStyle='#5be1ff'; ctx.lineWidth=2.2; ctx.shadowColor='#5be1ff'; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.moveTo(ridgeX0,baseY); ctx.lineTo(W*0.50,summitY); ctx.stroke();
+  // right ridge subtle
+  ctx.strokeStyle='rgba(91,225,255,0.4)'; ctx.shadowBlur=4;
+  ctx.beginPath(); ctx.moveTo(W*0.50,summitY); ctx.lineTo(W*0.86,baseY); ctx.stroke();
+  ctx.shadowBlur=0;
+  // huts as small markers on ridge
+  for(const hs of HUTS){ const p=ridgePoint(hs/TOTAL_STEPS);
+    const passed = step>=hs;
+    ctx.fillStyle = passed? 'rgba(255,138,61,0.5)':'#ff8a3d';
+    ctx.beginPath(); ctx.moveTo(p.x-7,p.y+2); ctx.lineTo(p.x,p.y-9); ctx.lineTo(p.x+7,p.y+2); ctx.closePath(); ctx.fill();
+  }
+}
+
+function drawHUD(){
+  // stamina bar
+  const x=W*0.10, y=H*0.06, w=W*0.80, h=12;
+  ctx.fillStyle='rgba(255,255,255,0.10)'; rrect(x,y,w,h,6); ctx.fill();
+  const sc = stamina/100;
+  const col = sc>0.5?'#5be1ff': sc>0.25?'#ffd34d':'#ff4d6d';
+  ctx.fillStyle=col; rrect(x,y,w*sc,h,6); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font='600 20px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('体力', x, y-8);
+  // altitude
+  const alt=Math.round(3776*(state==='dawn'?1:step/TOTAL_STEPS));
+  ctx.textAlign='right'; ctx.fillStyle='#cfe9ff'; ctx.font='700 22px sans-serif';
+  ctx.fillText(alt+' m', x+w, y-8);
+  // combo
+  if(combo>1 && state==='climb'){ ctx.textAlign='center'; ctx.fillStyle='#5be1ff';
+    ctx.font='800 30px sans-serif'; ctx.fillText('整 '+combo, W/2, H*0.20); }
+}
+
+function drawTitle(time){
+  splashT += 1;
+  ctx.textAlign='center';
+  // splash tag
+  ctx.fillStyle='rgba(255,211,77,0.9)'; ctx.font='700 22px sans-serif';
+  ctx.fillText('7月1日  富士山 山開き', W/2, H*0.16);
+  // title
+  ctx.save();
+  const tg=ctx.createLinearGradient(0,H*0.40,0,H*0.52);
+  tg.addColorStop(0,'#fff6d8'); tg.addColorStop(1,'#ffd34d');
+  ctx.fillStyle=tg; ctx.shadowColor='rgba(255,211,77,0.6)'; ctx.shadowBlur=24;
+  ctx.font='900 96px sans-serif'; ctx.fillText('ご来光', W/2, H*0.47);
+  ctx.shadowBlur=0; ctx.restore();
+  ctx.fillStyle='#9ff0ff'; ctx.font='700 26px sans-serif'; ctx.fillText('G O R A I K Ō', W/2, H*0.53);
+  ctx.fillStyle='rgba(207,233,255,0.85)'; ctx.font='500 23px sans-serif';
+  ctx.fillText('弾丸登山はやめて、山小屋で一息。', W/2, H*0.62);
+  ctx.fillText('夜明けの刹那、頂きで朝日を掴め。', W/2, H*0.655);
+  // pulsing tap prompt
+  const a=0.55+0.45*Math.sin(time*0.005);
+  ctx.globalAlpha=a; ctx.fillStyle='#ffd34d'; ctx.font='800 34px sans-serif';
+  ctx.fillText('タップして登りはじめる', W/2, H*0.80); ctx.globalAlpha=1;
+}
+
+function drawDawnGuide(){
+  if(tapResult!==null) return;
+  // timing meter at bottom: a sweeping marker, gold zone in center
+  const x=W*0.12, y=H*0.83, w=W*0.76, h=18;
+  ctx.fillStyle='rgba(255,255,255,0.08)'; rrect(x,y,w,h,9); ctx.fill();
+  // gold window
+  const gw = windowHalf*w*2;
+  ctx.fillStyle='rgba(255,211,77,0.55)'; rrect(x+w/2-gw/2, y, gw, h, 9); ctx.fill();
+  // perfect core
+  const cw = windowHalf*0.68*w;
+  ctx.fillStyle='rgba(255,246,216,0.9)'; rrect(x+w/2-cw/2, y, cw, h, 9); ctx.fill();
+  // marker
+  const mx = x + dawnT*w;
+  ctx.fillStyle='#ff2d7e'; ctx.shadowColor='#ff2d7e'; ctx.shadowBlur=12;
+  rrect(mx-3, y-7, 6, h+14, 3); ctx.fill(); ctx.shadowBlur=0;
+  ctx.textAlign='center'; ctx.fillStyle='#fff6e0'; ctx.font='800 30px sans-serif';
+  ctx.fillText('今だ！タップ', W/2, y-22);
+}
+function doDawnTimeout(){
+  if(tapResult!==null) return;
+  tapResult=1; finishGoraiko('霧中','タイミングを逃した',0.10,1);
+}
+
+function drawResult(){
+  const c=rankInfo; if(!c) return;
+  // dim panel
+  ctx.fillStyle='rgba(5,6,10,0.30)'; ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';
+  // rank big
+  const grad=ctx.createLinearGradient(0,H*0.30,0,H*0.44);
+  if(c.collapsed){ grad.addColorStop(0,'#9aa3b2'); grad.addColorStop(1,'#5b6373'); }
+  else if(c.strength>=1){ grad.addColorStop(0,'#fff6d8'); grad.addColorStop(1,'#ffd34d'); }
+  else if(c.strength>0.4){ grad.addColorStop(0,'#ffe7a8'); grad.addColorStop(1,'#ffb547'); }
+  else { grad.addColorStop(0,'#cfe9ff'); grad.addColorStop(1,'#7fa8d0'); }
+  ctx.fillStyle=grad;
+  ctx.shadowColor= c.collapsed?'rgba(0,0,0,0)':'rgba(255,211,77,0.5)'; ctx.shadowBlur=20;
+  ctx.font='900 86px sans-serif';
+  const pulse=1+ (c.strength>0.4? Math.sin(resultPulse)*0.02:0);
+  ctx.save(); ctx.translate(W/2,H*0.38); ctx.scale(pulse,pulse); ctx.fillText(c.rank,0,0); ctx.restore();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,255,255,0.92)'; ctx.font='600 27px sans-serif';
+  ctx.fillText(c.msg, W/2, H*0.45);
+  // stats
+  ctx.font='700 30px sans-serif'; ctx.fillStyle='#ffd34d';
+  ctx.fillText(c.alt+' m 地点', W/2, H*0.56);
+  if(!c.collapsed){
+    ctx.fillStyle='#9ff0ff'; ctx.font='700 26px sans-serif';
+    ctx.fillText('ご来光精度  '+c.prec+'%', W/2, H*0.61);
+    ctx.fillStyle='rgba(207,233,255,0.8)'; ctx.font='500 22px sans-serif';
+    ctx.fillText('整った一歩 '+c.good+'/'+TOTAL_STEPS+'    残体力 '+c.stamina, W/2, H*0.655);
+  } else {
+    ctx.fillStyle='rgba(207,233,255,0.8)'; ctx.font='500 22px sans-serif';
+    ctx.fillText('山小屋で休めば、頂きは遠くない', W/2, H*0.61);
+  }
+  ctx.fillStyle='rgba(255,211,77,0.7)'; ctx.font='600 18px sans-serif';
+  ctx.fillText('#ご来光  7/1 富士山 山開き', W/2, H*0.71);
+}
+
+function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+/* dawn progress uses simpler integrator (fix the messy line above) */
+// (dawnT advanced in draw via dt*dawnSpeed*0.001*... ) -> redefine cleanly:
+(function(){})();
+
+/* ---------- share ---------- */
+function makeShareCanvas(){
+  const sc=document.createElement('canvas'); sc.width=1080; sc.height=1920;
+  const x=sc.getContext('2d'); const c=rankInfo||{rank:'ご来光',msg:'',prec:0,alt:3776,good:0,stamina:0,collapsed:false,strength:0.8};
+  // bg
+  const skyT = c.collapsed?0.05: 0.55+ (c.strength>0.4?c.strength*0.35:0);
+  const sky=skyColors(skyT);
+  const g=x.createLinearGradient(0,0,0,1920); g.addColorStop(0,sky.top); g.addColorStop(1,sky.bot);
+  x.fillStyle=g; x.fillRect(0,0,1080,1920);
+  // sun
+  if(!c.collapsed){ const sg=x.createRadialGradient(680,640,10,680,640,720*(c.strength>0.4?1:0.5));
+    sg.addColorStop(0,'rgba(255,250,235,0.95)'); sg.addColorStop(0.3,'rgba(255,224,150,0.7)'); sg.addColorStop(1,'rgba(255,180,90,0)');
+    x.fillStyle=sg; x.fillRect(0,0,1080,1280); }
+  // fuji
+  x.beginPath(); x.moveTo(-40,1320); x.lineTo(300,1120); x.lineTo(540,720); x.lineTo(840,1120); x.lineTo(1120,1320); x.closePath();
+  const fb=x.createLinearGradient(0,720,0,1320); fb.addColorStop(0, skyT>0.6?'#3a2a40':'#10131f'); fb.addColorStop(1,'#0a0c18');
+  x.fillStyle=fb; x.fill();
+  x.strokeStyle='#5be1ff'; x.lineWidth=4; x.shadowColor='#5be1ff'; x.shadowBlur=22;
+  x.beginPath(); x.moveTo(300,1120); x.lineTo(540,720); x.stroke(); x.shadowBlur=0;
+  // snow cap
+  x.beginPath(); x.moveTo(540,720); x.lineTo(470,830); x.lineTo(508,810); x.lineTo(540,852); x.lineTo(572,810); x.lineTo(610,830); x.closePath();
+  x.fillStyle=skyT>0.6?'rgba(255,240,220,0.85)':'rgba(180,200,230,0.5)'; x.fill();
+  // gold dust
+  if(!c.collapsed){ for(let i=0;i<140;i++){ x.globalAlpha=Math.random()*0.7+0.1;
+    x.fillStyle=Math.random()<0.7?'#ffd34d':'#fff6d8'; const px=540+(Math.random()-.5)*900, py=640+(Math.random()-.5)*900;
+    x.beginPath(); x.arc(px,py,Math.random()*4+1,0,6.29); x.fill(); } x.globalAlpha=1; }
+  // text
+  x.textAlign='center';
+  x.fillStyle='rgba(255,211,77,0.92)'; x.font='700 44px sans-serif'; x.fillText('7月1日  富士山 山開き', 540, 200);
+  const tg=x.createLinearGradient(0,300,0,460);
+  if(c.collapsed){ tg.addColorStop(0,'#aab2c0'); tg.addColorStop(1,'#5b6373'); }
+  else { tg.addColorStop(0,'#fff6d8'); tg.addColorStop(1,'#ffd34d'); }
+  x.fillStyle=tg; x.shadowColor='rgba(255,211,77,0.5)'; x.shadowBlur=30; x.font='900 200px sans-serif';
+  x.fillText(c.rank, 540, 470); x.shadowBlur=0;
+  x.fillStyle='rgba(255,255,255,0.92)'; x.font='600 50px sans-serif'; x.fillText(c.msg, 540, 560);
+  // stats card
+  x.fillStyle='rgba(255,255,255,0.10)'; rr(x,140,1500,800,260,28); x.fill();
+  x.fillStyle='#ffd34d'; x.font='800 70px sans-serif'; x.fillText(c.alt+' m 地点', 540, 1640);
+  if(!c.collapsed){
+    x.fillStyle='#9ff0ff'; x.font='800 58px sans-serif'; x.fillText('ご来光精度  '+c.prec+'%', 540, 1720);
+    x.fillStyle='rgba(207,233,255,0.85)'; x.font='500 40px sans-serif';
+    x.fillText('整った一歩 '+c.good+'/'+TOTAL_STEPS+'　残体力 '+c.stamina, 540, 1780);
+  } else {
+    x.fillStyle='rgba(207,233,255,0.85)'; x.font='500 44px sans-serif';
+    x.fillText('弾丸登山は無謀。山小屋で一息を。', 540, 1720);
+  }
+  // footer
+  x.fillStyle='#9ff0ff'; x.font='700 46px sans-serif'; x.fillText('ご来光  Goraikō', 540, 1870);
+  return sc;
+}
+function rr(x,bx,by,w,h,r){ x.beginPath(); x.moveTo(bx+r,by); x.arcTo(bx+w,by,bx+w,by+h,r);
+  x.arcTo(bx+w,by+h,bx,by+h,r); x.arcTo(bx,by+h,bx,by,r); x.arcTo(bx,by,bx+w,by,r); x.closePath(); }
+
+btnReplay.addEventListener('click', ()=>{ ensureAudio(); if(AC&&AC.state==='suspended')AC.resume(); startGame(); });
+btnShare.addEventListener('click', async ()=>{
+  const sc=makeShareCanvas();
+  const r=rankInfo||{rank:'ご来光',prec:0,alt:3776};
+  const text=`【${r.rank}】${r.alt}m地点${r.collapsed?'':`・ご来光精度${r.prec}%`}  #ご来光 7月1日 富士山山開き`;
+  sc.toBlob(async(blob)=>{
+    const file=new File([blob],'goraiko.png',{type:'image/png'});
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], text}); return;
+      }
+    }catch(e){}
+    // fallback download
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='goraiko.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },'image/png');
+});
+
+/* ---------- boot ---------- */
+function fixDawnIntegrator(){}  // (handled inline)
+reset(); resize(); requestAnimationFrame(draw);
+</script>
+</body>
+</html>
