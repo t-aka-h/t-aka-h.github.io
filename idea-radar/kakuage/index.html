@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070d">
+<title>格上げ ｜ Kakuage Securities</title>
+<style>
+  :root{
+    --bg:#06070d; --panel:#0e1018; --panel2:#11131d;
+    --ink:#eef0f7; --sub:#9aa0b4; --dim:#5b6173;
+    --gold1:#c9a961; --gold2:#ffe9a8; --gold3:#7a5e1e;
+    --green:#34d399; --red:#ff2d55; --blue:#46e3ff;
+    --line:#222a3f;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #14121f 0%, rgba(20,18,31,0) 55%),
+      radial-gradient(100% 70% at 50% 110%, #0c1a18 0%, rgba(12,26,24,0) 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;
+    overflow-x:hidden; -webkit-text-size-adjust:100%;
+  }
+  .app{max-width:480px;margin:0 auto;min-height:100%;padding:18px 16px 40px;
+       display:flex;flex-direction:column;}
+  /* ---- header ---- */
+  .brand{text-align:center;margin:6px 0 14px;}
+  .brand .jp{font-size:30px;font-weight:900;letter-spacing:6px;
+      background:linear-gradient(180deg,var(--gold2),var(--gold1) 55%,var(--gold3));
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+      filter:drop-shadow(0 1px 0 rgba(0,0,0,.4));}
+  .brand .en{font-size:10px;letter-spacing:5px;color:var(--gold1);margin-top:2px;opacity:.85;}
+  .brand .tag{font-size:11px;color:var(--sub);margin-top:7px;line-height:1.6;}
+
+  /* ---- input panel ---- */
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:18px;padding:16px 14px 18px;}
+  .lbl{font-size:11px;letter-spacing:1.5px;color:var(--gold1);font-weight:700;margin:2px 0 9px;}
+  .name-in{width:100%;background:#0a0c14;border:1px solid var(--line);border-radius:11px;
+    color:var(--ink);font-size:15px;padding:11px 12px;font-family:inherit;outline:none;}
+  .name-in:focus{border-color:var(--gold1);}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 2px;}
+  .chip{font-size:13px;padding:9px 12px;border-radius:999px;border:1px solid var(--line);
+    background:#0a0c14;color:var(--sub);user-select:none;cursor:pointer;transition:.12s;}
+  .chip.on{background:linear-gradient(180deg,#1c2030,#141826);border-color:var(--gold1);
+    color:var(--gold2);box-shadow:0 0 0 1px rgba(201,169,97,.25),0 0 14px rgba(201,169,97,.18);}
+  .mood-row{display:flex;align-items:center;gap:10px;margin-top:4px;}
+  .mood-row .e{font-size:18px;}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;flex:1;
+    background:linear-gradient(90deg,#2a3140,var(--green));outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff,var(--gold2) 40%,var(--gold1));border:none;
+    box-shadow:0 0 10px rgba(201,169,97,.6);cursor:pointer;}
+  .mini{font-size:10px;color:var(--dim);margin-top:6px;text-align:center;}
+  .gobtn{width:100%;margin-top:15px;border:none;border-radius:14px;padding:16px;
+    font-size:17px;font-weight:900;letter-spacing:3px;color:#1a1405;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold2),var(--gold1) 60%,#b7913f);
+    box-shadow:0 6px 22px rgba(201,169,97,.35),inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .08s;}
+  .gobtn:active{transform:scale(.97);}
+
+  /* ---- report card ---- */
+  #stage{margin-top:16px;}
+  .report{position:relative;border-radius:18px;padding:2px;
+    background:linear-gradient(135deg,var(--gold2),var(--gold3) 30%,var(--gold2) 55%,var(--gold3) 80%,var(--gold2));
+    box-shadow:0 14px 40px rgba(0,0,0,.55);}
+  .report .inner{background:linear-gradient(180deg,#0d0f17,#0a0c13);border-radius:16px;
+    padding:18px 16px 16px;overflow:hidden;}
+  .rep-top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #20232f;padding-bottom:10px;}
+  .rep-top .co{font-size:10px;letter-spacing:3px;color:var(--gold1);font-weight:700;}
+  .rep-top .dt{font-size:10px;color:var(--dim);text-align:right;}
+  .ticker{font-size:24px;font-weight:900;margin:12px 0 2px;color:#fff;letter-spacing:.5px;}
+  .ticker small{font-size:12px;color:var(--sub);font-weight:600;letter-spacing:1px;}
+  .rating-row{display:flex;align-items:baseline;gap:10px;margin:10px 0 4px;}
+  .rating{font-size:21px;font-weight:900;letter-spacing:1px;
+    background:linear-gradient(180deg,#ff6a86,var(--red));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .upside{font-size:13px;font-weight:800;color:var(--green);}
+  .tp-label{font-size:10px;color:var(--sub);letter-spacing:2px;margin-top:10px;}
+  .tp{font-size:34px;font-weight:900;line-height:1.05;margin-top:1px;
+    background:linear-gradient(180deg,#fff,var(--gold2) 70%,var(--gold1));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 2px 6px rgba(201,169,97,.25));}
+  .chartwrap{margin:12px 0 6px;border:1px solid #1b2030;border-radius:11px;background:#080a11;overflow:hidden;}
+  canvas#chart{display:block;width:100%;height:128px;}
+  .sumtitle{font-size:10px;letter-spacing:2px;color:var(--gold1);margin:12px 0 5px;}
+  .summary{font-size:13.5px;line-height:1.75;color:var(--ink);}
+  .risk{font-size:11.5px;line-height:1.6;color:var(--sub);margin-top:11px;
+    border-left:2px solid var(--red);padding-left:9px;}
+  .risk b{color:#ff8aa0;font-weight:700;}
+  .badge-row{margin-top:13px;text-align:center;}
+  .tbadge{display:inline-block;font-size:14px;font-weight:900;letter-spacing:1px;padding:8px 16px;border-radius:999px;
+    color:var(--gold2);background:rgba(201,169,97,.08);border:1px solid var(--gold1);
+    box-shadow:0 0 18px rgba(201,169,97,.18);}
+  .disc{font-size:8.5px;color:#454b5e;line-height:1.5;margin-top:12px;text-align:center;}
+
+  .actions{display:flex;gap:10px;margin-top:14px;}
+  .actions button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:13px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:.12s;}
+  .actions button:active{transform:scale(.97);}
+  .actions .share{border-color:var(--gold1);color:var(--gold2);
+    background:linear-gradient(180deg,#1a1710,#11120c);}
+  .hidden{display:none!important;}
+  .foot{font-size:10px;color:var(--dim);text-align:center;margin-top:26px;line-height:1.7;}
+  .foot a{color:var(--gold1);text-decoration:none;}
+
+  /* confetti + flash canvases */
+  #fx{position:fixed;inset:0;pointer-events:none;z-index:50;}
+  @keyframes pop{0%{transform:translateY(14px) scale(.96);opacity:0;}100%{transform:none;opacity:1;}}
+  .pop{animation:pop .45s cubic-bezier(.2,.9,.25,1);}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div class="app">
+  <div class="brand">
+    <div class="jp">格 上 げ</div>
+    <div class="en">KAKUAGE SECURITIES</div>
+    <div class="tag">日経平均7万2000円・史上最速の大台替わり。<br>その熱狂相場、あなた自身を「強烈な買い」で格上げします。</div>
+  </div>
+
+  <div class="panel" id="inputPanel">
+    <div class="lbl">▶ 銘柄名（任意）</div>
+    <input class="name-in" id="nameIn" maxlength="14" placeholder="あなたの名前（空欄でもOK）" autocomplete="off">
+
+    <div class="lbl" style="margin-top:16px;">▶ 今日の材料（近況をタップ・複数可）</div>
+    <div class="chips" id="chips"></div>
+
+    <div class="lbl" style="margin-top:16px;">▶ 強気度（地合い）</div>
+    <div class="mood-row">
+      <span class="e">😔</span>
+      <input type="range" id="mood" min="0" max="100" value="68">
+      <span class="e">🚀</span>
+    </div>
+    <div class="mini">材料を選ぶほど、強気なほど、目標株価は天文学的に膨らみます。</div>
+
+    <button class="gobtn" id="go">格 付 け 発 行</button>
+  </div>
+
+  <div id="stage"></div>
+
+  <div class="foot">
+    ※ これは <a href="https://t-aka-h.github.io/idea-radar/">Idea Radar</a> が世の中の変化から自動生成し、エージェント審査で優勝した企画のWebデモ版です。<br>
+    投資助言ではありません。すべて架空・お遊びです。完全オンデバイス（通信ゼロ）。
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ phrase banks ============ */
+const CHIPS = [
+  {l:"二度寝した",       d:"睡眠充足というウェルビーイング投資"},
+  {l:"定時で帰った",     d:"ワークライフバランスの最適化"},
+  {l:"筋トレした",       d:"人的資本への先行投資"},
+  {l:"コンビニ行った",   d:"機動的な消費キャッシュフロー"},
+  {l:"推しに課金した",   d:"エンタメ・アロケーション"},
+  {l:"会議をこなした",   d:"ステークホルダー・エンゲージメント"},
+  {l:"自炊した",         d:"コスト構造の内製化"},
+  {l:"散歩した",         d:"低リスク資産の積み増し"},
+  {l:"早起きした",       d:"稼働時間の前倒し"},
+  {l:"ゲームした",       d:"余暇セグメントの成長"},
+  {l:"副業した",         d:"収益源の多角化戦略"},
+  {l:"とりあえず生きてた",d:"事業の継続性（ゴーイングコンサーン）"}
+];
+const ADJ = ["力強く","急角度に","サプライズを伴って","二桁成長で","減速の兆しなく",
+  "コンセンサスを大幅に上回り","右肩上がりに","底堅く","加速度的に","構造的に"];
+const META = ["半導体スーパーサイクル","AI相場の主役","日経平均の上昇率","ビッグテックのEPS",
+  "go-to-marketの常識","市場平均(TOPIX)","同業他社のガイダンス","FRBの利下げ期待",
+  "想定為替レンジ","アナリストの度肝"];
+const CLOSER = ["中長期で複利的に効くと見る。","再評価は不可避である。","現水準は明確な押し目。",
+  "アップサイドは青天井。","握力さえあれば必ず報われる。","ストップ高も時間の問題だ。",
+  "目標株価の上方修正余地は大きい。","ここからが本番である。"];
+const RISK = [
+  "二度寝による始業時刻の慢性的後ずれ","可処分所得の構造的枯渇","推しへの過剰投資に伴う資金繰りの悪化",
+  "冷蔵庫在庫の急速な毀損","モチベーションのボラティリティ拡大","週末の進捗が市場予想を下回る懸念",
+  "通知の見過ぎによる集中力の希薄化","『あとでやる』の引当不足","充電残量という流動性リスク",
+  "三日坊主リスク（継続性に係る重要事項）"];
+const RATING = [ // [label, minMood]
+  {t:"中立（ホールド）", m:0},
+  {t:"押し目買い",       m:28},
+  {t:"買い増し推奨",     m:48},
+  {t:"アウトパフォーム", m:64},
+  {t:"強 烈 な 買 い",   m:80}
+];
+const UNITS = [ {u:"億"},{u:"兆"},{u:"京"},{u:"垓"},{u:"𥝱"},{u:"穣"},{u:"無量大数"} ];
+const TITLES = [
+  {min:0,  t:"上場おめでとう 🎉"},
+  {min:120,t:"実質ストロングバイ 📊"},
+  {min:240,t:"テンバガー候補 🚀"},
+  {min:360,t:"含み益の塊 💰"},
+  {min:480,t:"ストップ高 📈"},
+  {min:620,t:"ユニコーン認定 🦄"},
+  {min:760,t:"国家予算級 🏦"}
+];
+
+/* ============ utils ============ */
+const $=s=>document.querySelector(s);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[(Math.random()*a.length)|0];
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+const sel=new Set();
+
+/* ============ build chips ============ */
+const chipsEl=$("#chips");
+CHIPS.forEach((c,i)=>{
+  const el=document.createElement("div");
+  el.className="chip";el.textContent=c.l;el.dataset.i=i;
+  el.addEventListener("click",()=>{
+    if(sel.has(i)){sel.delete(i);el.classList.remove("on");}
+    else{sel.add(i);el.classList.add("on");}
+    tick();
+  });
+  chipsEl.appendChild(el);
+});
+
+/* ============ WebAudio ============ */
+let AC=null;
+function ac(){ if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}} if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+function tick(){
+  const c=ac(); if(!c)return;
+  const o=c.createOscillator(),g=c.createGain();
+  o.type="triangle";o.frequency.value=880;
+  g.gain.setValueAtTime(.0001,c.currentTime);
+  g.gain.exponentialRampToValueAtTime(.16,c.currentTime+.005);
+  g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+.09);
+  o.connect(g).connect(c.destination);o.start();o.stop(c.currentTime+.1);
+  if(navigator.vibrate)navigator.vibrate(8);
+}
+function bell(big){
+  const c=ac(); if(!c)return; const t=c.currentTime;
+  // missing-fundamental "ズーン" : 55Hz + 110 + 165 (no real sub on phone speakers, brain fills it)
+  [55,110,165,220].forEach((f,i)=>{
+    const o=c.createOscillator(),g=c.createGain();
+    o.type="sine";o.frequency.value=f;
+    const amp=[.9,.6,.42,.26][i]*(big?.5:.36);
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.exponentialRampToValueAtTime(amp,t+.02);
+    g.gain.exponentialRampToValueAtTime(.0001,t+(big?1.5:1.0));
+    o.connect(g).connect(c.destination);o.start(t);o.stop(t+1.7);
+  });
+  // opening-bell : bright triangle, two strikes
+  [0,.16].forEach((d,k)=>{
+    const o=c.createOscillator(),g=c.createGain();
+    o.type="triangle";o.frequency.setValueAtTime(1760,t+d);
+    o.frequency.exponentialRampToValueAtTime(1320,t+d+.5);
+    g.gain.setValueAtTime(.0001,t+d);
+    g.gain.exponentialRampToValueAtTime(.2,t+d+.01);
+    g.gain.exponentialRampToValueAtTime(.0001,t+d+.6);
+    o.connect(g).connect(c.destination);o.start(t+d);o.stop(t+d+.7);
+  });
+}
+
+/* ============ generator ============ */
+function numFmt(n){ return n.toLocaleString("ja-JP"); }
+function genTargetPrice(mood){
+  // bias toward bigger units as mood rises
+  let pool=[];
+  UNITS.forEach((u,idx)=>{
+    const w=Math.max(0.2,(idx/(UNITS.length-1))*(mood/100)*5 + (1-mood/100)*(idx<2?3:0.4));
+    for(let k=0;k<Math.ceil(w*4);k++)pool.push(u);
+  });
+  const unit=pick(pool.length?pool:UNITS);
+  const coef=(Math.random()<.5)? (1+(Math.random()*98|0)) : (100+(Math.random()*899|0));
+  const topUnit = (unit.u==="無量大数"||unit.u==="穣"||unit.u==="𥝱");
+  return {text:"¥"+numFmt(coef)+unit.u, top:topUnit};
+}
+function genRating(mood){
+  let r=RATING[0];
+  RATING.forEach(x=>{ if(mood>=x.m) r=x; });
+  // small randomness: high mood may still bump
+  if(mood>=72 && Math.random()<.5) r=RATING[4];
+  return r.t;
+}
+function genSummary(chosen){
+  const drivers = chosen.length? chosen.map(i=>CHIPS[i].d) : ["日々の生存というディフェンシブ銘柄"];
+  const ds=shuffle(drivers).slice(0,Math.min(2,drivers.length));
+  let parts=[];
+  ds.forEach((d,k)=>{
+    parts.push(`${d}が${pick(ADJ)}立ち上がり、${pick(META)}を凌駕${k===ds.length-1?"。":"する一方、"}`);
+  });
+  return "当社カバレッジでは、"+parts.join("")+pick(CLOSER);
+}
+function genUpside(mood){
+  const base=(mood/100); const pct=Math.round(rnd(40,300)*(1+base*40));
+  return "+"+numFmt(pct)+"%";
+}
+function score(chosen,mood){ return chosen.length*45 + mood*4 + (Math.random()*60|0); }
+function genTitle(sc){ let t=TITLES[0]; TITLES.forEach(x=>{if(sc>=x.min)t=x;}); return t.t; }
+
+let lastChart=null;
+function makeChartData(seedUp){
+  const pts=[]; let v=rnd(18,34);
+  for(let i=0;i<12;i++){ v+= rnd(-4,8)+seedUp*1.1; v=Math.max(6,v); pts.push(v); }
+  // final spike
+  pts.push(pts[11]+rnd(22,46)+seedUp*1.4);
+  return pts;
+}
+function drawChart(cv,pts,prog){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*dpr;cv.height=h*dpr;
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  // grid
+  g.strokeStyle="rgba(255,255,255,.05)";g.lineWidth=1;
+  for(let i=0;i<5;i++){const y=8+i*(h-16)/4;g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+  const max=Math.max(...pts)*1.08,min=Math.min(...pts)*0.7;
+  const X=i=>8+i*(w-16)/(pts.length-1);
+  const Y=val=>h-10-((val-min)/(max-min))*(h-22);
+  const n=Math.max(2,Math.floor(prog*pts.length));
+  // area
+  g.beginPath();g.moveTo(X(0),h);
+  for(let i=0;i<n;i++)g.lineTo(X(i),Y(pts[i]));
+  g.lineTo(X(n-1),h);g.closePath();
+  const grd=g.createLinearGradient(0,0,0,h);
+  grd.addColorStop(0,"rgba(52,211,153,.28)");grd.addColorStop(1,"rgba(52,211,153,0)");
+  g.fillStyle=grd;g.fill();
+  // line
+  g.beginPath();
+  for(let i=0;i<n;i++){const x=X(i),y=Y(pts[i]);i?g.lineTo(x,y):g.moveTo(x,y);}
+  g.lineWidth=2.4;g.strokeStyle="#34d399";g.shadowColor="#34d399";g.shadowBlur=12;g.stroke();
+  g.shadowBlur=0;
+  // tip
+  if(n>=1){const tx=X(n-1),ty=Y(pts[n-1]);
+    g.fillStyle="#eafff6";g.beginPath();g.arc(tx,ty,3.4,0,7);g.fill();
+    g.strokeStyle="rgba(52,211,153,.5)";g.lineWidth=1;g.beginPath();g.arc(tx,ty,7,0,7);g.stroke();
+    if(prog>=1){g.fillStyle="#34d399";g.font="900 13px sans-serif";g.textAlign="right";g.fillText("↑",tx-6,ty-4);}
+  }
+}
+
+/* ============ FX: confetti + flash ============ */
+const fx=$("#fx"),fctx=fx.getContext("2d");
+let parts=[],fxRunning=false;
+function fxResize(){const d=Math.min(2,devicePixelRatio||1);fx.width=innerWidth*d;fx.height=innerHeight*d;fctx.setTransform(d,0,0,d,0,0);}
+addEventListener("resize",fxResize);fxResize();
+function confetti(big){
+  const cols=["#ffe9a8","#c9a961","#34d399","#ff2d55","#ffffff","#46e3ff"];
+  const N=big?160:110;
+  for(let i=0;i<N;i++){
+    parts.push({x:innerWidth/2+rnd(-40,40),y:innerHeight*0.42,
+      vx:rnd(-7,7),vy:rnd(-15,-4),g:rnd(.22,.38),
+      s:rnd(5,11),rot:rnd(0,7),vr:rnd(-.3,.3),
+      c:pick(cols),life:rnd(80,150)});
+  }
+  if(!fxRunning){fxRunning=true;requestAnimationFrame(fxLoop);}
+}
+function fxLoop(){
+  fctx.clearRect(0,0,innerWidth,innerHeight);
+  parts.forEach(p=>{p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.vx*=.99;p.rot+=p.vr;p.life--;
+    fctx.save();fctx.translate(p.x,p.y);fctx.rotate(p.rot);fctx.fillStyle=p.c;fctx.globalAlpha=Math.max(0,Math.min(1,p.life/40));
+    fctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);fctx.restore();});
+  parts=parts.filter(p=>p.life>0&&p.y<innerHeight+30);
+  if(parts.length){requestAnimationFrame(fxLoop);}else{fctx.clearRect(0,0,innerWidth,innerHeight);fxRunning=false;}
+}
+
+/* ============ render report ============ */
+let CUR=null;
+function generate(){
+  ac();
+  const chosen=[...sel];
+  const mood=+$("#mood").value;
+  const nameRaw=$("#nameIn").value.trim();
+  const name=nameRaw||"あなた";
+  const ticker=(name.replace(/\s/g,"").slice(0,4)||"YOU").toUpperCase();
+  const rating=genRating(mood);
+  const tp=genTargetPrice(mood);
+  const summary=genSummary(chosen);
+  const risk=pick(RISK);
+  const upside=genUpside(mood);
+  const sc=score(chosen,mood);
+  const title=genTitle(sc);
+  const now=new Date();
+  const date=now.getFullYear()+"."+String(now.getMonth()+1).padStart(2,"0")+"."+String(now.getDate()).padStart(2,"0");
+  const pts=makeChartData(2+mood/22);
+  lastChart=pts;
+  CUR={name,ticker,rating,tp,summary,risk,upside,title,date,pts};
+
+  const stage=$("#stage");
+  stage.innerHTML=`
+    <div class="report pop">
+     <div class="inner">
+      <div class="rep-top">
+        <div class="co">KAKUAGE SECURITIES<br><span style="color:#5b6173;letter-spacing:1px;">EQUITY RESEARCH</span></div>
+        <div class="dt">発行 ${date}<br>担当：AIアナリスト</div>
+      </div>
+      <div class="ticker">${esc(name)} <small>(${esc(ticker)})</small></div>
+      <div class="rating-row"><div class="rating">${rating}</div><div class="upside">想定アップサイド ${upside}</div></div>
+      <div class="tp-label">12ヶ月後 目標株価</div>
+      <div class="tp">${tp.text}</div>
+      <div class="chartwrap"><canvas id="chart"></canvas></div>
+      <div class="sumtitle">▌ アナリストコメント</div>
+      <div class="summary">${esc(summary)}</div>
+      <div class="risk"><b>リスク要因：</b>${esc(risk)}。ただし当社はこれを織り込み済みと判断する。</div>
+      <div class="badge-row"><span class="tbadge">${title}</span></div>
+      <div class="disc">本レポートは架空のジョークであり、いかなる投資判断の根拠にもなりません。Kakuage Securities は実在しません。</div>
+     </div>
+    </div>
+    <div class="actions">
+      <button id="again">もう一度 格上げ</button>
+      <button class="share" id="share">画像で保存・シェア</button>
+    </div>`;
+  // draw chart (single full draw — robust against rAF throttling)
+  const cv=$("#chart");
+  drawChart(cv,pts,1);
+  requestAnimationFrame(()=>drawChart(cv,pts,1)); // redraw once after layout settles (correct clientWidth)
+  $("#again").onclick=()=>{generate();window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});};
+  $("#share").onclick=shareCard;
+
+  bell(tp.top);
+  confetti(tp.top);
+  if(navigator.vibrate)navigator.vibrate(tp.top?[0,30,30,30,120]:[40,30,80]);
+  setTimeout(()=>stage.querySelector(".report")?.classList.remove("pop"),500);
+  stage.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function esc(s){return String(s).replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+
+/* ============ 9:16 share card ============ */
+function buildCard(){
+  const W=1080,H=1920;
+  const c=document.createElement("canvas");c.width=W;c.height=H;
+  const g=c.getContext("2d");
+  // bg
+  let bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,"#0b0a12");bg.addColorStop(.5,"#06070d");bg.addColorStop(1,"#0a120f");
+  g.fillStyle=bg;g.fillRect(0,0,W,H);
+  // soft glows
+  rad(g,540,300,520,"rgba(201,169,97,.12)");
+  rad(g,540,1640,560,"rgba(52,211,153,.10)");
+  // foil frame
+  const m=54;
+  let fr=g.createLinearGradient(m,m,W-m,H-m);
+  fr.addColorStop(0,"#ffe9a8");fr.addColorStop(.3,"#7a5e1e");fr.addColorStop(.55,"#ffe9a8");fr.addColorStop(.8,"#7a5e1e");fr.addColorStop(1,"#ffe9a8");
+  g.strokeStyle=fr;g.lineWidth=6;roundRect(g,m,m,W-2*m,H-2*m,40);g.stroke();
+  g.strokeStyle="rgba(201,169,97,.25)";g.lineWidth=2;roundRect(g,m+16,m+16,W-2*m-32,H-2*m-32,30);g.stroke();
+
+  g.textAlign="center";
+  // header
+  g.fillStyle="#c9a961";g.font="700 30px -apple-system,sans-serif";
+  g.fillText("K A K U A G E   S E C U R I T I E S",W/2,168);
+  g.fillStyle="#5b6173";g.font="600 22px sans-serif";g.fillText("EQUITY RESEARCH — 格上げレポート",W/2,206);
+  line(g,160,236,W-160,236,"rgba(255,255,255,.08)");
+
+  // ticker
+  g.fillStyle="#ffffff";g.font="900 76px -apple-system,sans-serif";
+  g.fillText(CUR.name+"  ("+CUR.ticker+")",W/2,360);
+
+  // rating
+  g.font="900 64px -apple-system,sans-serif";
+  let rg=g.createLinearGradient(0,400,0,470);rg.addColorStop(0,"#ff6a86");rg.addColorStop(1,"#ff2d55");
+  g.fillStyle=rg;g.fillText(CUR.rating,W/2,470);
+  g.fillStyle="#34d399";g.font="800 34px sans-serif";g.fillText("想定アップサイド "+CUR.upside,W/2,524);
+
+  // target price
+  g.fillStyle="#9aa0b4";g.font="600 28px sans-serif";g.fillText("12ヶ月後 目標株価",W/2,610);
+  let tg=g.createLinearGradient(0,620,0,730);tg.addColorStop(0,"#ffffff");tg.addColorStop(.7,"#ffe9a8");tg.addColorStop(1,"#c9a961");
+  g.fillStyle=tg;g.font="900 104px -apple-system,sans-serif";g.fillText(CUR.tp.text,W/2,720);
+
+  // chart panel
+  const cx=120,cy=790,cw=W-240,ch=360;
+  g.fillStyle="#080a11";roundRect(g,cx,cy,cw,ch,24);g.fill();
+  g.strokeStyle="rgba(52,211,153,.25)";g.lineWidth=2;roundRect(g,cx,cy,cw,ch,24);g.stroke();
+  drawCardChart(g,CUR.pts,cx+24,cy+24,cw-48,ch-48);
+
+  // comment
+  g.textAlign="left";g.fillStyle="#c9a961";g.font="700 26px sans-serif";g.fillText("▌ アナリストコメント",130,1268);
+  g.fillStyle="#eef0f7";g.font="400 31px -apple-system,sans-serif";
+  wrap(g,CUR.summary,130,1318,W-260,46);
+  // risk
+  const ry=1318+46*wrapLines(g,CUR.summary,W-260,46)+34;
+  g.fillStyle="#ff8aa0";g.font="700 25px sans-serif";g.fillText("リスク要因",150,ry);
+  g.fillStyle="#9aa0b4";g.font="400 26px sans-serif";
+  wrap(g,CUR.risk+"。ただし当社はこれを織り込み済みと判断する。",150,ry+40,W-300,38);
+
+  // title badge
+  g.textAlign="center";
+  const bw=Math.min(720, g.measureText(CUR.title).width+160);
+  g.fillStyle="rgba(201,169,97,.10)";roundRect(g,(W-bw)/2,1648,bw,92,46);g.fill();
+  g.strokeStyle="#c9a961";g.lineWidth=2;roundRect(g,(W-bw)/2,1648,bw,92,46);g.stroke();
+  g.fillStyle="#ffe9a8";g.font="900 40px -apple-system,sans-serif";g.fillText(CUR.title,W/2,1708);
+
+  // footer
+  g.fillStyle="#5b6173";g.font="600 24px sans-serif";g.fillText("発行 "+CUR.date+"   ｜   #格上げ #Kakuage",W/2,1804);
+  g.fillStyle="#454b5e";g.font="400 18px sans-serif";g.fillText("架空のジョークです。投資助言ではありません。 t-aka-h.github.io/idea-radar",W/2,1842);
+  return c;
+}
+function drawCardChart(g,pts,x,y,w,h){
+  const max=Math.max(...pts)*1.08,min=Math.min(...pts)*.7;
+  const X=i=>x+i*w/(pts.length-1),Y=v=>y+h-((v-min)/(max-min))*h;
+  g.strokeStyle="rgba(255,255,255,.05)";g.lineWidth=1;
+  for(let i=0;i<5;i++){const yy=y+i*h/4;g.beginPath();g.moveTo(x,yy);g.lineTo(x+w,yy);g.stroke();}
+  g.beginPath();g.moveTo(X(0),y+h);pts.forEach((v,i)=>g.lineTo(X(i),Y(v)));g.lineTo(X(pts.length-1),y+h);g.closePath();
+  let ar=g.createLinearGradient(0,y,0,y+h);ar.addColorStop(0,"rgba(52,211,153,.3)");ar.addColorStop(1,"rgba(52,211,153,0)");g.fillStyle=ar;g.fill();
+  g.beginPath();pts.forEach((v,i)=>i?g.lineTo(X(i),Y(v)):g.moveTo(X(i),Y(v)));
+  g.lineWidth=5;g.strokeStyle="#34d399";g.shadowColor="#34d399";g.shadowBlur=20;g.stroke();g.shadowBlur=0;
+  const tx=X(pts.length-1),ty=Y(pts[pts.length-1]);
+  g.fillStyle="#eafff6";g.beginPath();g.arc(tx,ty,8,0,7);g.fill();
+  g.fillStyle="#34d399";g.font="900 30px sans-serif";g.textAlign="right";g.fillText("↑",tx-12,ty-10);g.textAlign="center";
+}
+function wrapLines(g,text,maxW,lh){let line="",lines=1;for(const ch of text){if(g.measureText(line+ch).width>maxW){lines++;line=ch;}else line+=ch;}return lines;}
+function wrap(g,text,x,y,maxW,lh){let line="";for(const ch of text){if(g.measureText(line+ch).width>maxW){g.fillText(line,x,y);y+=lh;line=ch;}else line+=ch;}g.fillText(line,x,y);}
+function rad(g,x,y,r,col){const rg=g.createRadialGradient(x,y,0,x,y,r);rg.addColorStop(0,col);rg.addColorStop(1,"rgba(0,0,0,0)");g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);}
+function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function line(g,x1,y1,x2,y2,c){g.strokeStyle=c;g.lineWidth=1;g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();}
+
+function shareCard(){
+  const cv=buildCard();
+  if(navigator.vibrate)navigator.vibrate(20);
+  cv.toBlob(async(blob)=>{
+    const file=new File([blob],"kakuage.png",{type:"image/png"});
+    const txt=`私の近況、アナリストに【${CUR.rating}】格付けされた。目標株価 ${CUR.tp.text}。#格上げ #Kakuage`;
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],text:txt});return;}catch(e){}
+    }
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kakuage.png";a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },"image/png");
+}
+
+/* ============ wire ============ */
+$("#go").addEventListener("click",generate);
+// preselect a couple chips for instant gratification
+[0,3].forEach(i=>{sel.add(i);chipsEl.children[i].classList.add("on");});
+</script>
+</body>
+</html>
